@@ -15,7 +15,6 @@ async def root():
 @app.post("/api/v1/calculate/")
 async def calculate_plate(spec: models.ProductionSpecification):
     res = core.calculate_plan(spec)
-    print(res)
     return res
 
 
