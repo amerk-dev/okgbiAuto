@@ -1,17 +1,17 @@
+from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
 import models
 
 def calculate_plan(spec: models.ProductionSpecification) -> Dict:
     tracks = spec.available_tracks
-    total_track_length = 85000  # Общая длина дорожки
+    total_track_length = 85000  # длина дорожки
 
-    # Получаем цены из справочников
+    # Получаем цены
     concrete_price = {name[1]: price[1] for name, price in spec.directory.concrete_classes}
     wire_price = spec.directory.wire.price
     retooling_price = spec.directory.retooling.price
 
-    print("\t\t", concrete_price)
 
     # Собираем все плиты с привязкой к заказу и дате
     plates = []
@@ -120,6 +120,160 @@ def calculate_plan(spec: models.ProductionSpecification) -> Dict:
                 track_entry["orders"].append(order_entry)
 
             day_entry["tracks"].append(track_entry)
+
+        result_days.append(day_entry)
+
+    return {"days": result_days}
+
+
+def calculate_optimal_plan(spec: models.ProductionSpecification) -> Dict:
+    # Преобразование доступных дорожек в словарь {дата: количество}
+    available_tracks = {track.day: track.count for track in spec.available_tracks}
+
+    # Сбор всех плит с привязкой к дате и заказу
+    date_order_plates = defaultdict(lambda: defaultdict(list))
+    for order in spec.orders:
+        for completion in order.completion_dates:
+            date_obj = completion.date  # Уже datetime.date, не нужно преобразовывать
+            for plate in completion.plates:
+                # Умножаем плиты по количеству
+                for _ in range(plate.count):
+                    date_order_plates[date_obj][order.number].append(plate)
+
+    result_days = []
+
+    # Обработка для каждой даты
+    for date, orders in date_order_plates.items():
+        # Получаем доступное количество дорожек для этой даты
+        max_tracks = available_tracks.get(date, 0)
+        if max_tracks == 0:
+            continue
+
+        # Собираем все плиты для даты
+        all_plates = [plate for order_plates in orders.values() for plate in order_plates]
+
+        # Группировка плит по характеристикам
+        size_groups = defaultdict(list)
+        for plate in all_plates:
+            key = (
+                plate.width,
+                plate.height,
+                plate.concrete_class,
+                plate.wire_top,
+                plate.wire_bottom
+            )
+            size_groups[key].append(plate)
+
+        # Расчет параметров для каждой группы
+        group_data = []
+        concrete_class_map = {c.name: c.price for c in spec.directory.concrete_classes}
+        for key, plates in size_groups.items():
+            total_length = sum(p.length for p in plates)
+            volume = sum(p.length * p.width * p.height for p in plates) / 1e9  # m³
+            concrete_cost = volume * concrete_class_map[key[2]]
+            wire_cost = sum((p.wire_top + p.wire_bottom) * spec.directory.wire.price for p in plates)
+
+            group_data.append({
+                "key": key,
+                "plates": plates,
+                "total_length": total_length,
+                "cost": concrete_cost + wire_cost + spec.directory.retooling.price,
+                "efficiency": (concrete_cost + wire_cost) / total_length  # Стоимость на мм
+            })
+
+        # Сортировка групп по эффективности (наиболее выгодные сначала)
+        sorted_groups = sorted(group_data, key=lambda x: -x["efficiency"])
+
+        # Распределение по дорожкам
+        tracks = []
+        current_track = {
+            "groups": [],
+            "used_length": 0,
+            "total_cost": 0.0
+        }
+
+        for group in sorted_groups:
+            placed = False
+            # Пытаемся добавить в существующие дорожки
+            for track in tracks:
+                if track["used_length"] + group["total_length"] <= 85000:
+                    track["groups"].append(group)
+                    track["used_length"] += group["total_length"]
+                    track["total_cost"] += group["cost"]
+                    placed = True
+                    break
+
+            # Создаем новую дорожку если есть возможность
+            if not placed and len(tracks) < max_tracks:
+                tracks.append({
+                    "groups": [group],
+                    "used_length": group["total_length"],
+                    "total_cost": group["cost"]
+                })
+
+        # Формирование результата для даты
+        day_entry = {
+            "date": date.strftime("%Y-%m-%d"),  # Преобразуем дату в строку для вывода
+            "tracks": []
+        }
+
+        for track in tracks:
+            # Собираем все плиты в дорожке
+            track_plates = [plate for group in track["groups"] for plate in group["plates"]]
+
+            # Группировка по заказам
+            order_map = defaultdict(list)
+            for plate in track_plates:
+                order_num = next(
+                    num for num, plates in orders.items()
+                    if plate in plates
+                )
+                order_map[order_num].append(plate)
+
+            # Формирование структуры заказов
+            formatted_orders = []
+            for order_num, plates in order_map.items():
+                order_plates = []
+                for plate in plates:
+                    volume = (plate.length * plate.width * plate.height) / 1e9
+                    concrete_cost = volume * concrete_class_map[plate.concrete_class]
+                    wire_cost = (plate.wire_top + plate.wire_bottom) * spec.directory.wire.price
+
+                    order_plates.append({
+                        "count": 1,
+                        "length": plate.length,
+                        "production_plate": {
+                            "material_cost": round(concrete_cost + wire_cost, 2)
+                        },
+                        "order_plate": {
+                            "material_cost": round(concrete_cost + wire_cost, 2),
+                            "concrete_class": plate.concrete_class,
+                            "wire_top": plate.wire_top,
+                            "wire_bottom": plate.wire_bottom
+                        }
+                    })
+
+                formatted_orders.append({
+                    "number": order_num,
+                    "plates": order_plates
+                })
+
+            # Параметры первой группы в дорожке
+            first_group = track["groups"][0]["key"]
+
+            day_entry["tracks"].append({
+                "width": first_group[0],
+                "height": first_group[1],
+                "concrete_class": first_group[2],
+                "wire_top": first_group[3],
+                "wire_bottom": first_group[4],
+                "total_cost": round(track["total_cost"], 2),
+                "useful_length": track["used_length"],
+                "useful_cost": round(track["total_cost"] - spec.directory.retooling.price * len(track["groups"]), 2),
+                "free_length": 85000 - track["used_length"],
+                "free_cost": 0.0,
+                "orders": formatted_orders
+            })
 
         result_days.append(day_entry)
 
