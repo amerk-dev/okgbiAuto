@@ -28,3 +28,5 @@ async def calculate_optimal_track_plan(spec: models.ProductionSpecification):
 async def calculate_optimal_cost_plan(spec: models.ProductionSpecification):
     res = core.calculate_optimal_cost_plan(spec)
     return res
+
+
