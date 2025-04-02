@@ -9,8 +9,11 @@ def calculate_plan(spec: models.ProductionSpecification):
 
     orders = spec.orders
     ready_plates = spec.ready_plates  # Плиты которые уже изгоотвлены
-    need_create_plates = hasReadyPlate(orders, ready_plates)  # Плиты которые надо изготовить
-    print("need_create_plates -", need_create_plates)
+    need_create_plates, ready_plates = hasReadyPlate(orders, ready_plates)  # Плиты которые надо изготовить
+    print(
+        "need_create_plates -", need_create_plates,
+        "\nОстаток готовых плит", ready_plates
+    )
 
     return need_create_plates
 
@@ -24,15 +27,14 @@ def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification)
                 "plate": date.plates
             })
 
+
     for tnp in tmp_need_plates:
         for i in plates:
-            if tnp["plate"][0].length == i.length and tnp["plate"][0].width == i.width and tnp["plate"][
-                0].height == i.height:
-                if tnp["plate"][0].count > i.count:
-                    tnp["plate"][0].count -= i.count
-                else:
-                    tnp["plate"][0].count = 0
-                    i.count -= tnp["plate"][0].count
+            if tnp["plate"][0].length == i.length and tnp["plate"][0].width == i.width and tnp["plate"][0].height == i.height:
+                deduct = min(tnp["plate"][0].count, i.count)
+                tnp["plate"][0].count -= deduct
+                i.count -= deduct
+
 
     res = []
     for order in tmp_need_plates:
@@ -54,7 +56,7 @@ def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification)
         {"date": date, "plate": plates}
         for date, plates in grouped.items()
     ]
-    return result
+    return result, plates
 
 
 def calculate_optimal_for_track_plan(spec: models.ProductionSpecification) -> Dict:
