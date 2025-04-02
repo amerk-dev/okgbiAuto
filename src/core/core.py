@@ -4,15 +4,15 @@ from collections import defaultdict
 import models
 
 
-def calculate_plan(spec: models.ProductionSpecification) -> Dict:
+def calculate_plan(spec: models.ProductionSpecification):
     available_tracks = spec.available_tracks
 
     orders = spec.orders
     ready_plates = spec.ready_plates  # Плиты которые уже изгоотвлены
     need_create_plates = hasReadyPlate(orders, ready_plates)  # Плиты которые надо изготовить
-    # print("orders -", orders)
-    # print("ready_plates - ", ready_plates)
     print("need_create_plates -", need_create_plates)
+
+    return need_create_plates
 
 
 def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification):
@@ -44,7 +44,17 @@ def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification)
                 "plate": filtered_plates
             })
 
-    return res
+    # Это если на одну дату разные заказы, чтобы их совместить в одну дату
+    grouped = defaultdict(list)
+    for item in res:
+        date_key = item["date"]
+        grouped[date_key].extend(item["plate"])
+
+    result = [
+        {"date": date, "plate": plates}
+        for date, plates in grouped.items()
+    ]
+    return result
 
 
 def calculate_optimal_for_track_plan(spec: models.ProductionSpecification) -> Dict:
