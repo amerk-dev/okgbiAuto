@@ -118,6 +118,7 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
             track_remaining = track_len
             current_config = None
             available_size = None
+            concrete_price = None
 
             # Сортируем пластины по убыванию длины для оптимального заполнения
             sorted_plates = sorted(
@@ -171,11 +172,15 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                     cost += current_config.wire_bottom * prices.wire.price * max_plates
                     cost += current_config.wire_top * prices.wire.price * max_plates
                     cost += (
-                             plate.length / 1000 * current_config.height / 1000 * current_config.width / 1000
+                                    plate.length / 1000 * current_config.height / 1000 * current_config.width / 1000
                             ) * concrete_price
 
                     current_config.total_cost = cost
 
+
+                free_cost = ((current_config.free_len / 1000 * current_config.height / 1000
+                              * current_config.width / 1000) * concrete_price)
+                current_config.free_cost = free_cost
         # Уменьшаем количество доступных треков
         tracks.count -= 1
 

@@ -13,4 +13,5 @@ class TrackConfig(BaseModel):
     wire_bottom: int
     wire_top: int
     total_cost: float
+    free_cost: float = Field(default=0)
     plates: List[PlateSpecification] = Field(default_factory=list)
