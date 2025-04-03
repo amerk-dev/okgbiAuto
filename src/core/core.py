@@ -21,7 +21,7 @@ def calculate_plan(spec: models.ProductionSpecification):
     #         print(track.day)
     # Укладываем плиты на дорожку
     print(need_create_plates)
-    res = bestPlates(available_tracks, track_len, need_create_plates)
+    res = bestPlates(available_tracks, track_len, need_create_plates, spec.directory)
 
     return res
 
@@ -107,9 +107,9 @@ def merge_plates(tmp_need_plates):
 
 
 # bestPlates Используется для поиска лучших плит под дорожки на определенный день
-def bestPlates(trackDay, track_len: int, needPlates):
+def bestPlates(trackDay, track_len: int, needPlates, prices):
     tracks_config = []
-
+    print(prices)
     # Проходим по всем трекам дня
     for tracks in trackDay:
         for track in range(tracks.count):
@@ -143,6 +143,11 @@ def bestPlates(trackDay, track_len: int, needPlates):
                         height=plate.height,
                         width=plate.width,
                         free_len=track_len,
+                        useful_len=0,
+                        concrete_class=plate.concrete_class,
+                        wire_bottom=plate.wire_bottom,
+                        wire_top=plate.wire_top,
+                        total_cost=0,
                         plates=[]
                     )
                     available_size = (plate.width, plate.height)
@@ -153,13 +158,29 @@ def bestPlates(trackDay, track_len: int, needPlates):
                 if max_plates > 0:
                     current_config.plates.extend([plate] * max_plates)
                     current_config.free_len -= plate.length * max_plates
+                    current_config.useful_len += plate.length * max_plates
                     plate.count -= max_plates
                     track_remaining -= plate.length * max_plates
+                    # Расчет стоимости
+                    concrete_price = next(
+                        cc.price
+                        for cc in prices.concrete_classes
+                        if cc.name == current_config.concrete_class
+                    )
+                    cost = 0
+                    cost += current_config.wire_bottom * prices.wire.price * max_plates
+                    cost += current_config.wire_top * prices.wire.price * max_plates
+                    cost += (
+                             plate.length / 1000 * current_config.height / 1000 * current_config.width / 1000
+                            ) * concrete_price
 
-            # Уменьшаем количество доступных треков
+                    current_config.total_cost = cost
+
+        # Уменьшаем количество доступных треков
         tracks.count -= 1
 
     return tracks_config
+
 
 def calculate_optimal_for_track_plan(spec: models.ProductionSpecification) -> Dict:
     # Преобразование доступных дорожек в словарь {дата: количество}
