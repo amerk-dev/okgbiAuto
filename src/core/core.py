@@ -6,16 +6,24 @@ import models
 
 def calculate_plan(spec: models.ProductionSpecification):
     available_tracks = spec.available_tracks
-
+    track_len = spec.directory.track.length
+    print(available_tracks, track_len)
     orders = spec.orders
     ready_plates = spec.ready_plates  # Плиты которые уже изгоотвлены
     need_create_plates, ready_plates = hasReadyPlate(orders, ready_plates)  # Плиты которые надо изготовить
-    print(
-        "need_create_plates -", need_create_plates,
-        "\nОстаток готовых плит", ready_plates
-    )
+    # print(
+    #     "need_create_plates -", need_create_plates,
+    #     "\nОстаток готовых плит", ready_plates
+    # )
 
-    return need_create_plates
+    # for track in available_tracks:
+    #     if track.count > 0:
+    #         print(track.day)
+    # Укладываем плиты на дорожку
+    print(need_create_plates)
+    res = bestPlates(available_tracks, track_len, need_create_plates)
+
+    return res
 
 
 def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification):
@@ -27,14 +35,13 @@ def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification)
                 "plate": date.plates
             })
 
-
     for tnp in tmp_need_plates:
         for i in plates:
-            if tnp["plate"][0].length == i.length and tnp["plate"][0].width == i.width and tnp["plate"][0].height == i.height:
+            if tnp["plate"][0].length == i.length and tnp["plate"][0].width == i.width and tnp["plate"][
+                0].height == i.height:
                 deduct = min(tnp["plate"][0].count, i.count)
                 tnp["plate"][0].count -= deduct
                 i.count -= deduct
-
 
     res = []
     for order in tmp_need_plates:
@@ -56,8 +63,103 @@ def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification)
         {"date": date, "plate": plates}
         for date, plates in grouped.items()
     ]
-    return result, plates
 
+    resres = merge_plates(result)
+    return resres, plates
+
+
+def merge_plates(tmp_need_plates):
+    date_group = defaultdict(lambda: defaultdict(int))
+
+    for order in tmp_need_plates:
+        for plate in order["plate"]:
+            if plate.count == 0:
+                continue
+
+            plate_key = (
+                plate.length,
+                plate.width,
+                plate.height,
+                plate.concrete_class,  # Используем имя поля модели
+                plate.wire_bottom,
+                plate.wire_top
+            )
+            date_group[order["date"]][plate_key] += plate.count
+
+    result = []
+    for date, plates in date_group.items():
+        plate_list = []
+        for params, total_count in plates.items():
+            # Формируем данные с использованием алиаса 'class'
+            plate_data = {
+                "count": total_count,
+                "length": params[0],
+                "width": params[1],
+                "height": params[2],
+                "class": params[3],  # Важно: используем алиас!
+                "wire_bottom": params[4],
+                "wire_top": params[5]
+            }
+            plate_list.append(models.PlateSpecification(**plate_data))
+        result.append({"date": date, "plate": plate_list})
+
+    return result
+
+
+# bestPlates Используется для поиска лучших плит под дорожки на определенный день
+def bestPlates(trackDay, track_len: int, needPlates):
+    tracks_config = []
+
+    # Проходим по всем трекам дня
+    for tracks in trackDay:
+        for track in range(tracks.count):
+
+            # Подготовка для нового трека
+            track_remaining = track_len
+            current_config = None
+            available_size = None
+
+            # Сортируем пластины по убыванию длины для оптимального заполнения
+            sorted_plates = sorted(
+                (plate for plate_last_day in needPlates for plate in plate_last_day["plate"] if plate.count > 0),
+                key=lambda x: x.length,
+                reverse=True
+            )
+
+            # Обрабатываем пластины для текущего трека
+            for plate in sorted_plates:
+                if track_remaining <= 0:
+                    break  # Трек полностью заполнен
+
+                # Проверяем совместимость размеров
+                if current_config:
+                    # Для последующих пластин размер должен совпадать с первой
+                    if (plate.width, plate.height) != available_size:
+                        continue
+                else:
+                    # Инициализируем новую конфигурацию для первой пластины
+                    current_config = models.TrackConfig(
+                        day=tracks.day,
+                        height=plate.height,
+                        width=plate.width,
+                        free_len=track_len,
+                        plates=[]
+                    )
+                    available_size = (plate.width, plate.height)
+                    tracks_config.append(current_config)
+
+                # Добавляем пластины пока есть место
+                max_plates = min(plate.count, track_remaining // plate.length)
+                if max_plates > 0:
+                    current_config.plates.extend([plate] * max_plates)
+                    current_config.free_len -= plate.length * max_plates
+                    plate.count -= max_plates
+                    track_remaining -= plate.length * max_plates
+
+            # Уменьшаем количество доступных треков
+        tracks.count -= 1
+
+    return tracks_config
 
 def calculate_optimal_for_track_plan(spec: models.ProductionSpecification) -> Dict:
     # Преобразование доступных дорожек в словарь {дата: количество}
