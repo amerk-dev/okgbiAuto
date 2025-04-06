@@ -180,6 +180,7 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                 free_cost = ((current_config.free_len / 1000 * current_config.height / 1000
                               * current_config.width / 1000) * concrete_price)
                 current_config.free_cost = free_cost
+                current_config.full_cost = current_config.free_cost + current_config.total_cost
         # Уменьшаем количество доступных треков
         tracks.count -= 1
 
