@@ -7,7 +7,6 @@ import models
 def calculate_plan(spec: models.ProductionSpecification):
     available_tracks = spec.available_tracks
     track_len = spec.directory.track.length
-    print(available_tracks, track_len)
     orders = spec.orders
     ready_plates = spec.ready_plates  # Плиты которые уже изгоотвлены
     need_create_plates, ready_plates = hasReadyPlate(orders, ready_plates)  # Плиты которые надо изготовить
@@ -20,10 +19,10 @@ def calculate_plan(spec: models.ProductionSpecification):
     #     if track.count > 0:
     #         print(track.day)
     # Укладываем плиты на дорожку
-    print(need_create_plates)
+    print(ready_plates)
     res = bestPlates(available_tracks, track_len, need_create_plates, spec.directory)
 
-    return res
+    return res, ready_plates
 
 
 def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification):
