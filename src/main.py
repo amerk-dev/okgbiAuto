@@ -14,8 +14,8 @@ async def root():
 
 @app.post("/api/v1/calculate/default")
 async def calculate_plate(spec: models.ProductionSpecification):
-    res, rpr = core.calculate_plan(spec)
-    return {"result": res, "left_ready_plates": rpr}
+    res, rpr, ret_price = core.calculate_plan(spec)
+    return {"result": res, "left_ready_plates": rpr, "retooling_price": ret_price}
 
 
 @app.post("/api/v1/calculate/optimal-track")
@@ -28,3 +28,7 @@ async def calculate_optimal_track_plan(spec: models.ProductionSpecification):
 async def calculate_optimal_cost_plan(spec: models.ProductionSpecification):
     res = core.calculate_optimal_cost_plan(spec)
     return res
+
+@app.post("/api/v1/calculate/optimal-retool")
+async def calculate_optimal_retool_plan(spec: models.ProductionSpecification):
+    return {"Message": "КУКАРЕКУ"}

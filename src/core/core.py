@@ -19,10 +19,12 @@ def calculate_plan(spec: models.ProductionSpecification):
     #     if track.count > 0:
     #         print(track.day)
     # Укладываем плиты на дорожку
-    print(ready_plates)
     res = bestPlates(available_tracks, track_len, need_create_plates, spec.directory)
 
-    return res, ready_plates
+    # Расчет цены переналадок
+    retooling_cost = count_of_retooling(res, spec.directory.retooling.price)
+    print(retooling_cost)
+    return res, ready_plates, retooling_cost
 
 
 def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification):
@@ -108,7 +110,6 @@ def merge_plates(tmp_need_plates):
 # bestPlates Используется для поиска лучших плит под дорожки на определенный день
 def bestPlates(trackDay, track_len: int, needPlates, prices):
     tracks_config = []
-    print(prices)
     # Проходим по всем трекам дня
     for tracks in trackDay:
         for track in range(tracks.count):
@@ -176,7 +177,6 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
 
                     current_config.total_cost = cost
 
-
                 free_cost = ((current_config.free_len / 1000 * current_config.height / 1000
                               * current_config.width / 1000) * concrete_price)
                 current_config.free_cost = free_cost
@@ -185,6 +185,28 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
         tracks.count -= 1
 
     return tracks_config
+
+
+def count_of_retooling(tracks: List[models.TrackConfig], price) -> int:
+    if not tracks:
+        return 0
+
+    retooling_count = 0
+    prev_width = None
+    prev_height = None
+
+    for track in tracks:
+        current_width = track.width
+        current_height = track.height
+
+        if prev_width is not None and prev_height is not None:
+            if current_width != prev_width or current_height != prev_height:
+                retooling_count += 1
+
+        prev_width = current_width
+        prev_height = current_height
+
+    return retooling_count * price
 
 
 def calculate_optimal_for_track_plan(spec: models.ProductionSpecification) -> Dict:
