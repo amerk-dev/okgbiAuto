@@ -491,6 +491,9 @@ def calculate_optimal_cost_plan(spec: models.ProductionSpecification) -> Dict:
     return {"days": [{"date": k, "tracks": v} for k, v in result_days.items()]}
 
 
+def calculate_optimal_retool_plan(spec: models.ProductionSpecification):
+    return "GUG"
+
 def find_optimal_day(deadline: datetime.date,
                      needed_tracks: int,
                      available: Dict[datetime.date, int]) -> datetime.date:

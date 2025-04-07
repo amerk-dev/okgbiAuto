@@ -20,15 +20,16 @@ async def calculate_plate(spec: models.ProductionSpecification):
 
 @app.post("/api/v1/calculate/optimal-track")
 async def calculate_optimal_track_plan(spec: models.ProductionSpecification):
-    res = core.calculate_optimal_for_track_plan(spec)
+    res = core.calculate_plan_max_fill(spec)
     return res
 
 
 @app.post("/api/v1/calculate/optimal-cost")
 async def calculate_optimal_cost_plan(spec: models.ProductionSpecification):
-    res = core.calculate_optimal_cost_plan(spec)
+    res = core.calculate_plan_min_mix(spec)
     return res
 
 @app.post("/api/v1/calculate/optimal-retool")
 async def calculate_optimal_retool_plan(spec: models.ProductionSpecification):
-    return {"Message": "КУКАРЕКУ"}
+    res = core.calculate_plan_min_retooling(spec)
+    return res

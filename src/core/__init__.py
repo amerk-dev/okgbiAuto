@@ -1,1 +1,4 @@
-from .core import calculate_plan, calculate_optimal_for_track_plan, calculate_optimal_cost_plan
+from .core import calculate_plan, calculate_optimal_for_track_plan, calculate_optimal_cost_plan, calculate_optimal_retool_plan
+from .dopCore2 import calculate_plan_max_fill
+from .dopCore3 import calculate_plan_min_mix
+from .dopCore4 import calculate_plan_min_retooling

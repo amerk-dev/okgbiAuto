@@ -1,61 +1,74 @@
-## Гыг
+## 
 
 1. POST - `/api/v1/calculate/` - сделать расчет календарного плана
 
 Body:
-
+  
 ```json
 {
+  // Цены
   "directory": {
+    // Цены бетона по классам
     "concrete_classes": [
       {
         "name": "string",
         "price": 0
       }
     ],
+    // Цена проволоки
     "wire": {
       "price": 0
     },
+    // Цена переналадки машины  для залива
     "retooling": {
       "price": 0
     },
+    // длина дорожки
     "track": {
       "length": 0
     }
   },
+  // Настройки машины для залива
+  "retooler":{
+    "height": 0,
+    "width": 0
+  },
+   // Готовые плиты
   "ready_plates": [
     {
       "count": 0,
       "length": 0,
       "width": 0,
       "height": 0,
-      "class": "string",
-      "wire_bottom": 0,
-      "wire_top": 0
+      "class": "string", // Класс бетона
+      "wire_bottom": 0, // Проволока снизу
+      "wire_top": 0 // Проволока сверху
     }
   ],
+  // Свободные дорожки
   "available_tracks": [
     {
       "count": 0,
       "day": "2025-03-18"
     }
   ],
+  // Заказы
   "orders": [
     {
       "number": "string",
       "production_days": 0,
       "completion_dates": [
         {
-          "date": "2025-03-18",
+          "date": "2025-03-18", // Дата к которой нужны плиты
           "plates": [
             {
               "count": 0,
               "length": 0,
               "width": 0,
               "height": 0,
-              "class": "string",
-              "wire_bottom": 0,
-              "wire_top": 0
+              "class": "string", // Класс бетона
+              "wire_bottom": 0, // Проволока снизу
+              "wire_top": 0 // Проволока сверху
             }
           ]
         }
@@ -66,7 +79,7 @@ Body:
 ```
 
 ## Response
-
+## В финальном варианте изменится
 ### status code `200`:
 
 ```json
