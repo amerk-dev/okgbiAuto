@@ -1,1 +1,31 @@
-# Потом сюда запихну все роуты, для красоты
+from fastapi import APIRouter
+from core import (
+    calculate_plan,
+    calculate_plan_max_fill,
+    calculate_plan_min_mix,
+    calculate_plan_min_retooling
+)
+from models import ProductionSpecification
+
+v1_router = APIRouter(prefix="/v1", tags=["v1"])
+
+@v1_router.post("/calculate/default")
+async def calculate_plate(spec: ProductionSpecification):
+    res, rpr, ret_price = calculate_plan(spec)
+    return {"result": res, "left_ready_plates": rpr, "retooling_price": ret_price}
+
+@v1_router.post("/calculate/optimal-track")
+async def calculate_optimal_track_plan(spec: ProductionSpecification):
+    res = calculate_plan_max_fill(spec)
+    return res
+
+
+@v1_router.post("/calculate/optimal-cost")
+async def calculate_optimal_cost_plan(spec: ProductionSpecification):
+    res = calculate_plan_min_mix(spec)
+    return res
+
+@v1_router.post("/calculate/optimal-retool")
+async def calculate_optimal_retool_plan(spec: ProductionSpecification):
+    res = calculate_plan_min_retooling(spec)
+    return res
