@@ -10,21 +10,26 @@ def calculate_plan(spec: models.ProductionSpecification):
     orders = spec.orders
     ready_plates = spec.ready_plates  # Плиты которые уже изгоотвлены
     need_create_plates, ready_plates = hasReadyPlate(orders, ready_plates)  # Плиты которые надо изготовить
-    # print(
-    #     "need_create_plates -", need_create_plates,
-    #     "\nОстаток готовых плит", ready_plates
-    # )
+    is_real = reality_check(need_create_plates, available_tracks, track_len)
 
-    # for track in available_tracks:
-    #     if track.count > 0:
-    #         print(track.day)
-    # Укладываем плиты на дорожку
     res = bestPlates(available_tracks, track_len, need_create_plates, spec.directory)
 
     # Расчет цены переналадок
     retooling_cost = count_of_retooling(res, spec.directory.retooling.price)
-    print(retooling_cost)
-    return res, ready_plates, retooling_cost
+    return res, ready_plates, retooling_cost, is_real
+
+
+def reality_check(plates, tracks, track_len):
+    all_plates_len = 0
+    all_track_len = 0
+    for date in plates:
+        for plate in date["plate"]:
+            all_plates_len += (plate.count * plate.length)
+
+    for track in tracks:
+        all_track_len += (track.count * track_len)
+
+    return True if all_plates_len < all_track_len else False
 
 
 def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification):
@@ -493,6 +498,7 @@ def calculate_optimal_cost_plan(spec: models.ProductionSpecification) -> Dict:
 
 def calculate_optimal_retool_plan(spec: models.ProductionSpecification):
     return "GUG"
+
 
 def find_optimal_day(deadline: datetime.date,
                      needed_tracks: int,

@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
+from .core import reality_check
 import models
 
 
@@ -14,12 +15,13 @@ def calculate_plan_min_retooling(spec: models.ProductionSpecification):
     orders = spec.orders
     ready_plates = spec.ready_plates  # плиты, которые уже изготовлены
     need_create_plates, ready_plates = hasReadyPlate(orders, ready_plates)
+    is_real = reality_check(need_create_plates, available_tracks, track_len)
 
     # Получаем конфигурацию дорожек по варианту минимизации переналадок
     res = bestPlatesMinRetooling(available_tracks, track_len, need_create_plates, spec.directory)
     retooling_cost = count_of_retooling(res, spec.directory.retooling.price)
     print(retooling_cost)
-    return res, ready_plates, retooling_cost
+    return res, ready_plates, retooling_cost, is_real
 
 
 def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):

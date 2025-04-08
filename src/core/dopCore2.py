@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
+from .core import reality_check
 import models
 
 
@@ -10,11 +11,12 @@ def calculate_plan_max_fill(spec: models.ProductionSpecification):
     orders = spec.orders
     ready_plates = spec.ready_plates  # уже изготовленные плиты
     need_create_plates, ready_plates = hasReadyPlate(orders, ready_plates)
-    # Получаем конфигурацию с максимальным заполнением дорожек
+    is_real = reality_check(need_create_plates, available_tracks, track_len)
+
+# Получаем конфигурацию с максимальным заполнением дорожек
     res = bestPlatesMaxFill(available_tracks, track_len, need_create_plates, spec.directory)
     retooling_cost = count_of_retooling(res, spec.directory.retooling.price)
-    print(retooling_cost)
-    return res, ready_plates, retooling_cost
+    return res, ready_plates, retooling_cost, is_real
 
 
 def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
