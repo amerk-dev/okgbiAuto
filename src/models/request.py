@@ -55,9 +55,14 @@ class Order(BaseModel):
     production_days: int
     completion_dates: List[CompletionDate] = Field(default_factory=list)
 
+class RetoolerSetting(BaseModel):
+    height: int
+    width: int
+
 
 class ProductionSpecification(BaseModel):
     directory: Directory
+    retooler: RetoolerSetting
     ready_plates: List[PlateSpecification] = Field(default_factory=list)
     available_tracks: List[AvailableTrack] = Field(default_factory=list)
     orders: List[Order] = Field(default_factory=list)
