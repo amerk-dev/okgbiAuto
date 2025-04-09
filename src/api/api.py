@@ -1,9 +1,12 @@
+import os
+
 from fastapi import APIRouter, HTTPException, Header, Depends, status
 from typing import Annotated
 from api.v1.routes import v1_router
 
 # Проверка апи ключа
-API_KEY = "12345678"
+API_KEY = os.getenv("API_KEY")
+
 async def validate_apikey(api_key: Annotated[str, Header(description="API key")] = None):
     if not API_KEY:
         raise HTTPException(
