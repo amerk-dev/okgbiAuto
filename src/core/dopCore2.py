@@ -3,20 +3,70 @@ from typing import Dict, List
 from collections import defaultdict
 from .core import reality_check
 import models
+from copy import deepcopy
+
 
 
 def calculate_plan_max_fill(spec: models.ProductionSpecification):
     available_tracks = spec.available_tracks
     track_len = spec.directory.track.length
     orders = spec.orders
-    ready_plates = spec.ready_plates  # уже изготовленные плиты
-    need_create_plates, ready_plates = hasReadyPlate(orders, ready_plates)
-    is_real = reality_check(need_create_plates, available_tracks, track_len)
+    original_ready_plates = [deepcopy(plate) for plate in spec.ready_plates]  # Сохраняем копию исходных готовых плит
+    ready_plates = [deepcopy(plate) for plate in spec.ready_plates]  # Копия для модификации
 
-# Получаем конфигурацию с максимальным заполнением дорожек
-    res = bestPlatesMaxFill(available_tracks, track_len, need_create_plates, spec.directory)
-    retooling_cost = count_of_retooling(res, spec.directory.retooling.price)
-    return res, ready_plates, retooling_cost, is_real
+    # Получаем плиты, которые нужно изготовить, и обновленные готовые плиты
+    need_create_plates, updated_ready_plates = hasReadyPlate(orders, ready_plates)
+
+    # Вычисляем использованные готовые плиты
+    used_ready_plates = []
+    for original in original_ready_plates:
+        updated = next(
+            (p for p in updated_ready_plates
+             if (p.length == original.length and
+                 p.width == original.width and
+                 p.height == original.height and
+                 p.concrete_class == original.concrete_class and
+                 p.wire_bottom == original.wire_bottom and
+                 p.wire_top == original.wire_top)),
+            None
+        )
+        if updated:
+            used_count = original.count - updated.count
+            if used_count > 0:
+                used_plate = deepcopy(original)
+                used_plate.count = used_count
+                used_ready_plates.append(used_plate)
+        else:
+            # Все плиты этого типа использованы
+            used_plate = deepcopy(original)
+            used_plate.count = original.count
+            used_ready_plates.append(used_plate)
+
+    is_real = reality_check(need_create_plates, available_tracks, track_len)
+    tracks_config = bestPlatesMaxFill(available_tracks, track_len, need_create_plates, spec.directory)
+
+    # Собираем неуместившиеся плиты
+    unplaced_plates = []
+    for date_entry in need_create_plates:
+        date = date_entry["date"]
+        for plate in date_entry["plate"]:
+            if plate.count > 0:
+                unplaced_plates.append({
+                    "date": date,
+                    "plate": [deepcopy(plate)]  # Оборачиваем в список для merge_plates
+                })
+    unplaced_plates_merged = merge_plates(unplaced_plates)
+
+    retooling_cost = count_of_retooling(tracks_config, spec.directory.retooling.price)
+
+    return (
+        tracks_config,           # Конечные параметры переналадчика
+        used_ready_plates,       # Использованные готовые плиты
+        unplaced_plates_merged,  # Плиты, не уместившиеся на дорожках
+        updated_ready_plates,    # Оставшиеся готовые плиты
+        retooling_cost,
+        is_real
+    )
 
 
 def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):

@@ -30,41 +30,47 @@ async def calculate_plate(spec: ProductionSpecification):
 
 @v1_router.post("/calculate/optimal-track")
 async def calculate_optimal_track_plan(spec: ProductionSpecification):
-    res, rpr, ret_price, is_real = calculate_plan_max_fill(spec)
+    res, used_ready_plates, unplaced_plates_merged, updated_ready_plates, ret_price, is_real = calculate_plan_max_fill(spec)
     if is_real:
-        return {"result": res, "left_ready_plates": rpr, "retooling_price": ret_price}
+        return {"result": res, "left_ready_plates": updated_ready_plates, "retooling_price": ret_price}
     else:
         return {
             "Message": "Невозможно распределить все плиты, не хватает дорожек",
-            "result": res,
-            "left_ready_plates": rpr,
+            "plan": res,
+            "used_ready_plates": used_ready_plates,
+            "unplaced_plates": unplaced_plates_merged,
+            "left_ready_plates": updated_ready_plates,
             "retooling_price": ret_price,
         }
 
 
 @v1_router.post("/calculate/optimal-cost")
 async def calculate_optimal_cost_plan(spec: ProductionSpecification):
-    res, rpr, ret_price, is_real = calculate_plan_min_mix(spec)
+    res, used_ready_plates, unplaced_plates_merged, updated_ready_plates, ret_price, is_real = calculate_plan_min_mix(spec)
     if is_real:
-        return {"result": res, "left_ready_plates": rpr, "retooling_price": ret_price}
+        return {"result": res, "left_ready_plates": updated_ready_plates, "retooling_price": ret_price}
     else:
         return {
             "Message": "Невозможно распределить все плиты, не хватает дорожек",
-            "result": res,
-            "left_ready_plates": rpr,
+            "plan": res,
+            "used_ready_plates": used_ready_plates,
+            "unplaced_plates": unplaced_plates_merged,
+            "left_ready_plates": updated_ready_plates,
             "retooling_price": ret_price,
         }
 
 
 @v1_router.post("/calculate/optimal-retool")
 async def calculate_optimal_retool_plan(spec: ProductionSpecification):
-    res, rpr, ret_price, is_real = calculate_plan_min_retooling(spec)
+    res, used_ready_plates, unplaced_plates_merged, updated_ready_plates, ret_price, is_real = calculate_plan_min_retooling(spec)
     if is_real:
-        return {"result": res, "left_ready_plates": rpr, "retooling_price": ret_price}
+        return {"result": res, "left_ready_plates": updated_ready_plates, "retooling_price": ret_price}
     else:
         return {
             "Message": "Невозможно распределить все плиты, не хватает дорожек",
-            "result": res,
-            "left_ready_plates": rpr,
+            "plan": res,
+            "used_ready_plates": used_ready_plates,
+            "unplaced_plates": unplaced_plates_merged,
+            "left_ready_plates": updated_ready_plates,
             "retooling_price": ret_price,
         }
