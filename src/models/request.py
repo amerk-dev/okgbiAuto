@@ -28,6 +28,7 @@ class Directory(BaseModel):
 
 
 class PlateSpecification(BaseModel):
+    name: str
     count: int
     length: int
     width: int

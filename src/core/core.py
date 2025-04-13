@@ -136,14 +136,17 @@ def merge_plates(tmp_need_plates):
                 plate.height,
                 plate.concrete_class,  # Используем имя поля модели
                 plate.wire_bottom,
-                plate.wire_top
+                plate.wire_top,
+                plate.name
             )
             date_group[order["date"]][plate_key] += plate.count
 
     result = []
     for date, plates in date_group.items():
         plate_list = []
+        print("plates", plates)
         for params, total_count in plates.items():
+            print(params)
             # Формируем данные с использованием алиаса 'class'
             plate_data = {
                 "count": total_count,
@@ -152,7 +155,8 @@ def merge_plates(tmp_need_plates):
                 "height": params[2],
                 "class": params[3],  # Важно: используем алиас!
                 "wire_bottom": params[4],
-                "wire_top": params[5]
+                "wire_top": params[5],
+                "name": params[6]
             }
             plate_list.append(models.PlateSpecification(**plate_data))
         result.append({"date": date, "plate": plate_list})
