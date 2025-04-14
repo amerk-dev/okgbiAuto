@@ -35,15 +35,6 @@ def calculate_plan(spec: models.ProductionSpecification):
             used_plate.count = original.count
             used_ready_plates.append(used_plate)
 
-    # Добавим order к использованным плитам по аналогии с соответствующими заказами
-    for plate in used_ready_plates:
-        for order in orders:
-            for date in order.completion_dates:
-                for p in date.plates:
-                    if (plate.length == p.length and plate.width == p.width and plate.height == p.height and
-                            plate.concrete_class == p.concrete_class and plate.wire_bottom == p.wire_bottom and plate.wire_top == p.wire_top):
-                        plate.order = order.number
-
     is_real = reality_check(need_create_plates, available_tracks, track_len)
     tracks_config = bestPlates(available_tracks, track_len, need_create_plates, spec.directory)
 

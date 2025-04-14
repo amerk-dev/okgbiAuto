@@ -1,9 +1,12 @@
 from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
-from .core import reality_check
+from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling
 import models
 from copy import deepcopy
+
+
+
 
 
 def calculate_plan_min_retooling(spec: models.ProductionSpecification):
@@ -200,106 +203,3 @@ def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
 
     return tracks_config
 
-
-
-
-def hasReadyPlate(orders: List[models.Order], plates: models.PlateSpecification):
-    tmp_need_plates = []
-    for order in orders:
-        for date in order.completion_dates:
-            tmp_need_plates.append({
-                "date": date.date,
-                "plate": date.plates
-            })
-
-    for tnp in tmp_need_plates:
-        for i in plates:
-            if tnp["plate"][0].length == i.length and tnp["plate"][0].width == i.width and tnp["plate"][
-                0].height == i.height:
-                deduct = min(tnp["plate"][0].count, i.count)
-                tnp["plate"][0].count -= deduct
-                i.count -= deduct
-
-    res = []
-    for order in tmp_need_plates:
-        filtered_plates = [plate for plate in order["plate"] if plate.count != 0]
-
-        if filtered_plates:
-            res.append({
-                "date": order["date"],
-                "plate": filtered_plates
-            })
-
-    # Это если на одну дату разные заказы, чтобы их совместить в одну дату
-    grouped = defaultdict(list)
-    for item in res:
-        date_key = item["date"]
-        grouped[date_key].extend(item["plate"])
-
-    result = [
-        {"date": date, "plate": plates}
-        for date, plates in grouped.items()
-    ]
-
-    resres = merge_plates(result)
-    return resres, plates
-
-
-def count_of_retooling(tracks: List[models.TrackConfig], price) -> int:
-    if not tracks:
-        return 0
-
-    retooling_count = 0
-    prev_width = None
-    prev_height = None
-
-    for track in tracks:
-        current_width = track.width
-        current_height = track.height
-
-        if prev_width is not None and prev_height is not None:
-            if current_width != prev_width or current_height != prev_height:
-                retooling_count += 1
-
-        prev_width = current_width
-        prev_height = current_height
-
-    return retooling_count * price
-
-
-def merge_plates(tmp_need_plates):
-    date_group = defaultdict(lambda: defaultdict(int))
-
-    for order in tmp_need_plates:
-        for plate in order["plate"]:
-            if plate.count == 0:
-                continue
-
-            plate_key = (
-                plate.length,
-                plate.width,
-                plate.height,
-                plate.concrete_class,  # Используем имя поля модели
-                plate.wire_bottom,
-                plate.wire_top
-            )
-            date_group[order["date"]][plate_key] += plate.count
-
-    result = []
-    for date, plates in date_group.items():
-        plate_list = []
-        for params, total_count in plates.items():
-            # Формируем данные с использованием алиаса 'class'
-            plate_data = {
-                "count": total_count,
-                "length": params[0],
-                "width": params[1],
-                "height": params[2],
-                "class": params[3],  # Важно: используем алиас!
-                "wire_bottom": params[4],
-                "wire_top": params[5]
-            }
-            plate_list.append(models.PlateSpecification(**plate_data))
-        result.append({"date": date, "plate": plate_list})
-
-    return result

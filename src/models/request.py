@@ -33,6 +33,7 @@ class PlateSpecification(BaseModel):
     length: int
     width: int
     height: int
+    order: Optional[str] = None
     concrete_class: str = Field(alias="class")
     wire_bottom: int
     wire_top: int

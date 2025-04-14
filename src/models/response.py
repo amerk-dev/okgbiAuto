@@ -16,3 +16,17 @@ class TrackConfig(BaseModel):
     free_cost: float = Field(default=0)
     full_cost: float = Field(default=0)
     plates: List[PlateSpecification] = Field(default_factory=list)
+
+
+class Plate(BaseModel):
+    name: str
+    order: str
+    length: int
+    width: int
+    height: int
+    concrete_class: str = Field(alias="class")
+    wire_bottom: int
+    wire_top: int
+
+    class Config:
+        allow_population_by_field_name = True
