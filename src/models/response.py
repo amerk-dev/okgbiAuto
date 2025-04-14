@@ -1,0 +1,32 @@
+from datetime import date
+from typing import List, Optional
+from pydantic import BaseModel, Field
+from .request import PlateSpecification
+
+class TrackConfig(BaseModel):
+    day: date
+    height: int
+    width: int
+    useful_len: int
+    free_len: int
+    concrete_class: str
+    wire_bottom: int
+    wire_top: int
+    total_cost: float
+    free_cost: float = Field(default=0)
+    full_cost: float = Field(default=0)
+    plates: List[PlateSpecification] = Field(default_factory=list)
+
+
+class Plate(BaseModel):
+    name: str
+    order: str
+    length: int
+    width: int
+    height: int
+    concrete_class: str = Field(alias="class")
+    wire_bottom: int
+    wire_top: int
+
+    class Config:
+        allow_population_by_field_name = True

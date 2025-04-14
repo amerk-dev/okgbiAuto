@@ -5,4 +5,7 @@ services:
     build: .
     ports:
       - "8080:8080"
+    environment:
+      - UVICORN_RELOAD=true
+      - API_KEY=12345678
     restart: on-failure
