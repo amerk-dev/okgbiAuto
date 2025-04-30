@@ -19,7 +19,7 @@ async def calculate_plate(spec: ProductionSpecification):
             "used_ready_plates": used_ready_plates,
             "unplaced_plates": unplaced_plates_merged,
             "left_ready_plates": updated_ready_plates,
-            "retooling_price": ret_price,
+            "retooling_info": ret_price,
         }
     else:
         return {
@@ -28,7 +28,7 @@ async def calculate_plate(spec: ProductionSpecification):
             "used_ready_plates": used_ready_plates,
             "unplaced_plates": unplaced_plates_merged,
             "left_ready_plates": updated_ready_plates,
-            "retooling_price": ret_price,
+            "retooling_info": ret_price,
         }
 
 
@@ -43,7 +43,7 @@ async def calculate_optimal_track_plan(spec: ProductionSpecification):
             "used_ready_plates": used_ready_plates,
             "unplaced_plates": unplaced_plates_merged,
             "left_ready_plates": updated_ready_plates,
-            "retooling_price": ret_price,
+            "retooling_info": ret_price,
         }
     else:
         return {
@@ -52,7 +52,7 @@ async def calculate_optimal_track_plan(spec: ProductionSpecification):
             "used_ready_plates": used_ready_plates,
             "unplaced_plates": unplaced_plates_merged,
             "left_ready_plates": updated_ready_plates,
-            "retooling_price": ret_price,
+            "retooling_info": ret_price,
         }
 
 
@@ -65,7 +65,7 @@ async def calculate_optimal_cost_plan(spec: ProductionSpecification):
             "used_ready_plates": used_ready_plates,
             "unplaced_plates": unplaced_plates_merged,
             "left_ready_plates": updated_ready_plates,
-            "retooling_price": ret_price,
+            "retooling_info": ret_price,
         }
     else:
         return {
@@ -74,7 +74,7 @@ async def calculate_optimal_cost_plan(spec: ProductionSpecification):
             "used_ready_plates": used_ready_plates,
             "unplaced_plates": unplaced_plates_merged,
             "left_ready_plates": updated_ready_plates,
-            "retooling_price": ret_price,
+            "retooling_info": ret_price,
         }
 
 
@@ -87,7 +87,7 @@ async def calculate_optimal_retool_plan(spec: ProductionSpecification):
             "used_ready_plates": used_ready_plates,
             "unplaced_plates": unplaced_plates_merged,
             "left_ready_plates": updated_ready_plates,
-            "retooling_price": ret_price,
+            "retooling_info": ret_price,
         }
     else:
         return {
@@ -96,5 +96,5 @@ async def calculate_optimal_retool_plan(spec: ProductionSpecification):
             "used_ready_plates": used_ready_plates,
             "unplaced_plates": unplaced_plates_merged,
             "left_ready_plates": updated_ready_plates,
-            "retooling_price": ret_price,
+            "retooling_info": ret_price,
         }

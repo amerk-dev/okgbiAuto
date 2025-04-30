@@ -96,7 +96,8 @@ def hasReadyPlate(orders, plates):
 
     for tnp in tmp_need_plates:
         for i in plates:
-            if tnp["plate"][0].length == i.length and tnp["plate"][0].width == i.width and tnp["plate"][0].height == i.height:
+            if tnp["plate"][0].length == i.length and tnp["plate"][0].width == i.width and tnp["plate"][
+                0].height == i.height:
                 deduct = min(tnp["plate"][0].count, i.count)
                 tnp["plate"][0].count -= deduct
                 i.count -= deduct
@@ -227,23 +228,53 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
     return tracks_config
 
 
-def count_of_retooling(tracks, price) -> int:
+def count_of_retooling(tracks, price) -> dict:
     if not tracks:
-        return 0
+        return {
+            "price": 0,
+            "daily_retoolings": [],
+            "last_state": None
+        }
 
-    retooling_count = 0
-    prev_width = None
-    prev_height = None
+    daily_changes = defaultdict(list)
+    prev_track = tracks[0]
 
-    for track in tracks:
-        current_width = track.width
-        current_height = track.height
+    for current_track in tracks[1:]:
+        if prev_track.width != current_track.width or prev_track.height != current_track.height:
+            change_date = current_track.day
+            daily_changes[change_date].append({
+                "from": {
+                    "width": prev_track.width,
+                    "height": prev_track.height
+                },
+                "to": {
+                    "width": current_track.width,
+                    "height": current_track.height
+                }
+            })
+        prev_track = current_track
 
-        if prev_width is not None and prev_height is not None:
-            if current_width != prev_width or current_height != prev_height:
-                retooling_count += 1
+    sorted_dates = sorted(daily_changes.keys())
+    daily_retoolings = []
+    total_count = sum(len(changes) for changes in daily_changes.values())
+    total_price = total_count * price
 
-        prev_width = current_width
-        prev_height = current_height
+    for date in sorted_dates:
+        changes = daily_changes[date]
+        daily_retoolings.append({
+            "date": date,
+            "count": len(changes),
+            "price": len(changes) * price,
+            "changes": changes
+        })
 
-    return retooling_count * price
+    last_state = {
+        "width": prev_track.width,
+        "height": prev_track.height
+    } if tracks else None
+
+    return {
+        "price": total_price,
+        "daily_retoolings": daily_retoolings,
+        "last_state": last_state
+    }
