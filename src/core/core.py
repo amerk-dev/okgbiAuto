@@ -236,32 +236,42 @@ def count_of_retooling(tracks, price) -> dict:
             "last_state": None
         }
 
-    daily_counts = defaultdict(int)
+    daily_changes = defaultdict(list)
     prev_track = tracks[0]
 
     for current_track in tracks[1:]:
         if prev_track.width != current_track.width or prev_track.height != current_track.height:
-            current_date = current_track.day
-            daily_counts[current_date] += 1
+            change_date = current_track.day
+            daily_changes[change_date].append({
+                "from": {
+                    "width": prev_track.width,
+                    "height": prev_track.height
+                },
+                "to": {
+                    "width": current_track.width,
+                    "height": current_track.height
+                }
+            })
         prev_track = current_track
 
-    sorted_dates = sorted(daily_counts.keys())
+    sorted_dates = sorted(daily_changes.keys())
     daily_retoolings = []
-    total_count = sum(daily_counts.values())
+    total_count = sum(len(changes) for changes in daily_changes.values())
     total_price = total_count * price
 
     for date in sorted_dates:
-        count = daily_counts[date]
+        changes = daily_changes[date]
         daily_retoolings.append({
             "date": date,
-            "count": count,
-            "price": count * price
+            "count": len(changes),
+            "price": len(changes) * price,
+            "changes": changes
         })
 
     last_state = {
         "width": prev_track.width,
         "height": prev_track.height
-    }
+    } if tracks else None
 
     return {
         "price": total_price,
