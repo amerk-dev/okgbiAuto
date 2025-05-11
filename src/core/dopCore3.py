@@ -1,11 +1,13 @@
 from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
-from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling
+from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling, profile_time
 import models
 from copy import deepcopy
 
+import time
 
+@profile_time
 def calculate_plan_min_mix(spec: models.ProductionSpecification):
     available_tracks = spec.available_tracks
     track_len = spec.directory.track.length
@@ -68,6 +70,7 @@ def calculate_plan_min_mix(spec: models.ProductionSpecification):
     )
 
 
+@profile_time
 def bestPlatesMinMix(trackDays, track_len: int, needPlates, prices):
     """
     Для каждой дорожки выбирается однородная группа плит (одинаковый класс бетона и проводка),
@@ -75,163 +78,94 @@ def bestPlatesMinMix(trackDays, track_len: int, needPlates, prices):
     Если заполнение достигает не менее 80% д  лины дорожки, вариант считается приемлемым.
     """
     tracks_config = []
+    sorted_needPlates = sorted(needPlates, key=lambda x: x["date"])
 
-    # Группируем плиты по ключу: (width, height, concrete_class, wire_bottom, wire_top)
-    def group_plates(needPlates):
-        groups = defaultdict(list)
-        for order in needPlates:
-            for plate in order["plate"]:
-                if plate.count > 0:
-                    key = (plate.width, plate.height, plate.concrete_class, plate.wire_bottom, plate.wire_top)
-                    groups[key].append(plate)
-        return groups
+    for date_entry in sorted_needPlates:
+        date = date_entry["date"]
+        plates_for_date = [deepcopy(p) for p in date_entry["plate"] if p.count > 0]
+        if not plates_for_date:
+            continue
 
-    # Задача о рюкзаке для группы (однородных плит)
-    def knapsack_homogeneous(capacity, items):
-        # items: список кортежей (length, count, plate_obj)
-        dp = [(0, {}) for _ in range(capacity + 1)]
-        for i, (length, count, plate_obj) in enumerate(items):
-            for w in range(capacity, 0, -1):
-                for k in range(1, count + 1):
-                    cost = k * length
-                    if cost > w:
-                        break
-                    prev_fill, prev_sel = dp[w - cost]
-                    candidate_fill = prev_fill + cost
-                    if candidate_fill > dp[w][0]:
-                        new_sel = prev_sel.copy()
-                        new_sel[i] = new_sel.get(i, 0) + k
-                        dp[w] = (candidate_fill, new_sel)
-        best = max(dp, key=lambda x: x[0])
-        return best  # (filled_length, selection)
+        available_tracks = [t for t in trackDays if t.day == date]
+        for track_info in available_tracks:
+            for _ in range(track_info.count):
+                track_remaining = track_len
+                current_config = None
+                concrete_price = 0
 
-    # Обрабатываем дорожки по дням
-    for track_day in trackDays:
-        day = track_day.day
-        while track_day.count > 0:
-            best_config = None
-            best_fill = 0
-            best_cost = None  # суммарная стоимость заполнения выбранной группы
-            best_group_key = None
-            best_selection = None
+                def calc_cost_per_length(p):
+                    try:
+                        concrete_price = next(cc.price for cc in prices.concrete_classes if cc.name == p.concrete_class)
+                    except StopIteration:
+                        concrete_price = float('inf')
+                    volume_cost = (p.length / 1000) * (p.height / 1000) * (p.width / 1000) * concrete_price
+                    wire_cost = (p.wire_bottom + p.wire_top) * prices.wire.price
+                    return (volume_cost + wire_cost) / p.length if p.length else float('inf')
 
-            groups = group_plates(needPlates)
-            # Перебираем однородные группы
-            for group_key, plates in groups.items():
-                # Подготовка предметов для DP: (length, count, plate_obj)
-                items = []
-                # Для обеспечения корректности – сортируем плиты по длине
-                sorted_group = sorted([p for p in plates if p.count > 0], key=lambda p: p.length)
-                for plate in sorted_group:
-                    items.append((plate.length, plate.count, plate))
-                if not items:
-                    continue
-
-                fill, selection = knapsack_homogeneous(track_len, items)
-                if fill <= 0:
-                    continue
-
-                # Расчет стоимости заполненной части:
-                # стоимость рассчитывается по каждому использованному элементу
-                concrete_price = next(
-                    (cc.price for cc in prices.concrete_classes if cc.name == group_key[2]), 0
+                sorted_plates = sorted(
+                    [p for p in plates_for_date if p.count > 0],
+                    key=calc_cost_per_length
                 )
-                cost = 0
-                # Для каждого выбранного предмета (индекс в отсортированном списке)
-                for idx, used_count in selection.items():
-                    plate = sorted_group[idx]
-                    cost += group_key[3] * prices.wire.price * used_count  # проволока снизу
-                    cost += group_key[4] * prices.wire.price * used_count  # проволока сверху
-                    cost += (plate.length / 1000 * group_key[1] / 1000 * group_key[0] / 1000) * concrete_price * used_count
-                # Если заполнение не менее 80% дорожки, вариант считается предпочтительным
-                if fill >= 0.8 * track_len:
-                    # Выбираем вариант с минимальной стоимостью среди вариантов с достаточным заполнением
-                    if (best_config is None) or (fill > best_fill) or (fill == best_fill and cost < best_cost):
-                        best_fill = fill
-                        best_cost = cost
-                        best_group_key = group_key
-                        best_selection = selection
 
-            # Если ни одна однородная группа не дала заполнения не менее 80%,
-            # выбираем вариант с максимальным заполнением (даже если смешивание не происходит)
-            if best_group_key is None:
-                for group_key, plates in groups.items():
-                    items = []
-                    sorted_group = sorted([p for p in plates if p.count > 0], key=lambda p: p.length)
-                    for plate in sorted_group:
-                        items.append((plate.length, plate.count, plate))
-                    if not items:
-                        continue
-                    fill, selection = knapsack_homogeneous(track_len, items)
-                    if fill > best_fill:
-                        concrete_price = next(
-                            (cc.price for cc in prices.concrete_classes if cc.name == group_key[2]), 0
+                for plate in sorted_plates:
+                    if track_remaining <= 0:
+                        break
+
+                    if current_config:
+                        if not all(getattr(plate, attr) == getattr(current_config, attr) for attr in
+                                   ['width', 'height', 'concrete_class', 'wire_bottom', 'wire_top']):
+                            continue
+                    else:
+                        current_config = models.TrackConfig(
+                            day=date,
+                            height=plate.height,
+                            width=plate.width,
+                            free_len=track_len,
+                            useful_len=0,
+                            concrete_class=plate.concrete_class,
+                            wire_bottom=plate.wire_bottom,
+                            wire_top=plate.wire_top,
+                            total_cost=0,
+                            plates=[]
                         )
-                        cost = 0
-                        for idx, used_count in selection.items():
-                            plate = sorted_group[idx]
-                            cost += group_key[3] * prices.wire.price * used_count
-                            cost += group_key[4] * prices.wire.price * used_count
-                            cost += (plate.length / 1000 * group_key[1] / 1000 * group_key[0] / 1000) * concrete_price * used_count
-                        best_fill = fill
-                        best_cost = cost
-                        best_group_key = group_key
-                        best_selection = selection
+                        tracks_config.append(current_config)
+                        try:
+                            concrete_price = next(
+                                cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class)
+                        except StopIteration:
+                            concrete_price = 0
 
-            # Если так и не нашли подходящую группу, завершаем заполнение дорожки
-            if best_group_key is None:
-                break
+                    max_plates = min(plate.count, track_remaining // plate.length)
+                    if max_plates > 0:
+                        current_config.plates.extend([deepcopy(plate)] * max_plates)
+                        current_config.free_len -= plate.length * max_plates
+                        current_config.useful_len += plate.length * max_plates
+                        track_remaining -= plate.length * max_plates
 
-            # Формируем конфигурацию дорожки с выбранной группой
-            width, height, concrete_class, wire_bottom, wire_top = best_group_key
-            current_config = models.TrackConfig(
-                day=day,
-                height=height,
-                width=width,
-                free_len=track_len - best_fill,
-                useful_len=best_fill,
-                concrete_class=concrete_class,
-                wire_bottom=wire_bottom,
-                wire_top=wire_top,
-                total_cost=0,
-                plates=[]
-            )
-            # Применяем выбор DP для данной группы
-            group_plates_list = []
-            for order in needPlates:
-                for plate in order["plate"]:
-                    key = (plate.width, plate.height, plate.concrete_class, plate.wire_bottom, plate.wire_top)
-                    if key == best_group_key and plate.count > 0:
-                        group_plates_list.append(plate)
-            group_plates_list.sort(key=lambda p: p.length)
-            for idx, used_count in best_selection.items():
-                try:
-                    plate = group_plates_list[idx]
-                except IndexError:
-                    continue
-                actual_used = min(used_count, plate.count)
-                plate.count -= actual_used
-                current_config.plates.extend([plate] * actual_used)
+                        cost = (plate.wire_bottom + plate.wire_top) * prices.wire.price * max_plates
+                        cost += (
+                                            plate.length / 1000 * current_config.height / 1000 * current_config.width / 1000) * concrete_price * max_plates
+                        current_config.total_cost += cost
 
-            # Расчёт итоговой стоимости дорожки
-            concrete_price = next(
-                (cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class), 0
-            )
-            cost = 0
-            for plate in current_config.plates:
-                cost += current_config.wire_bottom * prices.wire.price
-                cost += current_config.wire_top * prices.wire.price
-                cost += (plate.length / 1000 * current_config.height / 1000 * current_config.width / 1000) * concrete_price
-            current_config.total_cost = cost
-            free_cost = ((current_config.free_len / 1000 * current_config.height / 1000 *
-                          current_config.width / 1000) * concrete_price)
-            current_config.free_cost = free_cost
-            current_config.full_cost = current_config.total_cost + current_config.free_cost
+                        # Обновление count в plates_for_date
+                        for p in plates_for_date:
+                            if all(getattr(p, attr) == getattr(plate, attr) for attr in
+                                   ['length', 'width', 'height', 'concrete_class', 'wire_bottom', 'wire_top']):
+                                p.count -= max_plates
+                                break
 
-            tracks_config.append(current_config)
-            track_day.count -= 1
+                if current_config:
+                    try:
+                        concrete_price = next(
+                            cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class)
+                    except StopIteration:
+                        concrete_price = 0
+                    current_config.free_cost = (
+                                                           current_config.free_len / 1000 * current_config.height / 1000 * current_config.width / 1000) * concrete_price
+                    current_config.full_cost = current_config.free_cost + current_config.total_cost
+
+            track_info.count = 0
 
     return tracks_config
-
 
 
