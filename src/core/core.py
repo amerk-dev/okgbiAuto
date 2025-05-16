@@ -1,8 +1,17 @@
 from copy import deepcopy
 from collections import defaultdict
 import models
+import time
 
+def profile_time(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        print(f"[PROFILE] {func.__name__} took {time.time() - start:.4f}s")
+        return result
+    return wrapper
 
+@profile_time
 def calculate_plan(spec: models.ProductionSpecification):
     available_tracks = spec.available_tracks
     track_len = spec.directory.track.length
