@@ -171,6 +171,15 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                     full_cost=0
                 )
                 tracks_config.append(current_config)
+            if current_config:
+                try:
+                    concrete_price = next(
+                        cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class)
+                except StopIteration:
+                    concrete_price = 0
+                current_config.free_cost = (
+                                                   current_config.free_len / 1000 * current_config.height / 1000 * current_config.width / 1000) * concrete_price
+                current_config.full_cost = current_config.free_cost + current_config.total_cost
 
         track_info.count = 0  # Освобождаем дорожки
 
