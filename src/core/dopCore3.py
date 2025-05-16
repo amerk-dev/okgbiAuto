@@ -86,8 +86,9 @@ def bestPlatesMinMix(trackDays, track_len: int, needPlates, prices):
         if not plates_for_date:
             continue
 
-        available_tracks = [t for t in trackDays if t.day == date]
+        available_tracks = trackDays #[t for t in trackDays if t.day == date]
         for track_info in available_tracks:
+            print("track_info", track_info)
             for _ in range(track_info.count):
                 track_remaining = track_len
                 current_config = None
