@@ -72,17 +72,17 @@ def calculate_plan_max_fill(spec: models.ProductionSpecification):
 @profile_time
 def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
     """
-    Для каждой дорожки ищется такая группа совместимых плит (по ширине, высоте, классу и проводам),
-    для которой с помощью алгоритма динамического программирования (задача о рюкзаке) можно максимально заполнить дорожку.
+    Для каждой дорожки ищется группа совместимых плит по ширине и высоте,
+    и с помощью алгоритма динамического программирования максимально заполняется.
     """
     tracks_config = []
 
-    # Группируем плиты по параметрам (ширина, высота, класс бетона)
+    # Группируем плиты по ширине и высоте
     grouped_plates = defaultdict(list)
     for date_entry in needPlates:
         for plate in date_entry["plate"]:
             if plate.count > 0:
-                key = (plate.width, plate.height, plate.concrete_class, plate.wire_bottom, plate.wire_top)
+                key = (plate.width, plate.height)
                 grouped_plates[key].append(deepcopy(plate))
 
     # Сортируем каждую группу по длине (от большего к меньшему)
@@ -95,20 +95,21 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
             current_config = None
             available_key = None
 
-            # Перебираем все группы плит
+            # Перебираем группы плит
             for key in list(grouped_plates.keys()):
-                width, height, concrete_class, wire_bottom, wire_top = key
+                width, height = key
                 plates = grouped_plates[key]
 
-                # Проверяем, можно ли начать новую конфигурацию
-                if current_config is None:
+                # Создаем конфигурацию, если возможно
+                if current_config is None and plates:
+                    first_plate = plates[0]
                     current_config = models.TrackConfig(
                         day=track_info.day,
                         height=height,
                         width=width,
-                        concrete_class=concrete_class,
-                        wire_bottom=wire_bottom,
-                        wire_top=wire_top,
+                        concrete_class=first_plate.concrete_class,
+                        wire_bottom=first_plate.wire_bottom,
+                        wire_top=first_plate.wire_top,
                         free_len=track_len,
                         useful_len=0,
                         total_cost=0,
@@ -119,12 +120,10 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                     tracks_config.append(current_config)
                     available_key = key
 
-                # Если текущая группа не совпадает с конфигурацией — пропускаем
                 if key != available_key:
                     continue
 
                 # Укладываем плиты
-                concrete_price = next(cc.price for cc in prices.concrete_classes if cc.name == concrete_class)
                 for plate in plates:
                     if current_config.free_len <= 0:
                         break
@@ -133,28 +132,26 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                     if max_count <= 0:
                         continue
 
-                    # Укладываем плиты
-                    for _ in range(max_count):
-                        current_config.plates.append(deepcopy(plate))
-
-                    # Обновляем параметры дорожки
+                    # Добавляем плиты
+                    current_config.plates.extend([deepcopy(plate)] * max_count)
                     current_config.free_len -= plate.length * max_count
                     current_config.useful_len += plate.length * max_count
                     plate.count -= max_count
 
-                    # Расчёт стоимости
-                    cost = 0
-                    cost += wire_bottom * prices.wire.price * max_count
-                    cost += wire_top * prices.wire.price * max_count
-                    cost += (plate.length / 1000 * height / 1000 * width / 1000) * concrete_price * max_count
+                    # Расчет стоимости бетона для текущей плиты
+                    try:
+                        concrete_price = next(cc.price for cc in prices.concrete_classes if cc.name == plate.concrete_class)
+                    except StopIteration:
+                        concrete_price = 0
+                    cost = (plate.length / 1000 * height / 1000 * width / 1000) * concrete_price * max_count
                     current_config.total_cost += cost
 
-                # Убираем пустые группы
+                # Очищаем пустые группы
                 grouped_plates[key] = [p for p in plates if p.count > 0]
                 if not grouped_plates[key]:
                     del grouped_plates[key]
 
-            # Если плиты не нашлись — всё равно создаём конфигурацию (например, для отчёта)
+            # Создаем пустую конфигурацию, если плит нет
             if current_config is None:
                 current_config = models.TrackConfig(
                     day=track_info.day,
@@ -171,15 +168,22 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                     full_cost=0
                 )
                 tracks_config.append(current_config)
-            if current_config:
+            else:
+                # Расчет свободной стоимости
                 try:
                     concrete_price = next(
-                        cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class)
+                        cc.price for cc in prices.concrete_classes
+                        if cc.name == current_config.concrete_class
+                    )
                 except StopIteration:
                     concrete_price = 0
                 current_config.free_cost = (
-                                                   current_config.free_len / 1000 * current_config.height / 1000 * current_config.width / 1000) * concrete_price
-                current_config.full_cost = current_config.free_cost + current_config.total_cost
+                    (current_config.free_len / 1000) *
+                    (current_config.height / 1000) *
+                    (current_config.width / 1000) *
+                    concrete_price
+                )
+                current_config.full_cost = current_config.total_cost + current_config.free_cost
 
         track_info.count = 0  # Освобождаем дорожки
 
