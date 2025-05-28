@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Планировщик производства</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #999;
+      padding: 8px 12px;
+      vertical-align: top;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    .track {
+      background-color: #e6ffe6;
+    }
+    .summary {
+      background-color: #fff2e6;
+      font-weight: bold;
+    }
+    .plate {
+      font-size: 0.9em;
+      margin-top: 5px;
+      color: #333;
+    }
+    .retooling {
+      background-color: #e6e6ff;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Запрос к серверу и отображение результата</h1>
+<button onclick="sendRequest()">Отправить запрос</button>
+<div id="result"></div>
+
+<script>
+  async function sendRequest() {
+    const url = 'http://localhost:8080/api/v1/calculate/default'; // Замените на ваш URL
+    const requestData = {
+      "directory": {
+        "concrete_classes": [
+          { "name": "В25", "price": 5500 },
+          { "name": "В30", "price": 6000 },
+          { "name": "В35", "price": 6500 },
+          { "name": "В40", "price": 7000 }
+        ],
+        "wire": { "price": 85 },
+        "retooling": { "price": 15000 },
+        "track": { "length": 85000 }
+      },
+      "retooler": { "height": 0, "width": 0 },
+      "ready_plates": [],
+      "available_tracks": [
+        { "day": "2025-08-02", "count": 2 },
+        { "day": "2025-09-02", "count": 2 },
+        { "day": "2025-10-02", "count": 2 },
+        { "day": "2025-11-02", "count": 2 }
+      ],
+      "orders": [
+        {
+          "number": "1",
+          "production_days": 0,
+          "completion_dates": [
+            {
+              "date": "2025-09-02",
+              "plates": [
+                { "count": 1, "length": 1000, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 20, "wire_top": 4, "name": "ПНО 58-12 (3.1 ПБ 58-12) 6 нагрузка" },
+                { "count": 2, "length": 4180, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 10, "wire_top": 4, "name": "ПНО 40-12 (3.1 ПБ 40-12) 6 нагрузка" }
+              ]
+            }
+          ]
+        },
+        {
+          "number": "ТПК01305/01",
+          "production_days": 0,
+          "completion_dates": [
+            {
+              "date": "2025-09-02",
+              "plates": [
+                { "count": 1, "length": 4880, "width": 1197, "height": 220, "class": "В25", "wire_bottom": 12, "wire_top": 4, "name": "ПБ 49-12 8 нагрузка" },
+                { "count": 2, "length": 4480, "width": 1495, "height": 220, "class": "В25", "wire_bottom": 12, "wire_top": 2, "name": "ПБ 45-15 8 нагрузка" }
+              ]
+            }
+          ]
+        },
+        {
+          "number": "ТПК02057/01",
+          "production_days": 0,
+          "completion_dates": [
+            {
+              "date": "2025-09-02",
+              "plates": [
+                { "count": 4, "length": 5980, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 20, "wire_top": 4, "name": "ПНО 60-12 (3.1 ПБ 60-12) 6 нагрузка" },
+                { "count": 3, "length": 4880, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 14, "wire_top": 4, "name": "ПНО 49-12 (3.1 ПБ 49-12) 6 нагрузка" },
+                { "count": 3, "length": 4880, "width": 1490, "height": 160, "class": "В30", "wire_bottom": 18, "wire_top": 6, "name": "ПНО 49-15 (3.1 ПБ 49-15) 6 нагрузка" }
+              ]
+            }
+          ]
+        },
+        {
+          "number": "ТПК37912",
+          "production_days": 0,
+          "completion_dates": [
+            {
+              "date": "None",
+              "plates": [
+                { "count": 6, "length": 6180, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 26, "wire_top": 4, "name": "ОПАОПАОПАПА-1" },
+                { "count": 4, "length": 4180, "width": 1490, "height": 160, "class": "В25", "wire_bottom": 12, "wire_top": 6, "name": "ОПАОПАОПАПА-2" }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'API-key': '123456788'
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка сети или сервер вернул ошибку');
+      }
+
+      const data = await response.json();
+
+      renderPlan(data);
+    } catch (error) {
+      console.error('Ошибка:', error);
+      document.getElementById('result').innerHTML = `<p style="color:red;">Произошла ошибка: ${error.message}</p>`;
+    }
+  }
+
+  function renderPlan(data) {
+    const resultDiv = document.getElementById('result');
+
+    let html = '<h2>План производства</h2>';
+    html += '<table>';
+    html += `
+      <tr>
+        <th>Дата</th>
+        <th>Дорожка</th>
+        <th>Размеры (Ш x В)</th>
+        <th>Полезная длина</th>
+        <th>Свободная длина</th>
+        <th>Класс бетона</th>
+        <th>Проволока (снизу / сверху)</th>
+        <th>Стоимость</th>
+        <th>Плиты</th>
+      </tr>
+    `;
+
+    // Группируем данные по дням и дорожкам
+    const grouped = {};
+
+    data.plan.forEach(day => {
+      if (!grouped[day.day]) grouped[day.day] = [];
+
+      grouped[day.day].push(day);
+    });
+
+    Object.keys(grouped).forEach(date => {
+      const tracks = grouped[date];
+
+      tracks.forEach((track, index) => {
+        html += `<tr class="track">`;
+        if (index === 0) {
+          html += `<td rowspan="${tracks.length}">${date}</td>`;
+        }
+        html += `
+          <td>${index + 1}</td>
+          <td>${track.width} × ${track.height} мм</td>
+          <td>${track.useful_len.toLocaleString()} мм</td>
+          <td>${track.free_len.toLocaleString()} мм</td>
+          <td>${track.concrete_class}</td>
+          <td>${track.wire_bottom} / ${track.wire_top}</td>
+          <td>Общая: ${track.total_cost.toFixed(2)}<br>Свободная: ${track.free_cost.toFixed(2)}<br>Полная: ${track.full_cost.toFixed(2)}</td>
+          <td>
+        `;
+
+        track.plates.forEach(plate => {
+          html += `<div class="plate">📦 ${plate.name}, ${plate.length}×${plate.width}×${plate.height}, ${plate.class}, проволока: ${plate.wire_bottom}/${plate.wire_top}</div>`;
+        });
+
+        html += `</td></tr>`;
+      });
+    });
+
+    // Суммарные затраты на переналадки
+    if (data.retooling_info && data.retooling_info.daily_retoolings) {
+      html += `<tr class="retooling"><td colspan="9"><strong>Переналадки:</strong><br>`;
+      data.retooling_info.daily_retoolings.forEach(retool => {
+        html += `📅 ${retool.date}: ${retool.count} изменений, стоимость: ${retool.price.toFixed(2)} руб.<br>`;
+      });
+      html += `Общая стоимость переналадок: ${data.retooling_info.price.toFixed(2)} руб.</td></tr>`;
+    }
+
+    html += '</table>';
+
+    resultDiv.innerHTML = html;
+  }
+</script>
+
+</body>
+</html>
