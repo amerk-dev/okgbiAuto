@@ -1,0 +1,41 @@
+{% extends 'admin/base_site.html' %}
+{% load static %}
+
+{% block content %}
+<div class="error-report-container">
+    <div class="card">
+        <div class="card-header bg-warning">
+            <h2>Сообщить о проблеме</h2>
+        </div>
+        <div class="card-body">
+            <h4>Ошибка ID: {{ error_log.id }}</h4>
+            
+            <div class="alert alert-info">
+                <p><strong>Время ошибки:</strong> {{ error_log.timestamp }}</p>
+                <p><strong>Тип ошибки:</strong> {{ error_log.error_type }}</p>
+                <p><strong>Сообщение:</strong> {{ error_log.error_message }}</p>
+            </div>
+            
+            <form method="post" action="{% url 'report_error' error_log.id %}">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="user_description">Опишите, что вы делали перед возникновением ошибки:</label>
+                    <textarea class="form-control" id="user_description" name="user_description" rows="5" required></textarea>
+                </div>
+                
+                <div class="mt-4">
+                    <input type="submit" class="grp-button btn-primary" value="Отправить отчет">
+                    <a href="{% url 'index' %}" class="grp-button btn-secondary">Вернуться на главную</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .error-report-container {
+        margin: 2rem auto;
+        max-width: 800px;
+    }
+</style>
+{% endblock %}

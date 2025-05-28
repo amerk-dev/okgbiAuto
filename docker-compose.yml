@@ -1,11 +1,43 @@
 version: '3.9'
 
 services:
-  app:
-    build: .
+  api:
+    build:
+      context: api
     ports:
       - "8080:8080"
     environment:
       - UVICORN_RELOAD=true
       - API_KEY=12345678
     restart: on-failure
+    volumes:
+      - ./api:/app
+
+  web:
+    build:
+      context: web
+    #TODO: gunicorn
+    command: bash -c "python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./web:/code
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=okgbi.settings
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  db:
+    image: postgres:latest
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+
+
+volumes:
+  postgres_data:

@@ -1,0 +1,592 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'calculation/css/all.css' %}">
+	<link rel="icon" href="https://okgbi.ru/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <title>Панель управления</title>
+    <style>
+
+        .dropdown-content a {
+            color: black;
+            padding: 8px 12px;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+        }
+
+        .dropdown-content a:hover {
+            background-color: #f1f1f1;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="position-screen">
+    <header class="con-header">
+        <div class="position-blocks">
+            <!-- Блок для печати -->
+            <div class="con-print">
+                <div class="header-con">
+                    Печать план на день:
+                </div>
+                <form action="/generate-production-calendar/" target="_blank">
+                    <div class="con-bnt-date">
+                        <input type="date" name="date_print" id="datePrint"
+                               class="style-date" value="{{ today|date:'Y-m-d' }}">
+                        <div class="con-btn">
+                            <button id="startPrint" class="style-btn">
+                                <div class="con-img">
+                                    <i class="fa fa-print" aria-hidden="true"></i>
+                                </div>
+                                <div class="style-text-btn">
+                                    Печать
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <!-- Статиксика -->
+            <div class="con-statistica">
+                <form action="">
+                    <div class="position-statistica">
+                        <div class="header-con">Статистика на сегодня:</div>
+                        <ul class="position-list">
+                            <li>Занято дорожек:<label for="" id="tracksToday"> {{ stats.tracks }} шт</label></li>
+                            <li>Изготовления:<label for="" id="tiles"> {{ stats.plates }} плит</label></li>
+                            <li>Занято:<label for=""
+                                              id="occupiedMM"> {{ stats.length }}/{{ stats.length_max }} мм</label></li>
+                        </ul>
+                    </div>
+                </form>
+            </div>
+            <!-- Статиксика -->
+            <div class="con-statistica">
+                <form action="">
+                    <div class="position-statistica">
+                        <div class="header-con">Общая статистика:</div>
+                        <ul class="position-list">
+                            <li>Занято дорожек:<label for="" id="tracksToday"> {{ all_stats.tracks }} шт</label></li>
+                            <li>Изготовления:<label for="" id="tiles"> {{ all_stats.plates }} плит</label></li>
+                            <li>Занято:<label for="" id="occupiedMM"> {{ all_stats.length }}/{{ all_stats.max_length }} мм</label></li>
+                            <li>Количество переналадок:<label for=""
+                                                              id="occupiedMM"> {{ all_stats.retool_count }} шт</label></li>
+                            <li>Стоимость переналадок:<label for=""
+                                                             id="occupiedMM"> {{ all_stats.retool_price }} р</label></li>
+	                        {% if unplaced_plates|length > 0 %}
+		                        <li style="color: #ff5151; cursor: pointer">
+                                <a id="ordersAndRemaindersStat">Неразмещенные плиты:<label for=""
+                                                                                           id="occupiedMM"> {{ unplaced_plates|length }} шт</label>
+                                </a>
+                                </li>
+	                        {% endif %}
+                        </ul>
+                    </div>
+                </form>
+            </div>
+            <!-- Рассчет -->
+            <div class="con-payment-mode">
+                <form action="{% url 'fetch_production_plan' %}" method="post">
+                    {% csrf_token %}
+                    <div class="header-con payment-header">
+                        Отобразить везде режим расчетов
+                    </div>
+                    {% csrf_token %}
+                    <div>
+                        <div class="style-btn-radio" style="color: #888888; border-color: #888888">
+                            <input disabled type="radio" id="minCost" value="1" name="option">
+                            <label for="minCost">Минимальная стоимость</label>
+                        </div>
+                        <div class="style-btn-radio">
+                            <input {% if parameters.last_used_mode == 1 %} checked {% endif %} type="radio"
+                                                                           id="maxCompletion" value="2" name="option">
+                            <label for="maxCompletion">Максимальное заполнение*</label>
+                        </div>
+                        <div class="style-btn-radio">
+                            <input {% if parameters.last_used_mode == 2 %} checked {% endif %} type="radio"
+                                                                           id="minMixing" value="3" name="option">
+                            <label for="minMixing">Минимальное смешивания</label>
+                        </div>
+                        <div class="style-btn-radio">
+                            <input {% if parameters.last_used_mode == 3 %} checked {% endif %} type="radio"
+                                                                           id="minReadjustments" value="4"
+                                                                           name="option">
+                            <label for="minReadjustments">Минимальные переналадки*</label>
+                        </div>
+                    </div>
+                <div class=""></div>
+                    <div class="position-btn-payment">
+                        <button class="style-btn-payment">Рассчитать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </header>
+    <section class="position-pages">
+        <!-- Кнопки -->
+        <div class="position-btn-pages">
+            <div class="con-btn-pages">
+                <button type="button" id="track" class="style-btn-pages active" data-target="trackAvailabilitySection">
+                    Доступность <br> дорожек
+                </button>
+            </div>
+            <div class="con-btn-pages">
+                <button type="button" id="ordersAndRemainders" class="style-btn-pages style-order "
+                        data-target="ordersAndRemaindersSection">Остатки и <br> заказы
+                </button>
+            </div>
+            <div class="con-btn-pages">
+                <button type="button" id="parametrs" class="style-btn-pages style-paremetrs"
+                        data-target="parametersSection">Параметры <br> стоимости
+                </button>
+            </div>
+        </div>
+        <!-- Секция дорожек -->
+        <section class="tracks section hidden" id="trackAvailabilitySection">
+            <div class="heading-tracks">
+                Сколько дорожек занять:
+            </div>
+            <div class="position-table">
+                    <table id="dynamicTable1" style="width: 30px">
+                        <thead style="height: 130px">
+	                        <tr id="headerRow">
+	                            <th>
+	                                <div></div>
+	                            </th>
+	                        </tr>
+                        </thead>
+                        <tbody id="tracksBody">
+
+                        {% for table_row in table_data %}
+	                        <tr>
+                                <th class="style-traks-row" {% if forloop.last %}style="height: 115px" {% endif %}>
+                                    <b>Дорожка {{ forloop.counter }}
+                                        <br>
+	                                    {% if forloop.last %}РЕЗЕРВ{% endif %}
+                                    </b>
+                                </th>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    <div style="overflow-x: scroll">
+	                    <table id="dynamicTable" style="width: 90%">
+	                        <thead style="height: 130px">
+	                        <tr id="headerRow">
+	                            {% for track in available_tracks %}
+		                            <th style="height: 115px;">
+	                                    <div>
+	                                        <div class="con-bnt-table">
+	                                            <label for="numberTracks-{{ forloop.counter }}">Дорожек:</label>
+	                                            <input id="numberTracks-{{ forloop.counter }}"
+	                                                   onchange="this.value = Math.max(0, Math.min(7, parseInt(this.value) || 0))"
+	                                                   onfocusout="updateAvailableTracks({{ forloop.counter }}, this.value)"
+	                                                   type="number" step="1" min='0' max='7' value="{{ track.count }}">
+{#	                                            #}
+
+{#	                                            <div id="numberTracks-{{ forloop.counter }}"><b>{{ track.count }}</b></div>#}
+{#	                                            <button day="{{ forloop.counter }}" class="style-btn-down track-dropdown-btn" type="button">#}
+{#	                                                <img class="style-icon-down" src="/static/calculation/img/down.png"#}
+{#	                                                     alt="">#}
+{#	                                            </button>#}
+{##}
+{#	                                            <div day="{{ forloop.counter }}" id="tracksDropdown-{{ forloop.counter }}"#}
+{#	                                                 class="dropdown-content"#}
+{#	                                                 style="display: none;">#}
+{#	                                                 {% for t in '1234567' %}#}
+{#		                                                <a href="#" data-value="{{ forloop.counter }}">Дорожек: {{ forloop.counter }}</a>#}
+{#	                                                {% endfor %}#}
+{#	                                            </div>#}
+	                                        </div>
+	                                        <div class="style-date-table" id="date-tracks">{{ track.date }}</div>
+	                                        <div>
+	                                            <button {% if track.retooling_info.count|default:0 == 0 %}disabled{% endif %}
+	                                                    id="style-Readjustments-btn-{{ track.id }}"
+	                                                    class="style-Readjustments-btn" type="button">
+	                                                {% if track.retooling_info.count|default:0 > 0 %}
+		                                                <div>Кол-во переналадок:</div>
+		                                                <div id="numberReadjustments">{{ track.retooling_info.count|default:'0' }}</div>
+		                                                <div class="con-img-Readjustments">
+		                                                    <img class="style-img-i"
+		                                                         src="/static/calculation/img/icon.png"
+		                                                         alt="">
+		                                                </div>
+	                                                {% else %}
+		                                                <div>Нет переналадок</div>
+	                                                {% endif %}
+	                                            </button>
+		                                        {% if track.retooling_info.count|default:0 > 0 %}
+			                                        <!-- Модальное окно -->
+			                                        <div id="myModal-{{ track.id }}" class="modal">
+		                                                <div class="modal-content">
+		                                                    <div class="heder-modal">
+		                                                        <span id="close-{{ track.id }}"
+		                                                              class="close">&times;</span>
+		                                                    </div>
+		                                                    <div class="positi">
+		                                                        <table class="modal-table">
+		                                                            <tr class="position-text">
+		                                                                <th>№</th>
+		                                                                <th>Ширина, мм</th>
+		                                                                <th>Высота, мм</th>
+		                                                            </tr>
+			                                                        {% with track.retooling_info.changes.all.0 as start_day %}
+				                                                        <tr class="position-text">
+		                                                                    <td>Начало дня</td>
+		                                                                    <td>{{ start_day.from_width }}</td>
+		                                                                    <td>{{ start_day.from_height }}</td>
+		                                                                </tr>
+			                                                        {% endwith %}
+			                                                        {% for changes in track.retooling_info.changes.all %}
+				                                                        <tr class="position-text">
+		                                                                    <td>Переналадка {{ forloop.counter }}</td>
+		                                                                    <td>{{ changes.to_width }}</td>
+		                                                                    <td>{{ changes.to_height }}</td>
+		                                                                </tr>
+			                                                        {% endfor %}
+		                                                        </table>
+		                                                    </div>
+		                                                </div>
+		                                            </div>
+		                                        {% endif %}
+
+
+	                                        </div>
+	                                    </div>
+	                                </th>
+	                            {% endfor %}
+	                        </tr>
+
+	                        </thead>
+	                        <tbody id="tracksBody">
+
+	                        {% for table_row in table_data %}
+		                        <tr>
+
+	                                {% for table_cell in table_row %}
+
+		                                {% if table_cell and table_cell.width %}
+			                                <td style="background-color: rgb(171, 233, 190);">
+	                                            <div class="position-info">
+	                                                <div>Ширина: {{ table_cell.width }} мм.</div>
+	                                                <div>Высота: {{ table_cell.height }} мм</div>
+	                                                <div>Проволока Верх: {{ table_cell.wire_top }} шт</div>
+	                                                <div>Проволока Низ: {{ table_cell.wire_bottom }} шт</div>
+	                                                <div>Бетон: {{ table_cell.concrete_class }}</div>
+	                                            </div>
+	                                            <div class="position-remains">
+	                                            Занято: {{ table_cell.useful_len }} мм
+	                                            <br>
+	                                            Остаток: {{ table_cell.free_len }} мм
+	                                            </div>
+	                                        </td>
+		                                {% elif table_cell.free_len %}
+			                                <td style="background-color: rgb(255, 241, 183)">
+	                                            <div class="position-info">
+	                                            </div>
+	                                            <div class="position-remains">Остаток: {{ table_cell.free_len }} мм</div>
+	                                        </td>
+		                                {% else %}
+			                                <td style="background-color: rgb(255, 193, 193)">
+	                                            <div class="position-info">
+	                                            </div>
+	                                            <div class="position-remains"></div>
+
+	                                        </td>
+		                                {% endif %}
+	                                {% endfor %}
+	                            </tr>
+	                        {% endfor %}
+	                        </tbody>
+	                    </table>
+                    </div>
+            </div>
+        </section>
+        <!-- Секция заказов и остатков -->
+        <section class="balances-and-orders section hidden" id="ordersAndRemaindersSection">
+            <div style="margin-top: 20px" class="heading-tracks">Заказы</div>
+            <div id="ordersTableContainer" style="width: 95%;">
+                <table class="custom-table" style="width: 100%;">
+                    <thead>
+                    <tr class="position-text">
+                        <th>Номер заказа</th>
+                        <th>Наименование</th>
+                        <th>Длина, мм</th>
+                        <th>Ширина, мм</th>
+                        <th>Высота, мм</th>
+                        <th>Нагрузка</th>
+                        <th>Класс бетона</th>
+                        <th>Проволока верх, шт</th>
+                        <th>Проволока низ, шт</th>
+                        <th>Количество, шт</th>
+                        <th>Дедлайн по заказу</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for order in orders %}
+	                    <tr class="position-text">
+                            <td>{{ order.order_number }}</td>
+                            <td>{{ order.product.clean_name }}</td>
+                            <td>{{ order.product.length }}</td>
+                            <td>{{ order.product.width }}</td>
+                            <td>{{ order.product.height }}</td>
+                            <td>{{ order.product.capacity }}</td>
+                            <td>{{ order.product.concrete_class }}</td>
+                            <td>{{ order.product.wire_top }}</td>
+                            <td>{{ order.product.wire_bottom }}</td>
+                            <td>{{ order.count }}</td>
+                            <td>{{ order.deadline|date:"d.m.Y" }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="margin-top: 20px" class="heading-tracks">Использованные в заказах остатки</div>
+	        {% if used_ready_plates|length > 0 %}
+		        <div id="remaindersTableContainer">
+	                <table class="custom-table">
+	                    <thead>
+	                    <tr class="position-text">
+	                        <th>Заказ</th>
+	                        <th>Наименование</th>
+	                        <th>Длина, мм</th>
+	                        <th>Ширина, мм</th>
+	                        <th>Высота, мм</th>
+	                        <th>Нагрузка</th>
+	                        <th>Класс бетона</th>
+	                        <th>Проволока верх, шт</th>
+	                        <th>Проволока низ, шт</th>
+	                        <th>Количество, шт</th>
+	                    </tr>
+	                    </thead>
+	                    <tbody>
+	                    {% for item in used_ready_plates %}
+		                    <tr class="position-text">
+	                            <td>{{ item.order }}</td>
+	                            <td>{{ item.clean_name }}</td>
+	                            <td>{{ item.length }}</td>
+	                            <td>{{ item.width }}</td>
+	                            <td>{{ item.height }}</td>
+	                            <td>{{ item.capacity }}</td>
+	                            <td>{{ item.concrete_class }}</td>
+	                            <td>{{ item.wire_top }}</td>
+	                            <td>{{ item.wire_bottom }}</td>
+	                            <td>{{ item.count }}</td>
+	                        </tr>
+	                    {% endfor %}
+	                    </tbody>
+	                </table>
+	            </div>
+	        {% else %}
+		        <p style="margin-left: 20px">Отсутствуют</p>
+	        {% endif %}
+
+
+	        <div style="margin-top: 20px" class="heading-tracks">Остатки</div>
+	        {% if inventory|length > 0 %}
+		        <div id="remaindersTableContainer">
+	                <table class="custom-table">
+	                    <thead>
+	                    <tr class="position-text">
+	                        <th>Наименование</th>
+	                        <th>Длина, мм</th>
+	                        <th>Ширина, мм</th>
+	                        <th>Высота, мм</th>
+	                        <th>Нагрузка</th>
+	                        <th>Класс бетона</th>
+	                        <th>Проволока верх, шт</th>
+	                        <th>Проволока низ, шт</th>
+	                        <th>Количество, шт</th>
+	                    </tr>
+	                    </thead>
+	                    <tbody>
+	                    {% for item in inventory %}
+		                    <tr class="position-text">
+	                            <td>{{ item.product.clean_name }}</td>
+	                            <td>{{ item.product.length }}</td>
+	                            <td>{{ item.product.width }}</td>
+	                            <td>{{ item.product.height }}</td>
+	                            <td>{{ item.product.capacity }}</td>
+	                            <td>{{ item.product.concrete_class }}</td>
+	                            <td>{{ item.product.wire_top }}</td>
+	                            <td>{{ item.product.wire_bottom }}</td>
+	                            <td>{{ item.count }}</td>
+	                        </tr>
+	                    {% endfor %}
+	                    </tbody>
+	                </table>
+	            </div>
+	        {% else %}
+		        <p style="margin-left: 20px">Отсутствуют</p>
+	        {% endif %}
+
+	        <div style="margin-top: 20px" class="heading-tracks">Неразмещенные плиты</div>
+	        {% if unplaced_plates|length > 0 %}
+		        <div id="remaindersTableContainer">
+	                <table class="custom-table">
+	                    <thead>
+	                    <tr class="position-text">
+	                        <th>Наименование</th>
+	                        <th>Длина, мм</th>
+	                        <th>Ширина, мм</th>
+	                        <th>Высота, мм</th>
+	                        <th>Нагрузка</th>
+	                        <th>Класс бетона</th>
+	                        <th>Проволока верх, шт</th>
+	                        <th>Проволока низ, шт</th>
+	                        <th>Количество, шт</th>
+	                    </tr>
+	                    </thead>
+	                    <tbody>
+	                    {% for item in unplaced_plates %}
+		                    <tr class="position-text">
+	                            <td>{{ item.clean_name }}</td>
+	                            <td>{{ item.length }}</td>
+	                            <td>{{ item.width }}</td>
+	                            <td>{{ item.height }}</td>
+	                            <td>{{ item.capacity }}</td>
+	                            <td>{{ item.concrete_class }}</td>
+	                            <td>{{ item.wire_top }}</td>
+	                            <td>{{ item.wire_bottom }}</td>
+	                            <td>{{ item.count }}</td>
+	                        </tr>
+	                    {% endfor %}
+	                    </tbody>
+	                </table>
+                </div>
+	        {% else %}
+		        <p style="margin-left: 20px">Отсутствуют</p>
+	        {% endif %}
+        </section>
+        <!-- Секция параметров и стоимости -->
+        <section id="parametersSection" class="section hidden">
+            <div class="heading-tracks">Cтоимость</div>
+            <div id="pricesContainer">
+                <table class="custom-table">
+                    <thead>
+                    <tr>
+                        <th>Наименование</th>
+                        <th>Цена</th>
+                        <th>Ед.изм.</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for price_row in price_table_data %}
+	                    <tr>
+                            <td>{{ price_row.name }}</td>
+                            <td>{{ price_row.price }}</td>
+                            <td>₽ за 1 {{ price_row.unit_name }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="heading-tracks">Парамерты</div>
+            <div id="trackContainer">
+                <table class="custom-table">
+                    <thead>
+                    <tr>
+                        <th></th>
+                        <th>Размер</th>
+                        <th>Ед.изм.</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>Длина дорожки</td>
+                        <td>{{ parameters.road_length }}</td>
+                        <td>мм</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
+
+</div>
+</body>
+<script>
+    {% for track in available_tracks %}
+		// Модальное окно
+		document.addEventListener("DOMContentLoaded", function () {
+			const modal = document.getElementById("myModal-{{ track.id }}");
+			const btn = document.getElementById("style-Readjustments-btn-{{ track.id }}");
+			const span = document.getElementById("close-{{ track.id }}");
+			btn.addEventListener("click", function () {
+				modal.style.display = "block";
+			});
+			span?.addEventListener("click", function () {
+				modal.style.display = "none";
+			});
+
+			window.addEventListener("click", function (event) {
+				if (event.target === modal) {
+					modal.style.display = "none";
+				}
+			});
+		});
+	{% endfor %}
+</script>
+
+	<!-- Логика работы кнопок -->
+<script src="{% static 'calculation/js/btn_page.js' %}"></script>
+<link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+
+<script>
+    function updateAvailableTracks(day, count) {
+		let csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+		$.ajax({
+			url: '/change-available-tracks/',
+			type: 'POST',
+			data: {
+				'day': day,
+				'count': count,
+				'csrfmiddlewaretoken': csrftoken
+			},
+			success: function (response) {
+				if (response.status !== 'success') {
+					alert('Ошибка обновления треков');
+				}
+				alert("Данные успешно обновлены")
+			},
+			error: function () {
+				alert('Ошибка обновления треков');
+			}
+		});
+	}
+
+	document.addEventListener('DOMContentLoaded', function () {
+		// Получаем элементы input
+		const dateFrom = document.getElementById('dateTracksFrom');
+
+		// Функция для обновления URL с новыми параметрами дат
+		function updateDates() {
+			const params = new URLSearchParams(window.location.search);
+
+			// Обновляем параметры с выбранными датами
+			params.set('date_from', dateFrom.value);
+
+			// Перезагружаем страницу с новыми параметрами
+			window.location.search = params.toString();
+		}
+
+		// Добавляем обработчики событий
+		dateFrom.addEventListener('change', updateDates);
+
+		// Устанавливаем начальные значения из GET-параметров, если они есть
+		const urlParams = new URLSearchParams(window.location.search);
+		if (urlParams.has('date_from')) {
+			dateFrom.value = urlParams.get('date_from');
+		}
+	});
+</script>
+</html>

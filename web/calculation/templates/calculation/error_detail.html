@@ -1,0 +1,127 @@
+{% extends 'admin/base_site.html' %}
+{% load static %}
+
+{% block content %}
+<div class="error-detail-container">
+    <div class="card">
+        <div class="card-header bg-info text-white d-flex justify-content-between" style="display: flex; align-items: center; justify-content: space-between;">
+            <h2>Детали ошибки #{{ error_log.id }}</h2>
+            <div>
+                {% if not error_log.resolved %}
+                <form method="post" action="{% url 'resolve_error' error_log.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="submit" class="btn btn-success" value="Пометить как решенную">
+                </form>
+                {% else %}
+                <span class="badge bg-success p-2">Решено</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h4>Основная информация</h4>
+                    <table class="table table-bordered">
+                        <tr>
+                            <th>Время</th>
+                            <td>{{ error_log.timestamp }}</td>
+                        </tr>
+                        <tr>
+                            <th>Тип ошибки</th>
+                            <td>{{ error_log.error_type }}</td>
+                        </tr>
+                        <tr>
+                            <th>Источник</th>
+                            <td>{{ error_log.source }}</td>
+                        </tr>
+                        <tr>
+                            <th>Пользователь</th>
+                            <td>{{ error_log.user|default:"Не указан" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Статус</th>
+                            <td>
+                                {% if error_log.resolved %}
+                                    <span class="badge bg-success">Решено</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Не решено</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div class="col-md-6">
+                    <h4>Сообщение об ошибке</h4>
+                    <div class="alert alert-danger">
+                        {{ error_log.error_message }}
+                    </div>
+                    
+                    {% if error_log.resolved and error_log.resolution_notes %}
+                    <h4>Примечание о решении</h4>
+                    <div class="alert alert-success">
+                        {{ error_log.resolution_notes }}
+                    </div>
+                    {% endif %}
+                    
+                    {% if error_reports %}
+                    <h4>Пользовательские отчеты ({{ error_reports|length }})</h4>
+                    <div class="user-reports">
+                        {% for report in error_reports %}
+                        <div class="card mb-2">
+                            <div class="card-header bg-light">
+                                Отчет #{{ report.id }} - {{ report.timestamp }}
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Описание:</strong> {{ report.user_description }}</p>
+                                {% if report.contact_info %}
+                                <p><strong>Контакт:</strong> {{ report.contact_info }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <h4>Traceback</h4>
+            <div class="card mb-4">
+                <div class="card-body">
+                    <pre>{{ error_log.traceback }}</pre>
+                </div>
+            </div>
+            
+            {% if error_log.details %}
+            <h4>Детали ошибки</h4>
+            <div class="card mb-4">
+                <div class="card-body">
+                    <pre>{{ error_log.details }}</pre>
+                </div>
+            </div>
+            {% endif %}
+
+            
+            <div class="mt-4">
+                <a href="{% url 'error_list' %}" class="grp-button btn-secondary">Вернуться к списку ошибок</a>
+                <a href="{% url 'index' %}" class="grp-button btn-primary">Вернуться на главную</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .error-detail-container {
+        margin: 2rem auto;
+        max-width: 1200px;
+    }
+    pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 5px;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}

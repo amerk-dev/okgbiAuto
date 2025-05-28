@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<title>{{ date }} | Печать производственного календаря</title>
+    <meta charset="UTF-8">
+    <style>
+	    body {
+		    font-family: Arial, sans-serif;
+		    font-size: 15px;
+		    margin: 1cm;
+	    }
+
+	    h1, h3, p {
+		    text-align: center;
+		    page-break-after: avoid;
+	    }
+
+	    .track-section {
+		    page-break-before: always;
+		    margin-top: 20px;
+	    }
+
+	    table {
+		    width: 100%;
+		    border-collapse: collapse;
+		    table-layout: fixed;
+		    word-wrap: break-word;
+		    font-size: 13px;
+		    margin-top: 10px;
+	    }
+	    thead {
+		    font-size: 11px;
+	    }
+
+	    th, td {
+		    border: 1px solid black;
+		    padding: 4px;
+		    text-align: center;
+	    }
+
+	    th {
+		    background-color: #f2f2f2;
+	    }
+
+	    .table-wrapper {
+		    page-break-inside: avoid;
+		    break-inside: avoid;
+	    }
+
+	    @page {
+		    size: A4 landscape;
+		    margin: 1cm;
+	    }
+	</style>
+</head>
+<body>
+	{% for track in tracks %}
+		<div class="track-section">
+            <h3>{{ track.name }}</h3>
+			<p>{{ date }}</p>
+            <table class="table-wrapper">
+                <thead>
+                    <tr>
+                        <th>Номер</th>
+                        <th>Наименование</th>
+                        <th>Длина, мм</th>
+                        <th>Ширина, мм</th>
+                        <th>Высота, мм</th>
+                        <th>Нагрузка</th>
+                        <th>Класс бетона</th>
+                        <th>Проволока верх, мм</th>
+                        <th>Проволока низ, мм</th>
+                        <th>Количество, шт</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in track.orders %}
+	                    <tr>
+                            <td>{{ order.номер }}</td>
+                            <td>{{ order.наименование }}</td>
+                            <td>{{ order.длина }}</td>
+                            <td>{{ order.ширина }}</td>
+                            <td>{{ order.высота }}</td>
+                            <td>{{ order.нагрузка }}</td>
+                            <td>{{ order.класс_бетона }}</td>
+                            <td>{{ order.проволока_верх }}</td>
+                            <td>{{ order.проволока_низ }}</td>
+                            <td>{{ order.количество }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+	{% endfor %}
+</body>
+</html>

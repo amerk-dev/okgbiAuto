@@ -1,0 +1,513 @@
+.position-screen {
+    margin: 0 auto;
+    border: 4px solid #000;
+    border-radius: 20px;
+    padding: 20px 60px;
+    margin: 30px;
+    height: max-content;
+}
+
+/* Хэдер */
+
+.position-blocks {
+    display: flex;
+}
+
+/* Загаловки хэдеров  */
+.header-con {
+    font-size: 24px;
+}
+
+
+/* Блок с принтом */
+
+.style-date {
+    border: 2px solid #000;
+    font-size: 14px;
+    padding: 10px;
+}
+
+.con-bnt-date {
+    display: flex;
+    margin: 15px 0 0 0;
+    border-radius: 7px;
+
+}
+
+.con-btn {
+    margin: 0 20px;
+}
+
+.style-btn {
+    display: flex;
+    background: #fff;
+    transition: all .2s;
+    border: 2px solid #000;
+    border-radius: 7px;
+    cursor: pointer;
+    height: 100%;
+    width: auto;
+    align-items: center;
+}
+
+.style-btn:hover {
+    filter: invert(2);
+    padding: 0 6px;
+}
+
+.con-img {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0 5px 0 0px;
+}
+.con-img i {
+    font-size: large;
+}
+
+.style-text-btn {
+    display: flex;
+    font-size: 22px;
+    padding: 0 0 0 5px;
+}
+
+/* Блок статистика */
+.con-statistica {
+    margin: 0 0 0 30px;
+}
+
+.position-list {
+    margin: 0;
+}
+
+/*Блок режим рассчетов */
+.con-payment-mode {
+    margin: 0 0 0 auto;
+}
+
+.payment-header {
+    font-weight: 600;
+}
+
+.style-btn-radio {
+    cursor: pointer;
+    border: 2px solid #000;
+    border-radius: 7px;
+    position: relative;
+    transition: all .2s;
+    margin: 5px 0 15px;
+}
+
+.style-btn-radio:hover {
+    border: 2px solid #555555;
+    color: #555555;
+}
+
+
+.style-btn-radio input[type="radio"] {
+    display: none;
+}
+
+.style-btn-radio label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+
+
+.style-btn-radio label::before {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin: 0 5px;
+    border: 2px solid #000;
+    border-radius: 50%;
+    background-color: #fff;
+    transition: background-color 0.3s, border-color 0.3s;
+    position: relative;
+
+}
+
+.style-btn-radio:hover label::before {
+    border-color: #555555;
+    /* Цвет границы внешнего кружка при наведении */
+}
+
+.style-btn-radio input[type="radio"]:checked+label {
+    font-weight: 600;
+}
+
+.style-btn-radio input[type="radio"]:checked+label::before {
+    border: 3px solid #000;
+
+}
+
+.style-btn-radio input[type="radio"]:checked+label::after {
+    content: '';
+    display: block;
+    width: 8px;
+    height: 8px;
+    background-color: #000;
+    border-radius: 50%;
+    position: absolute;
+    transform: translateX(11px);
+    font-weight: 600;
+}
+
+.style-btn-radio:hover input[type="radio"]:checked+label::before {
+    border-color: #555555;
+}
+
+.style-btn-radio:hover input[type="radio"]:checked+label::after {
+    background-color: #555555;
+}
+
+.position-btn-payment {
+    display: flex;
+    justify-content: center;
+
+}
+
+.style-btn-payment {
+    border: 2px solid #000;
+    background: #fff;
+    border-radius: 7px;
+    font-size: 22px;
+    padding: 3px 20px;
+    transition: all .3s;
+}
+
+.style-btn-payment:hover {
+    border: 2px solid #000;
+    background: #000;
+    color: #fff;
+}
+
+
+
+
+
+/* Стрица с дороками */
+
+.position-pages {
+    position: relative;
+}
+
+.position-btn-pages {
+    position: absolute;
+    right: -168px;
+    top: 50px;
+    margin: 0 -10px 0 0;
+    z-index: 100;
+}
+
+.con-btn-pages {
+    height: 204px;
+    transform: rotate(270deg);
+}
+
+.style-btn-pages {
+    background-color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    border: #000 solid 7px;
+    clip-path: polygon(15.5% 0%, 84.6% 0%, 100% 100%, 0% 100%);
+    text-align: center;
+    padding: 20px 50px;
+    transition: all .3s;
+    width: 100%;
+}
+
+.style-btn-pages:hover {
+    background-color: #000;
+    color: #fff;
+}
+
+.style-btn-pages::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -7px;
+    width: 8px;
+    height: 100%;
+    transform: skew(-20deg);
+    background-color: #000;
+}
+
+.style-btn-pages::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -8px;
+    width: 8px;
+    height: 100%;
+    transform: skew(20deg);
+    background-color: #000;
+}
+
+
+
+.style-paremetrs::before{
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0px;
+    width: 8px;
+    height: 100%;
+    transform: skew(-20deg);
+    background-color: #000;
+}
+.style-paremetrs::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -7px;
+    width: 8px;
+    height: 100%;
+    transform: skew(20deg);
+    background-color: #000;
+}
+
+
+.style-order::before{
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0px;
+    width: 8px;
+    height: 100%;
+    transform: skew(-20deg);
+    background-color: #000;
+}
+.style-order::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -8px;
+    width: 8px;
+    height: 100%;
+    transform: skew(20deg);
+    background-color: #000;
+}
+
+
+
+
+/* Таблица для дорожек */
+
+table {
+    border-collapse: collapse;
+    width: 95%;
+}
+
+th,
+td {
+    border: 2px solid #888888;
+    text-align: center;
+    padding: 5px;
+}
+
+td {
+
+    height: 165px;
+}
+
+tr th {
+    background-color: #f0f0f0;
+    width: 0;
+}
+
+.heading-tracks{
+    font-size: 26px;
+    margin-bottom: 2vh;
+}
+
+
+
+.position-table {
+    margin: 15px 0 0 0;
+    display: flex;
+    width: 86vw;
+    border: 2px solid #888888;
+}
+
+.style-table {
+    border: 2px solid #6e6e6e;
+}
+
+.con-bnt-table {
+    display: flex;
+    border: 1px solid #000;
+    font-weight: 400;
+    font-size: 14px;
+    padding: 5px;
+    justify-content: space-between;
+    max-width: 75%;
+    margin: 0 auto;
+    align-items: center;
+}
+
+.style-btn-down {
+    background-color: #fff;
+    border: 1px solid #fff;
+    filter: invert();
+    border-radius: 5px;
+    padding: 5px;
+    cursor: pointer;
+
+}
+
+.style-icon-down {
+    width: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.style-date-table {
+    text-align: center;
+    font-size: 10px;
+    padding: 8px 0 0px;
+}
+
+.style-Readjustments-btn{
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    font-size: 12px;
+    align-items: center;
+    border: none;
+    background: #00000000;
+    text-decoration: underline;
+    cursor: pointer;
+
+}
+
+.style-img-i{
+    width: 13px;
+}
+.con-img-Readjustments{
+    display: flex;
+    align-items: center;
+}
+#numberReadjustments{
+    padding: 0 5px 0 2px;    
+}
+
+.style-traks-row {
+    transform: rotate(270deg);
+    background: #00000000;
+    font-weight: 400;
+    font-size: 12px;
+    white-space: nowrap;
+    position: sticky;
+    height: 115px;
+    left: 0;
+}
+
+.style-traks-row b{
+    height: 115px;
+}
+
+.position-info{
+    text-align: left;
+    font-size: 12px;
+    padding: 5px;
+    height: 115px;
+    width: 150px;
+}
+.position-remains{
+    text-align: left;
+    font-size: 14px;
+}
+
+
+
+/* Модальное окно */
+.modal {
+    display: none; 
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); 
+}
+
+
+.modal-content {
+    background-color: white;
+    margin: 15% auto;
+    padding: 0 20px 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 500px;
+    text-align: center;
+    border-radius: 10px;
+}
+
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 40px;
+    font-weight: bold;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+.positi{
+    display: flex;
+    justify-content: center;
+    align-items: end;
+}
+.modal-table{
+    margin: 0;
+}
+.heder-modal {
+    height: 60px;
+}
+tr.position-text th,
+tr.position-text td {
+    height: auto;
+    text-align: left;
+}
+
+#pricesContainer td,
+#pricesContainer th,
+#trackContainer td,
+#trackContainer th
+{
+    height: auto;
+}
+
+#ordersTableContainer {
+    overflow-y: scroll;
+    max-height: 600px;
+}
+
+#ordersTableContainer thead tr{
+    position: sticky;
+    top: 0;
+}
+
+.hidden {
+    display: none;
+}
+.active {
+    background-color: #000; /* Цвет активной кнопки */
+    color: white;
+}

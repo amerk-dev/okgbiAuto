@@ -1,0 +1,178 @@
+from django.contrib import admin
+from django.conf import settings
+
+from .models import (LeftReadyPlate, ProductionDay, ProductionDayPlate, ProductionPlan, RetoolingInfo, UnplacedPlate,
+                     UsedReadyPlate, Parameters, UnitPrice, Order, Product, Inventory, AvailableTrack)
+
+
+class DailyRetoolingInline(admin.TabularInline):
+    model = RetoolingInfo.daily_retoolings.through
+    extra = 0
+    fields = ('dailyretooling', 'date', 'count', 'price')
+    readonly_fields = fields
+
+    def date(self, instance):
+        return instance.dailyretooling.date
+
+    date.short_description = 'Date'
+
+    def count(self, instance):
+        return instance.dailyretooling.count
+
+    count.short_description = 'Count'
+
+    def price(self, instance):
+        return instance.dailyretooling.price
+
+    price.short_description = 'Price'
+
+
+class RetoolingInfoAdmin(admin.ModelAdmin):
+    list_display = ('price', 'last_state_width', 'last_state_height')
+    inlines = [DailyRetoolingInline]
+    readonly_fields = ('price', 'last_state_width', 'last_state_height')
+
+    # Убираем стандартное поле many-to-many из формы
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if 'daily_retoolings' in form.base_fields:
+            del form.base_fields['daily_retoolings']
+        return form
+
+    def get_model_perms(self, request):
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        return {}
+
+
+# Остальной код admin.py остается без изменений
+class ProductionDayPlateInline(admin.TabularInline):
+    model = ProductionDayPlate
+    extra = 0
+    fields = ('name', 'count', 'length', 'width', 'height', 'order', 'concrete_class', 'wire_bottom', 'wire_top')
+    readonly_fields = fields
+
+
+class ProductionDayAdmin(admin.ModelAdmin):
+    list_display = ('date', 'height', 'width', 'useful_len', 'free_len', 'concrete_class')
+    list_filter = ('date', 'concrete_class')
+    search_fields = ('date', 'concrete_class')
+    inlines = [ProductionDayPlateInline]
+    readonly_fields = ('total_cost', 'free_cost', 'full_cost')
+
+    def get_model_perms(self, request):
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        return {}
+
+
+class UsedReadyPlateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'count', 'length', 'width', 'height', 'order', 'concrete_class')
+    list_filter = ('concrete_class', 'order')
+    search_fields = ('name', 'order')
+
+    def get_model_perms(self, request):
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        return {}
+
+
+class UnplacedPlateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'count', 'length', 'width', 'height', 'order', 'concrete_class')
+    list_filter = ('concrete_class', 'order')
+    search_fields = ('name', 'order')
+
+    def get_model_perms(self, request):
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        return {}
+
+
+class LeftReadyPlateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'count', 'length', 'width', 'height', 'order', 'concrete_class')
+    list_filter = ('concrete_class', 'order')
+    search_fields = ('name', 'order')
+
+    def get_model_perms(self, request):
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        return {}
+
+
+class ProductionDayInline(admin.TabularInline):
+    model = ProductionPlan.plan.through
+    extra = 0
+    verbose_name = "Production Day"
+    verbose_name_plural = "Production Days"
+    readonly_fields = ('productionday',)
+
+
+class UsedReadyPlateInline(admin.TabularInline):
+    model = ProductionPlan.used_ready_plates.through
+    extra = 0
+    verbose_name = "Used Ready Plate"
+    verbose_name_plural = "Used Ready Plates"
+    readonly_fields = ('usedreadyplate',)
+
+
+class UnplacedPlateInline(admin.TabularInline):
+    model = ProductionPlan.unplaced_plates.through
+    extra = 0
+    verbose_name = "Unplaced Plate"
+    verbose_name_plural = "Unplaced Plates"
+    readonly_fields = ('unplacedplate',)
+
+
+class LeftReadyPlateInline(admin.TabularInline):
+    model = ProductionPlan.left_ready_plates.through
+    extra = 0
+    verbose_name = "Left Ready Plate"
+    verbose_name_plural = "Left Ready Plates"
+    readonly_fields = ('leftreadyplate',)
+
+
+class ProductionPlanAdmin(admin.ModelAdmin):
+    list_display = ('id', 'retooling_info')
+    inlines = [
+        ProductionDayInline,
+        UsedReadyPlateInline,
+        UnplacedPlateInline,
+        LeftReadyPlateInline,
+    ]
+
+    def get_inline_instances(self, request, obj=None):
+        if obj:
+            return super().get_inline_instances(request, obj)
+        return []
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return [field.name for field in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def get_model_perms(self, request):
+        if request.user.is_superuser:
+            return super().get_model_perms(request)
+        return {}
+
+
+class ParametersAdmin(admin.ModelAdmin):
+
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if request.user.is_superuser:
+            return fields
+        return list(set(fields) - {'url_1c', 'sign_1c', 'last_used_mode'})
+
+admin.site.register(ProductionDay, ProductionDayAdmin)
+admin.site.register(UsedReadyPlate, UsedReadyPlateAdmin)
+admin.site.register(UnplacedPlate, UnplacedPlateAdmin)
+admin.site.register(LeftReadyPlate, LeftReadyPlateAdmin)
+admin.site.register(RetoolingInfo, RetoolingInfoAdmin)
+admin.site.register(ProductionPlan, ProductionPlanAdmin)
+admin.site.register(Inventory)
+admin.site.register(Product)
+admin.site.register(AvailableTrack)
+
+admin.site.register(UnitPrice)
+admin.site.register(Parameters, ParametersAdmin)

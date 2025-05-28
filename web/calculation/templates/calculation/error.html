@@ -1,0 +1,66 @@
+{% extends 'admin/base_site.html' %}
+{% load static %}
+
+{% block content %}
+<div class="error-container">
+    <div class="card">
+        <div class="card-header bg-danger text-white">
+            <h2>Произошла ошибка</h2>
+        </div>
+        <div class="card-body">
+            <h4>Ошибка ID: {{ error_log.id }}</h4>
+            <p>При обработке вашего запроса произошла ошибка.</p>
+            
+            <div class="alert alert-info">
+                <p><strong>Время ошибки:</strong> {{ error_log.timestamp }}</p>
+                <p><strong>Тип ошибки:</strong> {{ error_log.error_type }}</p>
+                <p><strong>Сообщение:</strong> {{ error_log.error_message }}</p>
+            </div>
+
+            {% if show_details %}
+            <div class="technical-details">
+                <h4>Технические детали</h4>
+                <div class="card">
+                    <div class="card-header">Traceback</div>
+                    <div class="card-body">
+                        <pre>{{ error_log.traceback }}</pre>
+                    </div>
+                </div>
+                
+                {% if error_log.details %}
+                <div class="card mt-3">
+                    <div class="card-header">Детали</div>
+                    <div class="card-body">
+                        <pre>{{ error_log.details }}</pre>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="mt-4">
+                <a href="{% url 'index' %}" class="grp-button btn-primary">Вернуться на главную</a>
+                <a onclick="window.history.back()" class="grp-button btn-secondary">Вернуться назад</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .error-container {
+        margin: 2rem auto;
+        max-width: 900px;
+    }
+    .technical-details {
+        margin-top: 2rem;
+    }
+    pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 5px;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
