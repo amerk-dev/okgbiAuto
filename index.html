@@ -8,6 +8,23 @@
       font-family: Arial, sans-serif;
       padding: 20px;
     }
+    h1, h2 {
+      margin-top: 30px;
+    }
+    textarea {
+      width: 100%;
+      height: 400px;
+      font-family: monospace;
+      font-size: 14px;
+      margin-top: 10px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
     table {
       border-collapse: collapse;
       width: 100%;
@@ -36,93 +53,38 @@
     .retooling {
       background-color: #e6e6ff;
     }
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
   </style>
 </head>
 <body>
 
-<h1>Запрос к серверу и отображение результата</h1>
+<h1>Редактор и отправка запроса</h1>
+
+<h2>Запрос:</h2>
+<textarea id="jsonInput" placeholder="Введите ваш JSON-запрос сюда..."></textarea>
+<br>
 <button onclick="sendRequest()">Отправить запрос</button>
+
 <div id="result"></div>
 
 <script>
   async function sendRequest() {
-    const url = 'http://localhost:8080/api/v1/calculate/default'; // Замените на ваш URL
-    const requestData = {
-      "directory": {
-        "concrete_classes": [
-          { "name": "В25", "price": 5500 },
-          { "name": "В30", "price": 6000 },
-          { "name": "В35", "price": 6500 },
-          { "name": "В40", "price": 7000 }
-        ],
-        "wire": { "price": 85 },
-        "retooling": { "price": 15000 },
-        "track": { "length": 85000 }
-      },
-      "retooler": { "height": 0, "width": 0 },
-      "ready_plates": [],
-      "available_tracks": [
-        { "day": "2025-08-02", "count": 2 },
-        { "day": "2025-09-02", "count": 2 },
-        { "day": "2025-10-02", "count": 2 },
-        { "day": "2025-11-02", "count": 2 }
-      ],
-      "orders": [
-        {
-          "number": "1",
-          "production_days": 0,
-          "completion_dates": [
-            {
-              "date": "2025-09-02",
-              "plates": [
-                { "count": 1, "length": 1000, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 20, "wire_top": 4, "name": "ПНО 58-12 (3.1 ПБ 58-12) 6 нагрузка" },
-                { "count": 2, "length": 4180, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 10, "wire_top": 4, "name": "ПНО 40-12 (3.1 ПБ 40-12) 6 нагрузка" }
-              ]
-            }
-          ]
-        },
-        {
-          "number": "ТПК01305/01",
-          "production_days": 0,
-          "completion_dates": [
-            {
-              "date": "2025-09-02",
-              "plates": [
-                { "count": 1, "length": 4880, "width": 1197, "height": 220, "class": "В25", "wire_bottom": 12, "wire_top": 4, "name": "ПБ 49-12 8 нагрузка" },
-                { "count": 2, "length": 4480, "width": 1495, "height": 220, "class": "В25", "wire_bottom": 12, "wire_top": 2, "name": "ПБ 45-15 8 нагрузка" }
-              ]
-            }
-          ]
-        },
-        {
-          "number": "ТПК02057/01",
-          "production_days": 0,
-          "completion_dates": [
-            {
-              "date": "2025-09-02",
-              "plates": [
-                { "count": 4, "length": 5980, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 20, "wire_top": 4, "name": "ПНО 60-12 (3.1 ПБ 60-12) 6 нагрузка" },
-                { "count": 3, "length": 4880, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 14, "wire_top": 4, "name": "ПНО 49-12 (3.1 ПБ 49-12) 6 нагрузка" },
-                { "count": 3, "length": 4880, "width": 1490, "height": 160, "class": "В30", "wire_bottom": 18, "wire_top": 6, "name": "ПНО 49-15 (3.1 ПБ 49-15) 6 нагрузка" }
-              ]
-            }
-          ]
-        },
-        {
-          "number": "ТПК37912",
-          "production_days": 0,
-          "completion_dates": [
-            {
-              "date": "None",
-              "plates": [
-                { "count": 6, "length": 6180, "width": 1190, "height": 160, "class": "В25", "wire_bottom": 26, "wire_top": 4, "name": "ОПАОПАОПАПА-1" },
-                { "count": 4, "length": 4180, "width": 1490, "height": 160, "class": "В25", "wire_bottom": 12, "wire_top": 6, "name": "ОПАОПАОПАПА-2" }
-              ]
-            }
-          ]
-        }
-      ]
-    };
+    const url = 'http://localhost:8080/api/v1/calculate/optimal-track'; // Замените на ваш URL
+    const input = document.getElementById('jsonInput').value;
+
+    let requestData;
+    try {
+      requestData = JSON.parse(input);
+    } catch (e) {
+      alert('Ошибка в формате JSON: ' + e.message);
+      return;
+    }
+
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = '<p>Отправка запроса...</p>';
 
     try {
       const response = await fetch(url, {
@@ -139,18 +101,17 @@
       }
 
       const data = await response.json();
-
       renderPlan(data);
     } catch (error) {
       console.error('Ошибка:', error);
-      document.getElementById('result').innerHTML = `<p style="color:red;">Произошла ошибка: ${error.message}</p>`;
+      resultDiv.innerHTML = `<p style="color:red;">Произошла ошибка: ${error.message}</p>`;
     }
   }
 
   function renderPlan(data) {
     const resultDiv = document.getElementById('result');
 
-    let html = '<h2>План производства</h2>';
+    let html = '<h2>Результат: План производства</h2>';
     html += '<table>';
     html += `
       <tr>
@@ -169,11 +130,12 @@
     // Группируем данные по дням и дорожкам
     const grouped = {};
 
-    data.plan.forEach(day => {
-      if (!grouped[day.day]) grouped[day.day] = [];
-
-      grouped[day.day].push(day);
-    });
+    if (data.plan && Array.isArray(data.plan)) {
+      data.plan.forEach(day => {
+        if (!grouped[day.day]) grouped[day.day] = [];
+        grouped[day.day].push(day);
+      });
+    }
 
     Object.keys(grouped).forEach(date => {
       const tracks = grouped[date];
@@ -186,34 +148,47 @@
         html += `
           <td>${index + 1}</td>
           <td>${track.width} × ${track.height} мм</td>
-          <td>${track.useful_len.toLocaleString()} мм</td>
-          <td>${track.free_len.toLocaleString()} мм</td>
-          <td>${track.concrete_class}</td>
-          <td>${track.wire_bottom} / ${track.wire_top}</td>
-          <td>Общая: ${track.total_cost.toFixed(2)}<br>Свободная: ${track.free_cost.toFixed(2)}<br>Полная: ${track.full_cost.toFixed(2)}</td>
+          <td>${(track.useful_len || 0).toLocaleString()} мм</td>
+          <td>${(track.free_len || 0).toLocaleString()} мм</td>
+          <td>${track.concrete_class || '-'}</td>
+          <td>${track.wire_bottom || 0} / ${track.wire_top || 0}</td>
+          <td>
+            Общая: ${(track.total_cost || 0).toFixed(2)}<br>
+            Свободная: ${(track.free_cost || 0).toFixed(2)}<br>
+            Полная: ${(track.full_cost || 0).toFixed(2)}
+          </td>
           <td>
         `;
 
-        track.plates.forEach(plate => {
-          html += `<div class="plate">📦 ${plate.name}, ${plate.length}×${plate.width}×${plate.height}, ${plate.class}, проволока: ${plate.wire_bottom}/${plate.wire_top}</div>`;
-        });
+        if (Array.isArray(track.plates)) {
+          track.plates.forEach(plate => {
+            html += `<div class="plate">📦 ${plate.name}., ${plate.length}×${plate.width}×${plate.height}, ${plate.class}, проволока: ${plate.wire_bottom}/${plate.wire_top}</div>`;
+          });
+        } else {
+          html += `<div class="plate">Нет плит</div>`;
+        }
 
         html += `</td></tr>`;
       });
     });
 
-    // Суммарные затраты на переналадки
-    if (data.retooling_info && data.retooling_info.daily_retoolings) {
-      html += `<tr class="retooling"><td colspan="9"><strong>Переналадки:</strong><br>`;
-      data.retooling_info.daily_retoolings.forEach(retool => {
-        html += `📅 ${retool.date}: ${retool.count} изменений, стоимость: ${retool.price.toFixed(2)} руб.<br>`;
-      });
-      html += `Общая стоимость переналадок: ${data.retooling_info.price.toFixed(2)} руб.</td></tr>`;
-    }
-
     html += '</table>';
 
-    resultDiv.innerHTML = html;
+    // Переналадки
+    if (data.retooling_info && data.retooling_info.daily_retoolings) {
+      html += `<h3>Переналадки</h3><table><tr><th>Дата</th><th>Изменения</th><th>Стоимость</th></tr>`;
+      data.retooling_info.daily_retoolings.forEach(retool => {
+        html += `<tr class="retooling"><td>${retool.date}</td><td>`;
+        retool.changes.forEach(change => {
+          html += `Из (${change.from.width}x${change.from.height}) → В (${change.to.width}x${change.to.height})<br>`;
+        });
+        html += `</td><td>${retool.price.toFixed(2)} руб.</td></tr>`;
+      });
+      html += `<tr class="summary"><td colspan="2">Общая стоимость</td><td>${data.retooling_info.price.toFixed(2)} руб.</td></tr>`;
+      html += '</table>';
+    }
+
+    resultDiv.innerHTML += html;
   }
 </script>
 
