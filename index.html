@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Планировщик производства</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    h1, h2 {
+      margin-top: 30px;
+    }
+    textarea {
+      width: 100%;
+      height: 400px;
+      font-family: monospace;
+      font-size: 14px;
+      margin-top: 10px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #999;
+      padding: 8px 12px;
+      vertical-align: top;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    .track {
+      background-color: #e6ffe6;
+    }
+    .summary {
+      background-color: #fff2e6;
+      font-weight: bold;
+    }
+    .plate {
+      font-size: 0.9em;
+      margin-top: 5px;
+      color: #333;
+    }
+    .retooling {
+      background-color: #e6e6ff;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Редактор и отправка запроса</h1>
+
+<h2>Запрос:</h2>
+<textarea id="jsonInput" placeholder="Введите ваш JSON-запрос сюда..."></textarea>
+<br>
+<button onclick="sendRequest()">Отправить запрос</button>
+
+<div id="result"></div>
+
+<script>
+  async function sendRequest() {
+    const url = 'http://localhost:8080/api/v1/calculate/optimal-track'; // Замените на ваш URL
+    const input = document.getElementById('jsonInput').value;
+
+    let requestData;
+    try {
+      requestData = JSON.parse(input);
+    } catch (e) {
+      alert('Ошибка в формате JSON: ' + e.message);
+      return;
+    }
+
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = '<p>Отправка запроса...</p>';
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'API-key': '123456788'
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка сети или сервер вернул ошибку');
+      }
+
+      const data = await response.json();
+      renderPlan(data);
+    } catch (error) {
+      console.error('Ошибка:', error);
+      resultDiv.innerHTML = `<p style="color:red;">Произошла ошибка: ${error.message}</p>`;
+    }
+  }
+
+  function renderPlan(data) {
+    const resultDiv = document.getElementById('result');
+
+    let html = '<h2>Результат: План производства</h2>';
+    html += '<table>';
+    html += `
+      <tr>
+        <th>Дата</th>
+        <th>Дорожка</th>
+        <th>Размеры (Ш x В)</th>
+        <th>Полезная длина</th>
+        <th>Свободная длина</th>
+        <th>Класс бетона</th>
+        <th>Проволока (снизу / сверху)</th>
+        <th>Стоимость</th>
+        <th>Плиты</th>
+      </tr>
+    `;
+
+    // Группируем данные по дням и дорожкам
+    const grouped = {};
+
+    if (data.plan && Array.isArray(data.plan)) {
+      data.plan.forEach(day => {
+        if (!grouped[day.day]) grouped[day.day] = [];
+        grouped[day.day].push(day);
+      });
+    }
+
+    Object.keys(grouped).forEach(date => {
+      const tracks = grouped[date];
+
+      tracks.forEach((track, index) => {
+        html += `<tr class="track">`;
+        if (index === 0) {
+          html += `<td rowspan="${tracks.length}">${date}</td>`;
+        }
+        html += `
+          <td>${index + 1}</td>
+          <td>${track.width} × ${track.height} мм</td>
+          <td>${(track.useful_len || 0).toLocaleString()} мм</td>
+          <td>${(track.free_len || 0).toLocaleString()} мм</td>
+          <td>${track.concrete_class || '-'}</td>
+          <td>${track.wire_bottom || 0} / ${track.wire_top || 0}</td>
+          <td>
+            Общая: ${(track.total_cost || 0).toFixed(2)}<br>
+            Свободная: ${(track.free_cost || 0).toFixed(2)}<br>
+            Полная: ${(track.full_cost || 0).toFixed(2)}
+          </td>
+          <td>
+        `;
+
+        if (Array.isArray(track.plates)) {
+          track.plates.forEach(plate => {
+            html += `<div class="plate">📦 ${plate.name}., ${plate.length}×${plate.width}×${plate.height}, ${plate.class}, проволока: ${plate.wire_bottom}/${plate.wire_top}</div>`;
+          });
+        } else {
+          html += `<div class="plate">Нет плит</div>`;
+        }
+
+        html += `</td></tr>`;
+      });
+    });
+
+    html += '</table>';
+
+    // Переналадки
+    if (data.retooling_info && data.retooling_info.daily_retoolings) {
+      html += `<h3>Переналадки</h3><table><tr><th>Дата</th><th>Изменения</th><th>Стоимость</th></tr>`;
+      data.retooling_info.daily_retoolings.forEach(retool => {
+        html += `<tr class="retooling"><td>${retool.date}</td><td>`;
+        retool.changes.forEach(change => {
+          html += `Из (${change.from.width}x${change.from.height}) → В (${change.to.width}x${change.to.height})<br>`;
+        });
+        html += `</td><td>${retool.price.toFixed(2)} руб.</td></tr>`;
+      });
+      html += `<tr class="summary"><td colspan="2">Общая стоимость</td><td>${data.retooling_info.price.toFixed(2)} руб.</td></tr>`;
+      html += '</table>';
+    }
+
+    resultDiv.innerHTML += html;
+  }
+</script>
+
+</body>
+</html>
