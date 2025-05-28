@@ -1,6 +1,6 @@
 from datetime import date
-from typing import List, Optional
-from pydantic import BaseModel, Field
+from typing import List, Optional, Union
+from pydantic import BaseModel, Field, validator
 
 
 class ConcreteClass(BaseModel):
@@ -48,8 +48,14 @@ class AvailableTrack(BaseModel):
 
 
 class CompletionDate(BaseModel):
-    date: date
+    date: Union[date, None]
     plates: List[PlateSpecification] = Field(default_factory=list)
+
+    @validator("date", pre=True)
+    def parse_none(cls, v):
+        if v == "None":
+            return None
+        return v
 
 
 class Order(BaseModel):

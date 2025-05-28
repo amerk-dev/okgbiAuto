@@ -237,7 +237,7 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
     return tracks_config
 
 
-def count_of_retooling(tracks, price) -> dict:
+def count_of_retooling(tracks, price) -> dict: #ToDo  переделать/оптимизировать
     if not tracks:
         return {
             "price": 0,
