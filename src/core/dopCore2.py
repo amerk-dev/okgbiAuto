@@ -102,14 +102,16 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
 
                 # Создаем конфигурацию, если возможно
                 if current_config is None and plates:
-                    first_plate = plates[0]
+                    wire_top = max(plates, key=lambda plate: plate.wire_top).wire_top
+                    wire_bottom = max(plates, key=lambda plate: plate.wire_bottom).wire_bottom
+                    concrete_class = max(plates, key=lambda plate: plate.concrete_class).concrete_class
                     current_config = models.TrackConfig(
                         day=track_info.day,
                         height=height,
                         width=width,
-                        concrete_class=first_plate.concrete_class,
-                        wire_bottom=first_plate.wire_bottom,
-                        wire_top=first_plate.wire_top,
+                        concrete_class=concrete_class,
+                        wire_bottom=wire_bottom,
+                        wire_top=wire_top,
                         free_len=track_len,
                         useful_len=0,
                         total_cost=0,
