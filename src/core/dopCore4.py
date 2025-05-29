@@ -71,96 +71,111 @@ def calculate_plan_min_retooling(spec: models.ProductionSpecification):
 
 @profile_time
 def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
-    """
-    Для минимизации переналадок пытаемся для каждой дорожки использовать тот же тип плит,
-    что и в предыдущей дорожке (одинаковые: ширина, высота, concrete_class, wire_bottom, wire_top).
-    Если выбранная ранее группа недоступна или не даёт заполнения, выбираем группу, которая
-    обеспечивает максимальное заполнение дорожки. Таким образом, последовательные дорожки будут иметь
-    одинаковые параметры, что снижает количество переналадок.
-    """
     tracks_config = []
 
-    # Группируем все плиты по их характеристикам
-    plate_groups = defaultdict(list)
-    for date_entry in needPlates:
-        for plate in date_entry["plate"]:
-            if plate.count > 0:
-                key = (
-                    plate.width,
-                    plate.height,
-                    plate.concrete_class,
-                    plate.wire_bottom,
-                    plate.wire_top
-                )
-                plate_groups[key].append(plate)
+    # Разделяем плиты на две группы: с дедлайном и без
+    plates_with_deadline = defaultdict(list)
+    plates_without_deadline = defaultdict(list)
 
-    # Сортируем группы так, чтобы сначала обрабатывать самые длинные плиты
-    sorted_group_keys = sorted(
-        plate_groups.keys(),
-        key=lambda k: sum(p.length * p.count for p in plate_groups[k]),
-        reverse=True
-    )
+    for order in needPlates:
+        for plate in order["plate"]:
+            if plate.count <= 0:
+                continue
+            if order['date'] is not None:
+                key = (plate.width, plate.height)
+                plates_with_deadline[key].append(plate)
+            else:
+                key = (plate.width, plate.height)
+                plates_without_deadline[key].append(plate)
 
-    # Обрабатываем каждую дорожку
+    for key in plates_with_deadline:
+        plates_with_deadline[key].sort(key=lambda x: x.length, reverse=True)
+    for key in plates_without_deadline:
+        plates_without_deadline[key].sort(key=lambda x: x.length, reverse=True)
+
+    grouped_plates = defaultdict(list)
+    for key in plates_with_deadline:
+        grouped_plates[key] = plates_with_deadline[key]
+    for key in plates_without_deadline:
+        grouped_plates[key].extend(plates_without_deadline[key])
+
+    # Используем дорожки
     for track_info in trackDays:
         for _ in range(track_info.count):
             current_config = None
-            track_remaining = track_len
+            available_key = None
 
-            # Попробуем выбрать оптимальную группу для этой дорожки
-            for group_key in sorted_group_keys:
-                plates_in_group = plate_groups[group_key]
-                if not plates_in_group:
-                    continue
+            # Перебираем группы плит
+            for key in list(grouped_plates.keys()):
+                width, height = key
+                plates = grouped_plates[key]
 
-                width, height, concrete_class, wire_bottom, wire_top = group_key
-
-                # Если ещё нет конфигурации — создаём
-                if current_config is None:
+                # Создаем конфигурацию, если возможно
+                if current_config is None and plates:
+                    wire_top = max(plates, key=lambda plate: plate.wire_top).wire_top
+                    wire_bottom = max(plates, key=lambda plate: plate.wire_bottom).wire_bottom
+                    concrete_class = max(plates, key=lambda plate: plate.concrete_class).concrete_class
                     current_config = models.TrackConfig(
                         day=track_info.day,
                         height=height,
                         width=width,
-                        free_len=track_len,
-                        useful_len=0,
                         concrete_class=concrete_class,
                         wire_bottom=wire_bottom,
                         wire_top=wire_top,
+                        free_len=track_len,
+                        useful_len=0,
                         total_cost=0,
                         plates=[],
+                        free_cost=0,
+                        full_cost=0
                     )
                     tracks_config.append(current_config)
+                    available_key = key
 
-                # Сортируем плиты в группе по убыванию длины
-                plates_sorted = sorted(plates_in_group, key=lambda x: x.length, reverse=True)
+                if key != available_key:
+                    continue
 
-                for plate in plates_sorted:
-                    if plate.count <= 0 or track_remaining < plate.length:
+                # Укладываем плиты
+                for plate in plates:
+                    if current_config.free_len <= 0:
+                        break
+
+                    max_count = min(plate.count, current_config.free_len // plate.length)
+                    if max_count <= 0:
                         continue
 
-                    max_plates = min(plate.count, track_remaining // plate.length)
-                    if max_plates == 0:
-                        continue
+                    # Добавляем плиты
+                    current_config.plates.extend([deepcopy(plate)] * max_count)
+                    current_config.free_len -= plate.length * max_count
+                    current_config.useful_len += plate.length * max_count
+                    plate.count -= max_count
 
-                    # Добавляем плиты в дорожку
-                    current_config.plates.extend([deepcopy(plate)] * max_plates)
-                    current_config.free_len -= plate.length * max_plates
-                    current_config.useful_len += plate.length * max_plates
-                    plate.count -= max_plates
-                    track_remaining -= plate.length * max_plates
+                # Очищаем пустые группы
+                grouped_plates[key] = [p for p in plates if p.count > 0]
+                if not grouped_plates[key]:
+                    del grouped_plates[key]
 
-                    # Удаляем полностью израсходованные плиты
-                    if plate.count == 0:
-                        plates_in_group.remove(plate)
-
-                # После добавления всех возможных плит из группы — выходим
-                break  # чтобы не менять конфигурацию
-
-            if current_config:
+            # Создаем пустую конфигурацию, если плит нет
+            if current_config is None:
+                current_config = models.TrackConfig(
+                    day=track_info.day,
+                    height=0,
+                    width=0,
+                    concrete_class="",
+                    wire_bottom=0,
+                    wire_top=0,
+                    free_len=track_len,
+                    useful_len=0,
+                    total_cost=0,
+                    plates=[],
+                    free_cost=0,
+                    full_cost=0
+                )
+                tracks_config.append(current_config)
+            else:
                 current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
                     current_config, prices)
 
-            # Уменьшаем количество доступных дорожек
-            track_info.count -= 1
+        track_info.count = 0  # Освобождаем дорожки
 
     return tracks_config
