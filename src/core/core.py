@@ -3,13 +3,16 @@ from collections import defaultdict
 import models
 import time
 
+
 def profile_time(func):
     def wrapper(*args, **kwargs):
         start = time.time()
         result = func(*args, **kwargs)
         print(f"[PROFILE] {func.__name__} took {time.time() - start:.4f}s")
         return result
+
     return wrapper
+
 
 @profile_time
 def calculate_plan(spec: models.ProductionSpecification):
@@ -189,13 +192,14 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                     if (plate.width, plate.height) != available_size:
                         continue
                 else:
-                    wire_top = max(sorted_plates, key=lambda plate: sorted_plates.wire_top).wire_top
-                    wire_bottom = max(sorted_plates, key=lambda plate: sorted_plates.wire_bottom).wire_bottom
-                    concrete_class = max(sorted_plates, key=lambda plate: sorted_plates.concrete_class).concrete_class
+                    wire_top = max(sorted_plates, key=lambda plate: sorted_plates).wire_top
+
+                    wire_bottom = max(sorted_plates, key=lambda plate: sorted_plates).wire_bottom
+                    concrete_class = max(sorted_plates, key=lambda plate: sorted_plates).concrete_class
                     current_config = models.TrackConfig(
-                        day=track_info.day,
-                        height=height,
-                        width=width,
+                        day=tracks.day,
+                        height=plate.height,
+                        width=plate.width,
                         concrete_class=concrete_class,
                         wire_bottom=wire_bottom,
                         wire_top=wire_top,
@@ -218,31 +222,17 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                     plate.count -= max_plates
                     track_remaining -= plate.length * max_plates
 
-                    concrete_price = next(
-                        cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class
-                    )
-                    cost = 0
-                    cost += current_config.wire_bottom * prices.wire.price * max_plates
-                    cost += current_config.wire_top * prices.wire.price * max_plates
-                    cost += (
-                                    plate.length / 1000 * current_config.height / 1000 * current_config.width / 1000
-                            ) * concrete_price * max_plates
 
-                    current_config.total_cost = cost
+                    current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(current_config, prices)
 
-                free_cost = (
-                        (current_config.free_len / 1000 * current_config.height / 1000 * current_config.width / 1000)
-                        * concrete_price
-                ) if concrete_price else 0
-                current_config.free_cost = free_cost
-                current_config.full_cost = current_config.free_cost + current_config.total_cost
+
 
         tracks.count -= 1
 
     return tracks_config
 
 
-def count_of_retooling(tracks, price) -> dict: #ToDo  переделать/оптимизировать
+def count_of_retooling(tracks, price) -> dict:  # ToDo  переделать/оптимизировать
     if not tracks:
         return {
             "price": 0,
@@ -292,3 +282,25 @@ def count_of_retooling(tracks, price) -> dict: #ToDo  переделать/оп�
         "daily_retoolings": daily_retoolings,
         "last_state": last_state
     }
+
+
+def calculate_price(track_config, prices):
+    print(track_config)
+    cost = 0
+    concrete_price = next(
+        cc.price for cc in prices.concrete_classes if cc.name == track_config.concrete_class
+    )
+
+    for plate in track_config.plates:
+        cost += plate.length / 1000 * track_config.height / 1000 * track_config.width / 1000 \
+                * concrete_price
+    cost += 85000 * prices.wire.price * (
+            track_config.wire_bottom + track_config.wire_top) #ToDo вынести 85000 в конфиг или еще что-то
+
+    total_cost = cost
+
+    free_vol = track_config.free_len / 1000 * track_config.height / 1000 * track_config.width / 1000
+    free_cost = free_vol * concrete_price if concrete_price else 0
+    full_cost = total_cost + free_cost
+
+    return total_cost, free_cost, full_cost

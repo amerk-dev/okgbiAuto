@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
-from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling, profile_time
+from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling, profile_time, calculate_price
 import models
 from copy import deepcopy
 
@@ -140,13 +140,6 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                     current_config.useful_len += plate.length * max_count
                     plate.count -= max_count
 
-                    # Расчет стоимости бетона для текущей плиты
-                    try:
-                        concrete_price = next(cc.price for cc in prices.concrete_classes if cc.name == plate.concrete_class)
-                    except StopIteration:
-                        concrete_price = 0
-                    cost = (plate.length / 1000 * height / 1000 * width / 1000) * concrete_price * max_count
-                    current_config.total_cost += cost
 
                 # Очищаем пустые группы
                 grouped_plates[key] = [p for p in plates if p.count > 0]
@@ -171,21 +164,8 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                 )
                 tracks_config.append(current_config)
             else:
-                # Расчет свободной стоимости
-                try:
-                    concrete_price = next(
-                        cc.price for cc in prices.concrete_classes
-                        if cc.name == current_config.concrete_class
-                    )
-                except StopIteration:
-                    concrete_price = 0
-                current_config.free_cost = (
-                    (current_config.free_len / 1000) *
-                    (current_config.height / 1000) *
-                    (current_config.width / 1000) *
-                    concrete_price
-                )
-                current_config.full_cost = current_config.total_cost + current_config.free_cost
+                current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
+                    current_config, prices)
 
         track_info.count = 0  # Освобождаем дорожки
 
