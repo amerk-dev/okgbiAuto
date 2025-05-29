@@ -6,8 +6,6 @@ import models
 from copy import deepcopy
 
 
-
-
 @profile_time
 def calculate_plan_min_retooling(spec: models.ProductionSpecification):
     available_tracks = spec.available_tracks
@@ -62,13 +60,14 @@ def calculate_plan_min_retooling(spec: models.ProductionSpecification):
     retooling_cost = count_of_retooling(tracks_config, spec.directory.retooling.price)
 
     return (
-        tracks_config,           # Конечные параметры переналадчика
-        used_ready_plates,       # Использованные готовые плиты
+        tracks_config,  # Конечные параметры переналадчика
+        used_ready_plates,  # Использованные готовые плиты
         unplaced_plates_merged,  # Плиты, не уместившиеся на дорожках
-        updated_ready_plates,    # Оставшиеся готовые плиты
+        updated_ready_plates,  # Оставшиеся готовые плиты
         retooling_cost,
         is_real
     )
+
 
 @profile_time
 def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
@@ -157,11 +156,11 @@ def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
                 # После добавления всех возможных плит из группы — выходим
                 break  # чтобы не менять конфигурацию
 
-            current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
-                current_config, prices)
+            if current_config:
+                current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
+                    current_config, prices)
 
             # Уменьшаем количество доступных дорожек
             track_info.count -= 1
 
     return tracks_config
-
