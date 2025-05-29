@@ -172,7 +172,7 @@ def merge_plates(tmp_need_plates):
 def bestPlates(trackDay, track_len: int, needPlates, prices):
     tracks_config = []
     for tracks in trackDay:
-        for track in range(tracks.count):
+        for _ in range(tracks.count):
             track_remaining = track_len
             current_config = None
             available_size = None
@@ -206,7 +206,6 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                         continue
                 else:
                     wire_top = max(sorted_plates, key=lambda plate: sorted_plates).wire_top
-
                     wire_bottom = max(sorted_plates, key=lambda plate: sorted_plates).wire_bottom
                     concrete_class = max(sorted_plates, key=lambda plate: sorted_plates).concrete_class
                     current_config = models.TrackConfig(
@@ -304,7 +303,7 @@ def calculate_price(track_config, prices):
     )
 
     for plate in track_config.plates:
-        cost += ((plate.length * track_config.height * track_config.width) / 10**9) * concrete_price
+        cost += (((plate.length * track_config.height * track_config.width) / 10**9) * concrete_price) * 0.65
     cost += 85000 / 1000 * prices.wire.price * (
             track_config.wire_bottom + track_config.wire_top) #ToDo вынести 85000 в конфиг или еще что-то
 
