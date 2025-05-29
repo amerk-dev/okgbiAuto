@@ -190,7 +190,8 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
 
 @logger.catch
 def post_calculating(track_config, plates_with_deadline):
-    for index, track in enumerate(track_config[:-1]):
+    for index in range(len(track_config)-1):
+        track = track_config[index]
         if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
             for plate in track.plates:
                 if plate in plates_with_deadline[(plate.width, plate.height)]:
