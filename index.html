@@ -72,7 +72,7 @@
 
 <script>
   async function sendRequest() {
-    const url = 'http://localhost:8080/api/v1/calculate/default'; // Замените на ваш URL
+    const url = 'http://localhost:8080/api/v1/calculate/optimal-mix'; // Замените на ваш URL
     const input = document.getElementById('jsonInput').value;
 
     let requestData;
@@ -173,7 +173,23 @@
     });
 
     html += '</table>';
-
+    if (data.unplaced_plates && data.unplaced_plates.length > 0) {
+        html += `<h3>⚠️ Нераспределённые плиты</h3>`;
+        html += `<table><tr><th>Название</th><th>Количество</th><th>Размеры</th><th>Класс бетона</th><th>Проволока (снизу / сверху)</th><th>Заказ</th></tr>`;
+        data.unplaced_plates.forEach(up => {
+          up.plate.forEach(plate => {
+            html += `<tr><td>${plate.name}</td>`;
+            html += `<td>${plate.count}</td>`;
+            html += `<td>${plate.length}×${plate.width}×${plate.height}</td>`;
+            html += `<td>${plate.class}</td>`;
+            html += `<td>${plate.wire_bottom}/${plate.wire_top}</td>`;
+            html += `<td>${plate.order || '-'}</td></tr>`;
+          });
+        });
+        html += '</table>';
+      } else {
+        html += `<p style="color: #888; margin-top: 30px;">ℹ️ Нет нераспределённых плит</p>`;
+      }
     // Переналадки
     if (data.retooling_info && data.retooling_info.daily_retoolings) {
       html += `<h3>Переналадки</h3><table><tr><th>Дата</th><th>Изменения</th><th>Стоимость</th></tr>`;
