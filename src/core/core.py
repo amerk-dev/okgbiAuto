@@ -70,7 +70,7 @@ def calculate_plan(spec: models.ProductionSpecification):
                 })
     unplaced_plates_merged = merge_plates(unplaced_plates)
 
-    retooling_cost = count_of_retooling(tracks_config, spec.directory.retooling.price)
+    retooling_cost = count_of_retooling(tracks_config, spec.directory.retooling.price, spec.retooler)
 
     return (
         tracks_config,
@@ -244,7 +244,7 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
     return tracks_config
 
 
-def count_of_retooling(tracks, price) -> dict:
+def count_of_retooling(tracks, price, retooler) -> dict:  # ToDo  переделать/оптимизировать (порядок дорожек в течении дня не важен)
     if not tracks:
         return {
             "price": 0,
@@ -252,72 +252,42 @@ def count_of_retooling(tracks, price) -> dict:
             "last_state": None
         }
 
-    # Группируем все дорожки по дням и собираем уникальные размеры для каждого дня
-    daily_dimensions = defaultdict(set)
-    for track in tracks:
-        daily_dimensions[track.day].add((track.width, track.height))
+    daily_changes = defaultdict(list)
+    prev_track = retooler
 
-    # Сортируем дни по порядку
-    sorted_days = sorted(daily_dimensions.keys())
+    for current_track in tracks:
+        if prev_track.width != current_track.width or prev_track.height != current_track.height:
+            change_date = current_track.day
+            daily_changes[change_date].append({
+                "from": {
+                    "width": prev_track.width,
+                    "height": prev_track.height
+                },
+                "to": {
+                    "width": current_track.width,
+                    "height": current_track.height
+                }
+            })
+        prev_track = current_track
+
+    sorted_dates = sorted(daily_changes.keys())
     daily_retoolings = []
-    total_price = 0
-    prev_dimensions = None
+    total_count = sum(len(changes) for changes in daily_changes.values())
+    total_price = total_count * price
 
-    for day in sorted_days:
-        current_dimensions = daily_dimensions[day]
-
-        if prev_dimensions is not None:  # Пропускаем первый день (нет предыдущего дня для сравнения)
-            # Находим изменения между днями
-            changes = []
-            count = 0
-
-            if not prev_dimensions:  # Если предыдущий день пустой (на всякий случай)
-                count = len(current_dimensions)
-                for curr in current_dimensions:
-                    changes.append({
-                        "from": None,
-                        "to": {"width": curr[0], "height": curr[1]}
-                    })
-            else:
-                # Если размеры изменились
-                if prev_dimensions != current_dimensions:
-                    # Находим общие размеры между днями
-                    common = prev_dimensions & current_dimensions
-
-                    if not common:
-                        # Все размеры изменились - полная переналадка
-                        count = len(current_dimensions)
-                        for curr in current_dimensions:
-                            changes.append({
-                                "from": {"width": next(iter(prev_dimensions))[0],
-                                         "height": next(iter(prev_dimensions))[1]},
-                                "to": {"width": curr[0], "height": curr[1]}
-                            })
-                    else:
-                        # Переналадка только для новых размеров
-                        count = len(current_dimensions - common)
-                        for curr in (current_dimensions - common):
-                            changes.append({
-                                "from": {"width": next(iter(prev_dimensions))[0],
-                                         "height": next(iter(prev_dimensions))[1]},
-                                "to": {"width": curr[0], "height": curr[1]}
-                            })
-
-            if count > 0:
-                daily_retoolings.append({
-                    "date": day,
-                    "count": count,
-                    "price": count * price,
-                    "changes": changes
-                })
-                total_price += count * price
-
-        prev_dimensions = current_dimensions
+    for date in sorted_dates:
+        changes = daily_changes[date]
+        daily_retoolings.append({
+            "date": date,
+            "count": len(changes),
+            "price": len(changes) * price,
+            "changes": changes
+        })
 
     last_state = {
-        "width": tracks[-1].width,
-        "height": tracks[-1].height
-    }
+        "width": prev_track.width,
+        "height": prev_track.height
+    } if tracks else None
 
     return {
         "price": total_price,
