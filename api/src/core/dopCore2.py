@@ -77,17 +77,33 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
     """
     tracks_config = []
 
-    # Группируем плиты по ширине и высоте
-    grouped_plates = defaultdict(list)
-    for date_entry in needPlates:
-        for plate in date_entry["plate"]:
-            if plate.count > 0:
-                key = (plate.width, plate.height)
-                grouped_plates[key].append(deepcopy(plate))
+    # Разделяем плиты на две группы: с дедлайном и без
+    plates_with_deadline = defaultdict(list)
+    plates_without_deadline = defaultdict(list)
 
-    # Сортируем каждую группу по длине (от большего к меньшему)
-    for key in grouped_plates:
-        grouped_plates[key].sort(key=lambda p: p.length, reverse=True)
+    for order in needPlates:
+        for plate in order["plate"]:
+            if plate.count <= 0:
+                continue
+            if order['date'] is not None:
+                key = (plate.width, plate.height)
+                plates_with_deadline[key].append(plate)
+            else:
+                key = (plate.width, plate.height)
+                plates_without_deadline[key].append(plate)
+
+
+    for key in plates_with_deadline:
+        plates_with_deadline[key].sort(key=lambda x: x.length, reverse=True)
+    for key in plates_without_deadline:
+        plates_without_deadline[key].sort(key=lambda x: x.length, reverse=True)
+
+    grouped_plates = defaultdict(list)
+    for key in plates_with_deadline:
+        grouped_plates[key] = plates_with_deadline[key]
+    for key in plates_without_deadline:
+        grouped_plates[key].extend(plates_without_deadline[key])
+
 
     # Используем дорожки
     for track_info in trackDays:
