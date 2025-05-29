@@ -92,7 +92,7 @@ def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
                     plate.wire_bottom,
                     plate.wire_top
                 )
-                plate_groups[key].append(deepcopy(plate))
+                plate_groups[key].append(plate)
 
     # Сортируем группы так, чтобы сначала обрабатывать самые длинные плиты
     sorted_group_keys = sorted(
