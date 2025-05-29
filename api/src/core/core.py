@@ -172,7 +172,7 @@ def merge_plates(tmp_need_plates):
 def bestPlates(trackDay, track_len: int, needPlates, prices):
     tracks_config = []
     for tracks in trackDay:
-        for track in range(tracks.count):
+        for _ in range(tracks.count):
             track_remaining = track_len
             current_config = None
             available_size = None
@@ -191,8 +191,8 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                         plates_without_deadline.append(plate)
 
             # Сортируем каждую группу по длине (от большего к меньшему)
-            plates_with_deadline.sort(key=lambda x: x.length, reverse=True)
-            plates_without_deadline.sort(key=lambda x: x.length, reverse=True)
+            plates_with_deadline.sort(key=lambda x: (x.width, x.height), reverse=True) #ToDo добавить высоту совсместно с шириной
+            plates_without_deadline.sort(key=lambda x: (x.width, x.height), reverse=True)
 
             # Объединяем группы: сначала плиты с дедлайном, потом без
             sorted_plates = plates_with_deadline + plates_without_deadline
@@ -206,7 +206,6 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                         continue
                 else:
                     wire_top = max(sorted_plates, key=lambda plate: sorted_plates).wire_top
-
                     wire_bottom = max(sorted_plates, key=lambda plate: sorted_plates).wire_bottom
                     concrete_class = max(sorted_plates, key=lambda plate: sorted_plates).concrete_class
                     current_config = models.TrackConfig(
@@ -245,7 +244,7 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
     return tracks_config
 
 
-def count_of_retooling(tracks, price) -> dict:  # ToDo  переделать/оптимизировать (порядок дорожек в течении дня не важен)
+def count_of_retooling(tracks, price) -> dict:
     if not tracks:
         return {
             "price": 0,
@@ -253,42 +252,72 @@ def count_of_retooling(tracks, price) -> dict:  # ToDo  переделать/о�
             "last_state": None
         }
 
-    daily_changes = defaultdict(list)
-    prev_track = tracks[0]
+    # Группируем все дорожки по дням и собираем уникальные размеры для каждого дня
+    daily_dimensions = defaultdict(set)
+    for track in tracks:
+        daily_dimensions[track.day].add((track.width, track.height))
 
-    for current_track in tracks[1:]:
-        if prev_track.width != current_track.width or prev_track.height != current_track.height:
-            change_date = current_track.day
-            daily_changes[change_date].append({
-                "from": {
-                    "width": prev_track.width,
-                    "height": prev_track.height
-                },
-                "to": {
-                    "width": current_track.width,
-                    "height": current_track.height
-                }
-            })
-        prev_track = current_track
-
-    sorted_dates = sorted(daily_changes.keys())
+    # Сортируем дни по порядку
+    sorted_days = sorted(daily_dimensions.keys())
     daily_retoolings = []
-    total_count = sum(len(changes) for changes in daily_changes.values())
-    total_price = total_count * price
+    total_price = 0
+    prev_dimensions = None
 
-    for date in sorted_dates:
-        changes = daily_changes[date]
-        daily_retoolings.append({
-            "date": date,
-            "count": len(changes),
-            "price": len(changes) * price,
-            "changes": changes
-        })
+    for day in sorted_days:
+        current_dimensions = daily_dimensions[day]
+
+        if prev_dimensions is not None:  # Пропускаем первый день (нет предыдущего дня для сравнения)
+            # Находим изменения между днями
+            changes = []
+            count = 0
+
+            if not prev_dimensions:  # Если предыдущий день пустой (на всякий случай)
+                count = len(current_dimensions)
+                for curr in current_dimensions:
+                    changes.append({
+                        "from": None,
+                        "to": {"width": curr[0], "height": curr[1]}
+                    })
+            else:
+                # Если размеры изменились
+                if prev_dimensions != current_dimensions:
+                    # Находим общие размеры между днями
+                    common = prev_dimensions & current_dimensions
+
+                    if not common:
+                        # Все размеры изменились - полная переналадка
+                        count = len(current_dimensions)
+                        for curr in current_dimensions:
+                            changes.append({
+                                "from": {"width": next(iter(prev_dimensions))[0],
+                                         "height": next(iter(prev_dimensions))[1]},
+                                "to": {"width": curr[0], "height": curr[1]}
+                            })
+                    else:
+                        # Переналадка только для новых размеров
+                        count = len(current_dimensions - common)
+                        for curr in (current_dimensions - common):
+                            changes.append({
+                                "from": {"width": next(iter(prev_dimensions))[0],
+                                         "height": next(iter(prev_dimensions))[1]},
+                                "to": {"width": curr[0], "height": curr[1]}
+                            })
+
+            if count > 0:
+                daily_retoolings.append({
+                    "date": day,
+                    "count": count,
+                    "price": count * price,
+                    "changes": changes
+                })
+                total_price += count * price
+
+        prev_dimensions = current_dimensions
 
     last_state = {
-        "width": prev_track.width,
-        "height": prev_track.height
-    } if tracks else None
+        "width": tracks[-1].width,
+        "height": tracks[-1].height
+    }
 
     return {
         "price": total_price,
@@ -304,7 +333,7 @@ def calculate_price(track_config, prices):
     )
 
     for plate in track_config.plates:
-        cost += ((plate.length * track_config.height * track_config.width) / 10**9) * concrete_price
+        cost += (((plate.length * track_config.height * track_config.width) / 10**9) * concrete_price) * 0.65
     cost += 85000 / 1000 * prices.wire.price * (
             track_config.wire_bottom + track_config.wire_top) #ToDo вынести 85000 в конфиг или еще что-то
 
