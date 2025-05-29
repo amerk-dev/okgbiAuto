@@ -87,10 +87,10 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                 continue
             if order['date'] is not None:
                 key = (plate.width, plate.height)
-                plates_with_deadline[key].append(deepcopy(plate))
+                plates_with_deadline[key].append(plate)
             else:
                 key = (plate.width, plate.height)
-                plates_without_deadline[key].append(deepcopy(plate))
+                plates_without_deadline[key].append(plate)
 
 
     for key in plates_with_deadline:
