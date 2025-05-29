@@ -155,24 +155,8 @@ def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
                 if not grouped_plates[key]:
                     del grouped_plates[key]
 
-            # Создаем пустую конфигурацию, если плит нет
-            if current_config is None:
-                current_config = models.TrackConfig(
-                    day=track_info.day,
-                    height=0,
-                    width=0,
-                    concrete_class="",
-                    wire_bottom=0,
-                    wire_top=0,
-                    free_len=track_len,
-                    useful_len=0,
-                    total_cost=0,
-                    plates=[],
-                    free_cost=0,
-                    full_cost=0
-                )
-                tracks_config.append(current_config)
-            else:
+
+            if current_config:
                 current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
                     current_config, prices)
 
