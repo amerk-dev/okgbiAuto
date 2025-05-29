@@ -176,13 +176,26 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
             track_remaining = track_len
             current_config = None
             available_size = None
-            concrete_price = None
 
-            sorted_plates = sorted(
-                (plate for plate_last_day in needPlates for plate in plate_last_day["plate"] if plate.count > 0),
-                key=lambda x: x.length,
-                reverse=True
-            )
+            # Разделяем плиты на две группы: с дедлайном и без
+            plates_with_deadline = []
+            plates_without_deadline = []
+
+            for order in needPlates:
+                for plate in order["plate"]:
+                    if plate.count <= 0:
+                        continue
+                    if order['date'] is not None:
+                        plates_with_deadline.append(plate)
+                    else:
+                        plates_without_deadline.append(plate)
+
+            # Сортируем каждую группу по длине (от большего к меньшему)
+            plates_with_deadline.sort(key=lambda x: x.length, reverse=True)
+            plates_without_deadline.sort(key=lambda x: x.length, reverse=True)
+
+            # Объединяем группы: сначала плиты с дедлайном, потом без
+            sorted_plates = plates_with_deadline + plates_without_deadline
 
             for plate in sorted_plates:
                 if track_remaining <= 0:
@@ -285,7 +298,6 @@ def count_of_retooling(tracks, price) -> dict:  # ToDo  переделать/о�
 
 
 def calculate_price(track_config, prices):
-    print(track_config)
     cost = 0
     concrete_price = next(
         cc.price for cc in prices.concrete_classes if cc.name == track_config.concrete_class
