@@ -57,7 +57,7 @@ def calculate_plan_min_retooling(spec: models.ProductionSpecification):
                 })
     unplaced_plates_merged = merge_plates(unplaced_plates)
 
-    retooling_cost = count_of_retooling(tracks_config, spec.directory.retooling.price)
+    retooling_cost = count_of_retooling(tracks_config, spec.directory.retooling.price, spec.retooler)
 
     return (
         tracks_config,  # Конечные параметры переналадчика
