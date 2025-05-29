@@ -340,7 +340,7 @@ def calculate_price(track_config, prices):
     total_cost = cost
 
     free_vol = track_config.free_len / 1000 * track_config.height / 1000 * track_config.width / 1000
-    free_cost = free_vol * concrete_price if concrete_price else 0
+    free_cost = free_vol * concrete_price
     full_cost = total_cost + free_cost
 
     return total_cost, free_cost, full_cost
