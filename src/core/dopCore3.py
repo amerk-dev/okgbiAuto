@@ -117,15 +117,18 @@ def bestPlatesMinMix(trackDays, track_len: int, needPlates, prices):
                                ['width', 'height', 'concrete_class', 'wire_bottom', 'wire_top']):
                         continue
                 else:
+                    wire_top = max(sorted_plates, key=lambda plate: sorted_plates.wire_top).wire_top
+                    wire_bottom = max(sorted_plates, key=lambda plate: sorted_plates.wire_bottom).wire_bottom
+                    concrete_class = max(sorted_plates, key=lambda plate: sorted_plates.concrete_class).concrete_class
                     current_config = models.TrackConfig(
                         day=track_info.day,
                         height=plate.height,
                         width=plate.width,
                         free_len=track_len,
                         useful_len=0,
-                        concrete_class=plate.concrete_class,
-                        wire_bottom=plate.wire_bottom,
-                        wire_top=plate.wire_top,
+                        concrete_class=concrete_class,
+                        wire_bottom=wire_bottom,
+                        wire_top=wire_top,
                         total_cost=0,
                         plates=[]
                     )
