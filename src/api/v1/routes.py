@@ -34,7 +34,7 @@ async def calculate_plate(spec: ProductionSpecification):
 
 
 
-@v1_router.post("/calculate/optimal-track")
+@v1_router.post("/calculate/optimal-track")# Расчет 2
 async def calculate_optimal_track_plan(spec: ProductionSpecification):
     res, used_ready_plates, unplaced_plates_merged, updated_ready_plates, ret_price, is_real = calculate_plan_max_fill(spec)
     if is_real:
@@ -56,7 +56,7 @@ async def calculate_optimal_track_plan(spec: ProductionSpecification):
         }
 
 
-@v1_router.post("/calculate/optimal-cost")
+@v1_router.post("/calculate/optimal-mix")# Расчет 3
 async def calculate_optimal_cost_plan(spec: ProductionSpecification):
     res, used_ready_plates, unplaced_plates_merged, updated_ready_plates, ret_price, is_real = calculate_plan_min_mix(spec)
     if is_real:
@@ -78,7 +78,7 @@ async def calculate_optimal_cost_plan(spec: ProductionSpecification):
         }
 
 
-@v1_router.post("/calculate/optimal-retool")
+@v1_router.post("/calculate/optimal-retool")# Расчет 4
 async def calculate_optimal_retool_plan(spec: ProductionSpecification):
     res, used_ready_plates, unplaced_plates_merged, updated_ready_plates, ret_price, is_real = calculate_plan_min_retooling(spec)
     if is_real:

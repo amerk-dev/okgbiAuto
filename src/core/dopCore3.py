@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
-from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling, profile_time
+from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling, profile_time, calculate_price
 import models
 from copy import deepcopy
 
@@ -71,105 +71,76 @@ def calculate_plan_min_mix(spec: models.ProductionSpecification):
 
 
 @profile_time
-def bestPlatesMinMix(trackDays, track_len: int, needPlates, prices):
-    """
-    Для каждой дорожки выбирается однородная группа плит (одинаковый класс бетона и проводка),
-    которая обеспечивает максимально возможное заполнение дорожки при минимальном использовании более дорогих материалов.
-    Если заполнение достигает не менее 80% д  лины дорожки, вариант считается приемлемым.
-    """
+def bestPlatesMinMix(trackDay, track_len: int, needPlates, prices):
     tracks_config = []
-    sorted_needPlates = sorted(needPlates, key=lambda x: x["date"])
-
-    plates_for_date = []
-    for date_entry in sorted_needPlates:
-        date = date_entry["date"]
-        plates_for_date = [deepcopy(p) for p in date_entry["plate"] if p.count > 0]
-        if not plates_for_date:
-            continue
-
-    available_tracks = trackDays #[t for t in trackDays if t.day == date]
-    for track_info in available_tracks:
-        for _ in range(track_info.count):
+    for tracks in trackDay:
+        for _ in range(tracks.count):
             track_remaining = track_len
             current_config = None
-            concrete_price = 0
+            available_size = None
 
-            def calc_cost_per_length(p):
-                try:
-                    concrete_price = next(cc.price for cc in prices.concrete_classes if cc.name == p.concrete_class)
-                except StopIteration:
-                    concrete_price = float('inf')
-                volume_cost = (p.length / 1000) * (p.height / 1000) * (p.width / 1000) * concrete_price
-                wire_cost = (p.wire_bottom + p.wire_top) * prices.wire.price
-                return (volume_cost + wire_cost) / p.length if p.length else float('inf')
+            # Разделяем плиты на две группы: с дедлайном и без
+            plates_with_deadline = []
+            plates_without_deadline = []
 
-            sorted_plates = sorted(
-                [p for p in plates_for_date if p.count > 0],
-                key=calc_cost_per_length
-            )
+            for order in needPlates:
+                for plate in order["plate"]:
+                    if plate.count <= 0:
+                        continue
+                    if order['date'] is not None:
+                        plates_with_deadline.append(plate)
+                    else:
+                        plates_without_deadline.append(plate)
+
+            # Сортируем каждую группу по длине (от большего к меньшему)
+            plates_with_deadline.sort(key=lambda x: (x.width, x.height, x.wire_top, x.wire_bottom, x.concrete_class), reverse=True)
+            plates_without_deadline.sort(key=lambda x: (x.width, x.height, x.wire_top, x.wire_bottom, x.concrete_class), reverse=True)
+
+            # Объединяем группы: сначала плиты с дедлайном, потом без
+            sorted_plates = plates_with_deadline + plates_without_deadline
 
             for plate in sorted_plates:
                 if track_remaining <= 0:
                     break
 
                 if current_config:
-                    if not all(getattr(plate, attr) == getattr(current_config, attr) for attr in
-                               ['width', 'height', 'concrete_class', 'wire_bottom', 'wire_top']):
+                    if (plate.width, plate.height) != available_size:
                         continue
                 else:
-                    wire_top = max(sorted_plates, key=lambda plate: sorted_plates.wire_top).wire_top
-                    wire_bottom = max(sorted_plates, key=lambda plate: sorted_plates.wire_bottom).wire_bottom
-                    concrete_class = max(sorted_plates, key=lambda plate: sorted_plates.concrete_class).concrete_class
+                    wire_top = max(sorted_plates, key=lambda plate: sorted_plates).wire_top
+                    wire_bottom = max(sorted_plates, key=lambda plate: sorted_plates).wire_bottom
+                    concrete_class = max(sorted_plates, key=lambda plate: sorted_plates).concrete_class
                     current_config = models.TrackConfig(
-                        day=track_info.day,
+                        day=tracks.day,
                         height=plate.height,
                         width=plate.width,
-                        free_len=track_len,
-                        useful_len=0,
                         concrete_class=concrete_class,
                         wire_bottom=wire_bottom,
                         wire_top=wire_top,
+                        free_len=track_len,
+                        useful_len=0,
                         total_cost=0,
-                        plates=[]
+                        plates=[],
+                        free_cost=0,
+                        full_cost=0
                     )
+                    available_size = (plate.width, plate.height)
                     tracks_config.append(current_config)
-                    try:
-                        concrete_price = next(
-                            cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class)
-                    except StopIteration:
-                        concrete_price = 0
 
                 max_plates = min(plate.count, track_remaining // plate.length)
                 if max_plates > 0:
-                    current_config.plates.extend([deepcopy(plate)] * max_plates)
+                    for _ in range(max_plates):
+                        current_config.plates.append(deepcopy(plate))
                     current_config.free_len -= plate.length * max_plates
                     current_config.useful_len += plate.length * max_plates
+                    plate.count -= max_plates
                     track_remaining -= plate.length * max_plates
 
-                    cost = (plate.wire_bottom + plate.wire_top) * prices.wire.price * max_plates
-                    cost += (
-                                        plate.length / 1000 * current_config.height / 1000 * current_config.width / 1000) * concrete_price * max_plates
-                    current_config.total_cost += cost
 
-                    # Обновление count в plates_for_date
-                    for p in plates_for_date:
-                        if all(getattr(p, attr) == getattr(plate, attr) for attr in
-                               ['length', 'width', 'height', 'concrete_class', 'wire_bottom', 'wire_top']):
-                            p.count -= max_plates
-                            break
+                    current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(current_config, prices)
 
-            if current_config:
-                try:
-                    concrete_price = next(
-                        cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class)
-                except StopIteration:
-                    concrete_price = 0
-                current_config.free_cost = (
-                                                       current_config.free_len / 1000 * current_config.height / 1000 * current_config.width / 1000) * concrete_price
-                current_config.full_cost = current_config.free_cost + current_config.total_cost
 
-        track_info.count = 0
+
+        tracks.count -= 1
 
     return tracks_config
-
-
