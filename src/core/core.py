@@ -245,7 +245,7 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
     return tracks_config
 
 
-def count_of_retooling(tracks, price) -> dict:  # ToDo  переделать/оптимизировать
+def count_of_retooling(tracks, price) -> dict:  # ToDo  переделать/оптимизировать (порядок дорожек в течении дня не важен)
     if not tracks:
         return {
             "price": 0,
@@ -304,9 +304,8 @@ def calculate_price(track_config, prices):
     )
 
     for plate in track_config.plates:
-        cost += plate.length / 1000 * track_config.height / 1000 * track_config.width / 1000 \
-                * concrete_price
-    cost += 85000 * prices.wire.price * (
+        cost += ((plate.length * track_config.height * track_config.width) / 10**9) * concrete_price
+    cost += 85000 / 1000 * prices.wire.price * (
             track_config.wire_bottom + track_config.wire_top) #ToDo вынести 85000 в конфиг или еще что-то
 
     total_cost = cost
