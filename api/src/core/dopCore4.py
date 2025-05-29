@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
-from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling, profile_time
+from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling, profile_time, calculate_price
 import models
 from copy import deepcopy
 
@@ -157,23 +157,8 @@ def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
                 # После добавления всех возможных плит из группы — выходим
                 break  # чтобы не менять конфигурацию
 
-            # Подсчёт стоимости после заполнения дорожки
-            if current_config and current_config.plates:
-                concrete_price = next(
-                    cc.price for cc in prices.concrete_classes if cc.name == current_config.concrete_class
-                )
-                cost = 0
-                for plate in current_config.plates:
-                    cost += plate.length / 1000 * current_config.height / 1000 * current_config.width / 1000 \
-                            * concrete_price
-                cost += len(current_config.plates) * prices.wire.price * (
-                            current_config.wire_bottom + current_config.wire_top)
-                current_config.total_cost = cost
-
-                # Стоимость свободного места
-                free_vol = current_config.free_len / 1000 * current_config.height / 1000 * current_config.width / 1000
-                current_config.free_cost = free_vol * concrete_price if concrete_price else 0
-                current_config.full_cost = current_config.total_cost + current_config.free_cost
+            current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
+                current_config, prices)
 
             # Уменьшаем количество доступных дорожек
             track_info.count -= 1
