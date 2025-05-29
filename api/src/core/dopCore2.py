@@ -1,10 +1,12 @@
 from datetime import datetime
 from typing import Dict, List
 from collections import defaultdict
+
+from loguru import logger
+
 from .core import reality_check, hasReadyPlate, merge_plates, count_of_retooling, profile_time, calculate_price
 import models
 from copy import deepcopy
-
 
 
 @profile_time
@@ -61,13 +63,14 @@ def calculate_plan_max_fill(spec: models.ProductionSpecification):
     retooling_cost = count_of_retooling(tracks_config, spec.directory.retooling.price)
 
     return (
-        tracks_config,           # Конечные параметры переналадчика
-        used_ready_plates,       # Использованные готовые плиты
+        tracks_config,  # Конечные параметры переналадчика
+        used_ready_plates,  # Использованные готовые плиты
         unplaced_plates_merged,  # Плиты, не уместившиеся на дорожках
-        updated_ready_plates,    # Оставшиеся готовые плиты
+        updated_ready_plates,  # Оставшиеся готовые плиты
         retooling_cost,
         is_real
     )
+
 
 @profile_time
 def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
@@ -92,7 +95,6 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                 key = (plate.width, plate.height)
                 plates_without_deadline[key].append(plate)
 
-
     for key in plates_with_deadline:
         plates_with_deadline[key].sort(key=lambda x: x.length, reverse=True)
     for key in plates_without_deadline:
@@ -103,7 +105,6 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
         grouped_plates[key] = plates_with_deadline[key]
     for key in plates_without_deadline:
         grouped_plates[key].extend(plates_without_deadline[key])
-
 
     # Используем дорожки
     for track_info in trackDays:
@@ -156,7 +157,6 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                     current_config.useful_len += plate.length * max_count
                     plate.count -= max_count
 
-
                 # Очищаем пустые группы
                 grouped_plates[key] = [p for p in plates if p.count > 0]
                 if not grouped_plates[key]:
@@ -184,5 +184,30 @@ def bestPlatesMaxFill(trackDays, track_len: int, needPlates, prices):
                     current_config, prices)
 
         track_info.count = 0  # Освобождаем дорожки
-
+    post_calculating(tracks_config, plates_with_deadline)
     return tracks_config
+
+
+@logger.catch
+def post_calculating(track_config, plates_with_deadline):
+    for index, track in enumerate(track_config[:-1]):
+        if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
+            for plate in track.plates:
+                if plate in plates_with_deadline[(plate.width, plate.height)]:
+                    break
+            else:
+                p1 = track.free_cost - 15000
+                p2 = track_config[index + 1].total_cost
+                if p1 < p2:
+                    swap_to_end(index, track_config)
+                    continue
+
+
+def swap_to_end(index, track_config):
+    while index < len(track_config) - 1:
+        if track_config[index + 1].width == 0 or track_config[index + 1].height == 0:
+            break
+        track_config[index].day, track_config[index + 1].day = track_config[index + 1].day, track_config[index].day
+        track_config[index], track_config[index + 1] = track_config[index + 1], track_config[index]
+
+        index += 1
