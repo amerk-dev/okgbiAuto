@@ -4,6 +4,7 @@ import models
 import time
 
 
+
 def profile_time(func):
     def wrapper(*args, **kwargs):
         start = time.time()
@@ -171,6 +172,7 @@ def merge_plates(tmp_need_plates):
 
 def bestPlates(trackDay, track_len: int, needPlates, prices):
     tracks_config = []
+    global_plates_with_deadline=[]
     for tracks in trackDay:
         for _ in range(tracks.count):
             track_remaining = track_len
@@ -187,6 +189,7 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                         continue
                     if order['date'] is not None:
                         plates_with_deadline.append(plate)
+                        global_plates_with_deadline.append(plate)
                     else:
                         plates_without_deadline.append(plate)
 
@@ -234,17 +237,18 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                     plate.count -= max_plates
                     track_remaining -= plate.length * max_plates
 
-
-                    current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(current_config, prices)
-
-
+                    current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
+                        current_config, prices)
 
         tracks.count -= 1
+
+    post_calculating(tracks_config, global_plates_with_deadline)
 
     return tracks_config
 
 
-def count_of_retooling(tracks, price, retooler) -> dict:  # ToDo  переделать/оптимизировать (порядок дорожек в течении дня не важен)
+def count_of_retooling(tracks, price,
+                       retooler) -> dict:  # ToDo  переделать/оптимизировать (порядок дорожек в течении дня не важен)
     if not tracks:
         return {
             "price": 0,
@@ -303,9 +307,9 @@ def calculate_price(track_config, prices):
     )
 
     for plate in track_config.plates:
-        cost += (((plate.length * track_config.height * track_config.width) / 10**9) * concrete_price) * 0.65
+        cost += (((plate.length * track_config.height * track_config.width) / 10 ** 9) * concrete_price) * 0.65
     cost += 85000 / 1000 * prices.wire.price * (
-            track_config.wire_bottom + track_config.wire_top) #ToDo вынести 85000 в конфиг или еще что-то
+            track_config.wire_bottom + track_config.wire_top)  # ToDo вынести 85000 в конфиг или еще что-то
 
     total_cost = cost
 
@@ -314,3 +318,28 @@ def calculate_price(track_config, prices):
     full_cost = total_cost + free_cost
 
     return total_cost, free_cost, full_cost
+
+
+def post_calculating(track_config, plates_with_deadline):
+    for index in range(len(track_config)-1):
+        track = track_config[index]
+        if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
+            for plate in track.plates:
+                if plate in plates_with_deadline:
+                    break
+            else:
+                p1 = track.free_cost - 15000
+                p2 = track_config[index + 1].total_cost
+                if p1 < p2:
+                    swap_to_end(index, track_config)
+                    continue
+
+
+def swap_to_end(index, track_config):
+    while index < len(track_config) - 1:
+        if track_config[index + 1].width == 0 or track_config[index + 1].height == 0:
+            break
+        track_config[index].day, track_config[index + 1].day = track_config[index + 1].day, track_config[index].day
+        track_config[index], track_config[index + 1] = track_config[index + 1], track_config[index]
+
+        index += 1
