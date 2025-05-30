@@ -1,8 +1,8 @@
-from copy import deepcopy
-from collections import defaultdict
-import models
 import time
+from collections import defaultdict
+from copy import deepcopy
 
+import models
 
 
 def profile_time(func):
@@ -172,7 +172,7 @@ def merge_plates(tmp_need_plates):
 
 def bestPlates(trackDay, track_len: int, needPlates, prices):
     tracks_config = []
-    global_plates_with_deadline=[]
+    global_plates_with_deadline = []
     for tracks in trackDay:
         for _ in range(tracks.count):
             track_remaining = track_len
@@ -194,7 +194,8 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                         plates_without_deadline.append(plate)
 
             # Сортируем каждую группу по длине (от большего к меньшему)
-            plates_with_deadline.sort(key=lambda x: (x.width, x.height), reverse=True) #ToDo добавить высоту совсместно с шириной
+            plates_with_deadline.sort(key=lambda x: (x.width, x.height),
+                                      reverse=True)  # ToDo добавить высоту совсместно с шириной
             plates_without_deadline.sort(key=lambda x: (x.width, x.height), reverse=True)
 
             # Объединяем группы: сначала плиты с дедлайном, потом без
@@ -242,7 +243,7 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
 
         tracks.count -= 1
 
-    post_calculating(tracks_config, global_plates_with_deadline)
+    # post_calculating(tracks_config, global_plates_with_deadline)
 
     return tracks_config
 
@@ -321,7 +322,7 @@ def calculate_price(track_config, prices):
 
 
 def post_calculating(track_config, plates_with_deadline):
-    for index in range(len(track_config)-1):
+    for index in range(len(track_config) - 1):
         track = track_config[index]
         if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
             for plate in track.plates:
