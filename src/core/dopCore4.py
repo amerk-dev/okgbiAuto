@@ -93,22 +93,16 @@ def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
     for key in plates_without_deadline:
         plates_without_deadline[key].sort(key=lambda x: x.length, reverse=True)
 
-    grouped_plates = defaultdict(list)
-    for key in plates_with_deadline:
-        grouped_plates[key] = plates_with_deadline[key]
-    for key in plates_without_deadline:
-        grouped_plates[key].extend(plates_without_deadline[key])
-
-    # Используем дорожки
+    # Первый этап, плиты с дедлайнами
     for track_info in trackDays:
         for _ in range(track_info.count):
             current_config = None
             available_key = None
 
             # Перебираем группы плит
-            for key in list(grouped_plates.keys()):
+            for key in list(plates_with_deadline.keys()):
                 width, height = key
-                plates = grouped_plates[key]
+                plates = plates_with_deadline[key]
 
                 # Создаем конфигурацию, если возможно
                 if current_config is None and plates:
@@ -151,10 +145,82 @@ def bestPlatesMinRetooling(trackDays, track_len: int, needPlates, prices):
                     plate.count -= max_count
 
                 # Очищаем пустые группы
-                grouped_plates[key] = [p for p in plates if p.count > 0]
-                if not grouped_plates[key]:
-                    del grouped_plates[key]
+                plates_with_deadline[key] = [p for p in plates if p.count > 0]
+                if not plates_with_deadline[key]:
+                    del plates_with_deadline[key]
 
+            if current_config:
+                current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
+                    current_config, prices)
+
+    # Второй этап, плиты без дедлайнов
+    for track_info in trackDays:
+        for _ in range(track_info.count):
+            current_config = None
+            available_key = None
+            # Перебираем группы плит
+            for key in list(plates_without_deadline.keys()):
+                width, height = key
+                plates = plates_without_deadline[key]
+                for track in tracks_config:
+                    if (track.width, track.height) == (width, height):
+                        for plate in plates:
+                            if track.free_len > plate.length:
+                                track.free_len -= plate.length
+                                track.useful_len += plate.length
+                                track.total_cost, track.free_cost, track.full_cost = calculate_price(
+                                    track, prices)
+                                track.wire_top = max(track.plates, key=lambda plate: plate.wire_top).wire_top
+                                track.wire_bottom = max(track.plates, key=lambda plate: plate.wire_bottom).wire_bottom
+                                track.concrete_class = max(track.plates, key=lambda plate: plate.concrete_class).concrete_class
+                                track.plates.append(plate)
+                            else:
+                                break
+
+                # Создаем конфигурацию, если возможно
+                if current_config is None and plates:
+                    wire_top = max(plates, key=lambda plate: plate.wire_top).wire_top
+                    wire_bottom = max(plates, key=lambda plate: plate.wire_bottom).wire_bottom
+                    concrete_class = max(plates, key=lambda plate: plate.concrete_class).concrete_class
+                    current_config = models.TrackConfig(
+                        day=track_info.day,
+                        height=height,
+                        width=width,
+                        concrete_class=concrete_class,
+                        wire_bottom=wire_bottom,
+                        wire_top=wire_top,
+                        free_len=track_len,
+                        useful_len=0,
+                        total_cost=0,
+                        plates=[],
+                        free_cost=0,
+                        full_cost=0
+                    )
+                    tracks_config.append(current_config)
+                    available_key = key
+
+                if key != available_key:
+                    continue
+
+                # Укладываем плиты
+                for plate in plates:
+                    if current_config.free_len <= 0:
+                        break
+
+                    max_count = min(plate.count, current_config.free_len // plate.length)
+                    if max_count <= 0:
+                        continue
+
+                    # Добавляем плиты
+                    current_config.plates.extend([deepcopy(plate)] * max_count)
+                    current_config.free_len -= plate.length * max_count
+                    current_config.useful_len += plate.length * max_count
+                    plate.count -= max_count
+
+                # Очищаем пустые группы
+                plates_without_deadline[key] = [p for p in plates if p.count > 0]
+                if not plates_without_deadline[key]:
+                    del plates_without_deadline[key]
 
             if current_config:
                 current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
