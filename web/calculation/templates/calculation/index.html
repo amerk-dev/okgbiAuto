@@ -268,29 +268,14 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 	                                        <div class="con-bnt-table">
 	                                            <label for="numberTracks-{{ forloop.counter }}">Дорожек:</label>
 	                                            <input id="numberTracks-{{ forloop.counter }}"
-	                                                   data-id="{{ forloop.counter }}"
-	                                                   class="track-input"
-	                                                   onchange="this.value = Math.max(0, Math.min(7, parseInt(this.value) || 0))"
-	                                                   type="number"
-	                                                   step="1"
-	                                                   min='0'
-	                                                   max='7'
-	                                                   value="{{ track.count }}">
-{#	                                            #}
-
-{#	                                            <div id="numberTracks-{{ forloop.counter }}"><b>{{ track.count }}</b></div>#}
-{#	                                            <button day="{{ forloop.counter }}" class="style-btn-down track-dropdown-btn" type="button">#}
-{#	                                                <img class="style-icon-down" src="/static/calculation/img/down.png"#}
-{#	                                                     alt="">#}
-{#	                                            </button>#}
-{##}
-{#	                                            <div day="{{ forloop.counter }}" id="tracksDropdown-{{ forloop.counter }}"#}
-{#	                                                 class="dropdown-content"#}
-{#	                                                 style="display: none;">#}
-{#	                                                 {% for t in '1234567' %}#}
-{#		                                                <a href="#" data-value="{{ forloop.counter }}">Дорожек: {{ forloop.counter }}</a>#}
-{#	                                                {% endfor %}#}
-{#	                                            </div>#}
+	                                                       data-id="{{ forloop.counter }}"
+	                                                       class="track-input"
+	                                                       onchange="this.value = Math.max(0, Math.min(7, parseInt(this.value) || 0))"
+	                                                       type="number"
+	                                                       step="1"
+	                                                       min='0'
+	                                                       max='7'
+	                                                       value="{{ track.count }}">
 	                                        </div>
 	                                        <div class="style-date-table" id="date-tracks">{{ track.date }}</div>
 	                                        <div>
@@ -393,11 +378,21 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 	                                            </div>
 	                                        </td>
 		                                {% else %}
-			                                <td style="background-color: rgb(255, 193, 193, 0.2)">
+			                                <td style="background-color: rgb(255, 193, 193, 0.2); position: relative;">
 	                                            <div class="position-info">
 	                                            </div>
 	                                            <div class="position-remains"></div>
-
+                                                {% with col_index=forloop.counter0 %}
+                                                    {% for track in available_tracks %}
+                                                        {% if forloop.counter0 == col_index %}
+                                                            {% if track.count == 0 and track.is_weekend_day %}
+                                                                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; transform: rotate(-45deg); color: #000000; font-weight: bold; font-size: 20px;">
+                                                                    Выходной
+                                                                </div>
+                                                            {% endif %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endwith %}
 	                                        </td>
 		                                {% endif %}
 	                                {% endfor %}

@@ -157,6 +157,24 @@ class ProductionPlanAdmin(admin.ModelAdmin):
 
 
 class ParametersAdmin(admin.ModelAdmin):
+    fieldsets = (
+        (None, {
+            'fields': ('road_length', 'default_available_tracks', 'retooler_last_width', 'retooler_last_height')
+        }),
+        ('Выходные дни', {
+            'fields': ('monday_weekend', 'tuesday_weekend', 'wednesday_weekend', 'thursday_weekend', 
+                      'friday_weekend', 'saturday_weekend', 'sunday_weekend'),
+            'description': 'Укажите, какие дни недели считать выходными (количество доступных дорожек будет 0)'
+        }),
+        ('Настройки 1C', {
+            'fields': ('url_1c', 'sign_1c'),
+            'classes': ('collapse',),
+        }),
+        ('Прочие настройки', {
+            'fields': ('last_used_mode',),
+            'classes': ('collapse',),
+        }),
+    )
 
     def get_fields(self, request, obj=None):
         fields = super().get_fields(request, obj)

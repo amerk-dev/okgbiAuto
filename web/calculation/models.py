@@ -163,7 +163,7 @@ class UnitPrice(models.Model):
             3: "раз",
         }
         return unit_name_dict[self.unit]
-    
+
     class Meta:
         verbose_name = 'Цена за единицу'
         verbose_name_plural = 'Цены за единицу'
@@ -200,6 +200,15 @@ class Parameters(SingletonModel):
     url_1c = models.CharField(max_length=255, verbose_name='URL 1c', default='')
     sign_1c = models.CharField(max_length=255, verbose_name='Пароль 1с', default='123456788')
 
+    # Weekend day settings
+    monday_weekend = models.BooleanField(default=False, verbose_name='Понедельник выходной')
+    tuesday_weekend = models.BooleanField(default=False, verbose_name='Вторник выходной')
+    wednesday_weekend = models.BooleanField(default=False, verbose_name='Среда выходной')
+    thursday_weekend = models.BooleanField(default=False, verbose_name='Четверг выходной')
+    friday_weekend = models.BooleanField(default=False, verbose_name='Пятница выходной')
+    saturday_weekend = models.BooleanField(default=True, verbose_name='Суббота выходной')
+    sunday_weekend = models.BooleanField(default=True, verbose_name='Воскресенье выходной')
+
     class ModeChoice(models.IntegerChoices):
         MINIMAL_COST = 0, 'Минимальная стоимость'
         MAXIMUM_FILL = 1, 'Максимальное заполнение'
@@ -218,11 +227,73 @@ class Parameters(SingletonModel):
 
     def save(self, *args, **kwargs):
         prev_params = Parameters.get_solo()
+        changes_made = False
+
+        # Check if default_available_tracks has changed
         if prev_params.default_available_tracks != self.default_available_tracks:
+            changes_made = True
             obj = super().save(*args, **kwargs)
-            AvailableTrack.objects.all().update(count=self.default_available_tracks)
+
+            # Update all non-weekend days with the new default_available_tracks
+            for track in AvailableTrack.objects.all():
+                weekday = track.date.weekday()
+                is_weekend = (
+                    (weekday == 0 and self.monday_weekend) or
+                    (weekday == 1 and self.tuesday_weekend) or
+                    (weekday == 2 and self.wednesday_weekend) or
+                    (weekday == 3 and self.thursday_weekend) or
+                    (weekday == 4 and self.friday_weekend) or
+                    (weekday == 5 and self.saturday_weekend) or
+                    (weekday == 6 and self.sunday_weekend)
+                )
+                if not is_weekend:
+                    track.count = self.default_available_tracks
+                    track.save()
+
             return obj
-        return super().save(*args, **kwargs)
+
+        # Check if any weekend day settings have changed
+        weekend_changes = (
+            prev_params.monday_weekend != self.monday_weekend or
+            prev_params.tuesday_weekend != self.tuesday_weekend or
+            prev_params.wednesday_weekend != self.wednesday_weekend or
+            prev_params.thursday_weekend != self.thursday_weekend or
+            prev_params.friday_weekend != self.friday_weekend or
+            prev_params.saturday_weekend != self.saturday_weekend or
+            prev_params.sunday_weekend != self.sunday_weekend
+        )
+
+        if weekend_changes:
+            changes_made = True
+            obj = super().save(*args, **kwargs)
+
+            # Update all tracks based on their weekday and the new weekend settings
+            for track in AvailableTrack.objects.all():
+                weekday = track.date.weekday()
+                is_weekend = False
+
+                if weekday == 0 and self.monday_weekend:
+                    is_weekend = True
+                elif weekday == 1 and self.tuesday_weekend:
+                    is_weekend = True
+                elif weekday == 2 and self.wednesday_weekend:
+                    is_weekend = True
+                elif weekday == 3 and self.thursday_weekend:
+                    is_weekend = True
+                elif weekday == 4 and self.friday_weekend:
+                    is_weekend = True
+                elif weekday == 5 and self.saturday_weekend:
+                    is_weekend = True
+                elif weekday == 6 and self.sunday_weekend:
+                    is_weekend = True
+
+                track.count = 0 if is_weekend else self.default_available_tracks
+                track.save()
+
+            return obj
+
+        if not changes_made:
+            return super().save(*args, **kwargs)
 
 
 class Product(models.Model):
@@ -312,15 +383,60 @@ class AvailableTrack(models.Model):
     @property
     def retooling_info(self):
         return DailyRetooling.objects.filter(date=self.date).first()
-    
-    
+
+    @property
+    def is_weekend_day(self):
+        """Check if this day is marked as a weekend day in the admin panel"""
+        params = Parameters.get_solo()
+        weekday = self.date.weekday()  # 0 is Monday, 6 is Sunday
+
+        if weekday == 0 and params.monday_weekend:
+            return True
+        elif weekday == 1 and params.tuesday_weekend:
+            return True
+        elif weekday == 2 and params.wednesday_weekend:
+            return True
+        elif weekday == 3 and params.thursday_weekend:
+            return True
+        elif weekday == 4 and params.friday_weekend:
+            return True
+        elif weekday == 5 and params.saturday_weekend:
+            return True
+        elif weekday == 6 and params.sunday_weekend:
+            return True
+
+        return False
+
+
     @classmethod
     def get_tracks(cls, date_from, date_to=None):
         params = Parameters.get_solo()
         date_to = date_to or date_from + timedelta(days=6)
-        for day in range((date_to - date_from).days):
+        for day in range((date_to - date_from).days + 1):  # +1 to include date_to
             date = date_from + timedelta(days=day)
-            cls.objects.get_or_create(date=date, defaults={'count': params.default_available_tracks})
+            # Check if the day is marked as a weekend day
+            is_weekend = False
+            weekday = date.weekday()  # 0 is Monday, 6 is Sunday
+
+            if weekday == 0 and params.monday_weekend:
+                is_weekend = True
+            elif weekday == 1 and params.tuesday_weekend:
+                is_weekend = True
+            elif weekday == 2 and params.wednesday_weekend:
+                is_weekend = True
+            elif weekday == 3 and params.thursday_weekend:
+                is_weekend = True
+            elif weekday == 4 and params.friday_weekend:
+                is_weekend = True
+            elif weekday == 5 and params.saturday_weekend:
+                is_weekend = True
+            elif weekday == 6 and params.sunday_weekend:
+                is_weekend = True
+
+            # Set count to 0 for weekend days, otherwise use default_available_tracks
+            track_count = 0 if is_weekend else params.default_available_tracks
+            cls.objects.get_or_create(date=date, defaults={'count': track_count})
+
         tracks = cls.objects.filter(date__gte=date_from, date__lte=date_to)
         return tracks
 
@@ -334,7 +450,7 @@ class ErrorLog(models.Model):
         ('view', 'Представление'),
         ('other', 'Другое'),
     ]
-    
+
     error_type = models.CharField(max_length=255)
     error_message = models.TextField()
     source = models.CharField(max_length=255)
@@ -349,20 +465,20 @@ class ErrorLog(models.Model):
     timestamp = models.DateTimeField(default=timezone.now)
     resolved = models.BooleanField(default=False)
     resolution_notes = models.TextField(blank=True, null=True)
-    
+
     class Meta:
         ordering = ['-timestamp']
         verbose_name = 'Лог ошибок'
         verbose_name_plural = 'Логи ошибок'
-    
+
     def __str__(self):
         return f"{self.error_type}: {self.error_message[:50]}"
-    
+
     @property
     def short_error(self):
         return f"{self.error_message[:100]}{'...' if len(self.error_message) > 100 else ''}"
-        
-        
+
+
 class ErrorReport(models.Model):
     """Model for storing user reports of errors"""
     error_log = models.ForeignKey(
@@ -373,11 +489,11 @@ class ErrorReport(models.Model):
     user_description = models.TextField()
     contact_info = models.CharField(max_length=255, blank=True, null=True)
     timestamp = models.DateTimeField(default=timezone.now)
-    
+
     class Meta:
         ordering = ['-timestamp']
         verbose_name = 'Отчет об ошибке'
         verbose_name_plural = 'Отчеты об ошибках'
-        
+
     def __str__(self):
         return f"Report for {self.error_log.id} - {self.timestamp}"
