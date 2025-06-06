@@ -76,14 +76,17 @@ def index(request):
     }
     all_max_length = (sum([i.count for i in available_tracks if i.count and len(production_days[i.date]) != 0])
                         * Parameters.get_solo().road_length)
+
+    retool_price = sum([i for i in DailyRetooling.objects.all().values_list('price', flat=True)])
+    all_cost = sum(ProductionDay.objects.all().values_list('total_cost', flat=True)) + retool_price
+    useful = (sum([sum([ip.count * ip.length for ip in i.plates.all()])
+                       for i in ProductionDay.objects.all()]) / all_max_length)
     all_stats = {
         'tracks': len(ProductionDay.objects.all()),
         'plates': sum([sum([ip.count for ip in i.plates.all()]) for i in ProductionDay.objects.all()]),
-        'length': sum([sum([ip.count * ip.length for ip in i.plates.all()])
-                       for i in ProductionDay.objects.all()]),
-        'max_length': all_max_length,
+        'useful': round(useful * 100, 2),
         'retool_count': sum([i for i in DailyRetooling.objects.all().values_list('count', flat=True)]),
-        'retool_price': sum([i for i in DailyRetooling.objects.all().values_list('price', flat=True)])
+        'all_cost': all_cost
     }
 
     return render(request, 'calculation/index.html', {
@@ -101,6 +104,12 @@ def index(request):
     })
 
 
+def update_available_tracks(tracks, date_from, date_to):
+    old_tracks = list(AvailableTrack.get_tracks(date_from, date_to))
+    for i, track in enumerate(tracks):
+        old_tracks[i].count = track
+    AvailableTrack.objects.bulk_update(old_tracks, ['count'])
+
 @logger.catch
 @handle_view_exception
 @login_required(login_url='/admin/login/')
@@ -109,6 +118,9 @@ def fetch_and_save_production_plan(request):
         option = request.POST.get('option', '1')
         date_from, date_to = get_date_range_from_request(request)
         date_to = date_from + datetime.timedelta(days=100)
+        tracks = list(map(int, request.POST['tracks'].split(',')))
+        update_available_tracks(tracks, date_from, date_to)
+
         with transaction.atomic():
             clear_old_data(date_from)
             update_data()
