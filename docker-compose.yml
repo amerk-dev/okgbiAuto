@@ -4,30 +4,37 @@ services:
   api:
     build:
       context: api
-    ports:
-      - "8080:8080"
     environment:
       - UVICORN_RELOAD=true
       - API_KEY=12345678
     restart: on-failure
+    ports:
+      - "8080:8080"
     volumes:
       - ./api:/app
 
   web:
     build:
       context: web
-    #TODO: gunicorn
-    command: bash -c "python manage.py collectstatic --noinput && python manage.py runserver 0.0.0.0:8000"
+    command: bash -c "python manage.py collectstatic --noinput && gunicorn --reload -w 4 okgbi.wsgi:application --bind 0.0.0.0:8000"
     volumes:
       - ./web:/code
-    ports:
-      - "8000:8000"
     environment:
       - DJANGO_SETTINGS_MODULE=okgbi.settings
     env_file:
       - .env
     depends_on:
       - db
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./web/staticfiles:/static
+    depends_on:
+      - web
 
   db:
     image: postgres:latest

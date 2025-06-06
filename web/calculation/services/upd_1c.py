@@ -51,7 +51,7 @@ def update_data():
                     )
 
                     if completion_date['date'] == '0001-01-01T00:00:00':
-                        deadline_date = (datetime.today() + timedelta(days=100)).date()
+                        deadline_date = None
                     else:
                         deadline_date = datetime.strptime(completion_date['date'], '%Y-%m-%dT%H:%M:%S').date()
 

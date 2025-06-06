@@ -7,6 +7,7 @@ from django.db.models import F
 from calculation.models import AvailableTrack, DailyRetooling, DailyRetoolingChanges, Inventory, LeftReadyPlate, Order, \
     Parameters, \
     ProductionDay, ProductionDayPlate, ProductionPlan, RetoolingInfo, UnitPrice, UnplacedPlate, UsedReadyPlate
+from calculation.utils import DecimalEncoder
 
 
 def clear_old_data(date_from):
@@ -46,7 +47,7 @@ def prepare_data(date_from, date_to):
         order_dates = set(Order.objects.filter(order_number=order_number).values_list('deadline', flat=True))
         for order_date in order_dates:
             completion_date = {
-                    "date": order_date.strftime("%Y-%m-%d"),
+                    "date": order_date.strftime("%Y-%m-%d") if order_date else None,
                     "plates": [
                         {
                             "count": order.count,
@@ -98,9 +99,9 @@ def prepare_data(date_from, date_to):
 
 
 option_urls = {
-    '1': 'http://api:8080/api/v1/calculate/optimal-cost/',
+    '1': 'http://api:8080/api/v1/calculate/default/',
     '2': 'http://api:8080/api/v1/calculate/optimal-track/',
-    '3': 'http://api:8080/api/v1/calculate/default/',
+    '3': 'http://api:8080/api/v1/calculate/optimal-mix/',
     '4': 'http://api:8080/api/v1/calculate/optimal-retool/',
 
 }
@@ -108,7 +109,7 @@ option_urls = {
 def calculate_plan(date_from, date_to, option: str = '1'):
     # Получаем данные из API
     headers = {'api-key': '12345678'}
-    payload = json.dumps(prepare_data(date_from, date_to), ensure_ascii=False)
+    payload = json.dumps(prepare_data(date_from, date_to), ensure_ascii=False, cls=DecimalEncoder)
     with open('output.json', 'w', encoding='utf-8') as f:
         f.write(payload)
     url = option_urls[option]
@@ -117,7 +118,7 @@ def calculate_plan(date_from, date_to, option: str = '1'):
     data = r.json()
 
     with open('response.json', 'w', encoding='utf-8') as f:
-        f.write(json.dumps(data, ensure_ascii=False))
+        f.write(json.dumps(data, ensure_ascii=False, cls=DecimalEncoder))
 
     # Сначала создаем RetoolingInfo и DailyRetoolings
     retooling_data = data.get('retooling_info', {})

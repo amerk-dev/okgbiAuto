@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
+from django.db.models import DecimalField
 
 
 class Plate(models.Model):
@@ -55,9 +56,9 @@ class ProductionDay(models.Model):
     concrete_class = models.CharField(max_length=10)
     wire_bottom = models.PositiveIntegerField()
     wire_top = models.PositiveIntegerField()
-    total_cost = models.FloatField()
-    free_cost = models.FloatField()
-    full_cost = models.FloatField()
+    total_cost = models.DecimalField(max_digits=16, decimal_places=2)
+    free_cost = models.DecimalField(max_digits=16, decimal_places=2)
+    full_cost = models.DecimalField(max_digits=16, decimal_places=2)
 
     class Meta:
         verbose_name = "Production Day"
@@ -95,7 +96,7 @@ class LeftReadyPlate(Plate):
 class DailyRetooling(models.Model):
     date = models.DateField()
     count = models.PositiveIntegerField()
-    price = models.PositiveIntegerField()
+    price = models.DecimalField(max_digits=16, decimal_places=2)
 
     class Meta:
         verbose_name = "Daily Retooling"
@@ -114,7 +115,7 @@ class DailyRetoolingChanges(models.Model):
 
 
 class RetoolingInfo(models.Model):
-    price = models.PositiveIntegerField()
+    price = models.DecimalField(max_digits=16, decimal_places=2)
     last_state_width = models.PositiveIntegerField()
     last_state_height = models.PositiveIntegerField()
     daily_retoolings = models.ManyToManyField(DailyRetooling)
@@ -144,7 +145,7 @@ class UnitPrice(models.Model):
 
     name = models.CharField(max_length=255, verbose_name="Наименование")
     concrete_class = models.CharField(max_length=10, null=True, blank=True, verbose_name="Класс бетона")
-    price = models.PositiveIntegerField(verbose_name="Цена")
+    price = models.DecimalField(max_digits=16, decimal_places=2, verbose_name="Цена")
     unit = models.PositiveSmallIntegerField(verbose_name="Тип",
                                             choices=UnitTypeChoice.choices, default=1)
 
@@ -275,11 +276,12 @@ class Order(models.Model):
     order_number = models.CharField('Номер заказа', max_length=50)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name='Изделие')
     count = models.PositiveIntegerField('Количество, шт', validators=[MinValueValidator(1)])
-    deadline = models.DateField('Дедлайн по заказу')
+    deadline = models.DateField('Дедлайн по заказу', null=True)
 
     class Meta:
         verbose_name = 'Заказ'
         verbose_name_plural = 'Заказы'
+        ordering = ['deadline']
 
     def __str__(self):
         return f"Заказ {self.order_number} - {self.product.name} x{self.count}"

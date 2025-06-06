@@ -10,6 +10,56 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <title>Панель управления</title>
     <style>
+	    .loader {
+            width: 75px;
+            height: 75px;
+            border: 0 solid #fff;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            position: fixed;
+            animation: pulse 2s ease infinite;
+            left: 55%;
+            top: 46%;
+            z-index: 100;
+            fill: #2B6FB6;
+        }
+
+        .loader:after {
+            content: '';
+            position: fixed;
+            width: 75px;
+            height: 75px;
+            border: 0 solid #fff;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            animation: scaleUp 1s linear infinite;
+            z-index: 100;
+        }
+
+
+        @keyframes pulse {
+            0%, 50%, 100% {
+                opacity: 1;
+                scale: 1.15;
+                left: 58.5%;
+            }
+            25% {
+                opacity: 0.5;
+                scale: 1;
+                left: 57%;
+            }
+            75% {
+                scale: 1;
+                left: 57%;
+                opacity: 0.25;
+            }
+        }
+
 
         .dropdown-content a {
             color: black;
@@ -27,6 +77,35 @@
 
 <body>
 
+<span class="loader" style="display: none">
+
+	<svg style="scale: 2"
+	     version="1.1"
+	     preserveAspectRatio="xMidYMid meet"
+	     xmlns="http://www.w3.org/2000/svg"
+	     x="130px"
+	     y="0px"
+	     width="360px"
+	     height="84px"
+	     viewBox="77 -2 50 50"
+	     style="enable-background:new 0 0 130 32;"
+	     xml:space="preserve"><path d="M31.023,12.812l-5.527-5.931l3.976-4.142V1.181h-2.787l-2.258,1.836V1.154l-3.192,0.255l-0.076,0.057
+c-1.783,1.392-2.995,2.333-3.615,2.817c-0.666-0.123-1.35-0.195-2.051-0.195c-2.877,0-5.601,1.12-7.658,3.017
+C3.257,8.896,0,13.345,0,18.551c0,6.779,5.516,12.296,12.296,12.296c5.153,0,9.569-3.19,11.395-7.697
+c-0.003,0.008-0.006,0.017-0.009,0.024c1.53-1.611,2.563-3.652,2.947-5.869l0.008,0.008L31.023,12.812z M23.874,7.83
+c-0.142-0.156-0.279-0.315-0.428-0.463l5.369-5.083v0.191L23.874,7.83z M26.919,1.839h1.407l-5.369,5.084
+c-0.271-0.24-0.554-0.466-0.847-0.678l2.317-2.379L26.919,1.839z M20.825,5.429l2.945-3.006v1.129l-2.21,2.316
+C21.319,5.715,21.077,5.564,20.825,5.429 M21.478,2.05l1.886-0.15l-3.163,3.228c-0.607-0.28-1.244-0.504-1.904-0.673
+C18.901,4.029,19.938,3.277,21.478,2.05 M12.296,26.898c-4.603,0-8.348-3.745-8.348-8.348c0-4.317,3.294-7.879,7.501-8.304
+l-1.82,1.769H7.202v13.071h3.083v-3.389l3.335,3.389h3.769l-5.833-6.687l7.126-5.213c1.222,1.452,1.961,3.322,1.961,5.364
+C20.643,23.153,16.898,26.898,12.296,26.898 M17.189,11.803c0.373,0.271,0.725,0.567,1.047,0.894l-5.393,3.945L17.189,11.803z
+M16.089,12.015h-1.886l1.16-1.22c0.444,0.176,0.868,0.392,1.271,0.639L16.089,12.015z M10.285,15.071v-2.775l2.146-2.085
+c0.782,0.012,1.538,0.131,2.254,0.346L10.285,15.071z M24.226,21.471c0,0.003-0.001,0.006-0.002,0.008
+c0.231-0.94,0.367-1.918,0.367-2.928c0-6.78-5.516-12.295-12.295-12.295c-0.94,0-1.853,0.116-2.733,0.317
+c0.001,0,0.002-0.001,0.003-0.001c1.727-1.162,3.782-1.825,5.928-1.825c5.873,0,10.65,4.778,10.65,10.65
+C26.144,17.611,25.447,19.72,24.226,21.471 M24.27,8.279l0.867-0.854l4.978,5.375l-3.354,3.442c0.021-0.281,0.042-0.562,0.042-0.847
+C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
+</span>
 <div class="position-screen">
     <header class="con-header">
         <div class="position-blocks">
@@ -74,11 +153,11 @@
                         <ul class="position-list">
                             <li>Занято дорожек:<label for="" id="tracksToday"> {{ all_stats.tracks }} шт</label></li>
                             <li>Изготовления:<label for="" id="tiles"> {{ all_stats.plates }} плит</label></li>
-                            <li>Занято:<label for="" id="occupiedMM"> {{ all_stats.length }}/{{ all_stats.max_length }} мм</label></li>
+                            <li>Занято:<label for="" id="occupiedMM"> {{ all_stats.useful }} %</label></li>
                             <li>Количество переналадок:<label for=""
                                                               id="occupiedMM"> {{ all_stats.retool_count }} шт</label></li>
-                            <li>Стоимость переналадок:<label for=""
-                                                             id="occupiedMM"> {{ all_stats.retool_price }} р</label></li>
+                            <li>Стоимость:<label for=""
+                                                 id="occupiedMM"> {{ all_stats.all_cost }} р</label></li>
 	                        {% if unplaced_plates|length > 0 %}
 		                        <li style="color: #ff5151; cursor: pointer">
                                 <a id="ordersAndRemaindersStat">Неразмещенные плиты:<label for=""
@@ -92,21 +171,25 @@
             </div>
             <!-- Рассчет -->
             <div class="con-payment-mode">
-                <form action="{% url 'fetch_production_plan' %}" method="post">
+                <form style="width: 300px" id="mainForm" action="{% url 'fetch_production_plan' %}" method="post">
                     {% csrf_token %}
                     <div class="header-con payment-header">
-                        Отобразить везде режим расчетов
+                        Выберите режим расчетов
                     </div>
                     {% csrf_token %}
                     <div>
-                        <div class="style-btn-radio" style="color: #888888; border-color: #888888">
-                            <input disabled type="radio" id="minCost" value="1" name="option">
+                        <div class="style-btn-radio">
+                            <input {% if parameters.last_used_mode == 0 %} checked {% endif %}
+                                                                           type="radio"
+                                                                           id="minCost"
+                                                                           value="1"
+                                                                           name="option">
                             <label for="minCost">Минимальная стоимость</label>
                         </div>
                         <div class="style-btn-radio">
                             <input {% if parameters.last_used_mode == 1 %} checked {% endif %} type="radio"
                                                                            id="maxCompletion" value="2" name="option">
-                            <label for="maxCompletion">Максимальное заполнение*</label>
+                            <label for="maxCompletion">Максимальное заполнение</label>
                         </div>
                         <div class="style-btn-radio">
                             <input {% if parameters.last_used_mode == 2 %} checked {% endif %} type="radio"
@@ -117,10 +200,10 @@
                             <input {% if parameters.last_used_mode == 3 %} checked {% endif %} type="radio"
                                                                            id="minReadjustments" value="4"
                                                                            name="option">
-                            <label for="minReadjustments">Минимальные переналадки*</label>
+                            <label for="minReadjustments">Минимальные переналадки</label>
                         </div>
                     </div>
-                <div class=""></div>
+
                     <div class="position-btn-payment">
                         <button class="style-btn-payment">Рассчитать</button>
                     </div>
@@ -153,7 +236,7 @@
                 Сколько дорожек занять:
             </div>
             <div class="position-table">
-                    <table id="dynamicTable1" style="width: 30px">
+                    <table id="dynamicTable1" style="width: 30px; height: 1371px">
                         <thead style="height: 130px">
 	                        <tr id="headerRow">
 	                            <th>
@@ -175,7 +258,7 @@
                         {% endfor %}
                         </tbody>
                     </table>
-                    <div style="overflow-x: scroll">
+                    <div style="overflow-x: scroll; padding-bottom: 5px">
 	                    <table id="dynamicTable" style="width: 90%">
 	                        <thead style="height: 130px">
 	                        <tr id="headerRow">
@@ -185,9 +268,14 @@
 	                                        <div class="con-bnt-table">
 	                                            <label for="numberTracks-{{ forloop.counter }}">Дорожек:</label>
 	                                            <input id="numberTracks-{{ forloop.counter }}"
+	                                                   data-id="{{ forloop.counter }}"
+	                                                   class="track-input"
 	                                                   onchange="this.value = Math.max(0, Math.min(7, parseInt(this.value) || 0))"
-	                                                   onfocusout="updateAvailableTracks({{ forloop.counter }}, this.value)"
-	                                                   type="number" step="1" min='0' max='7' value="{{ track.count }}">
+	                                                   type="number"
+	                                                   step="1"
+	                                                   min='0'
+	                                                   max='7'
+	                                                   value="{{ track.count }}">
 {#	                                            #}
 
 {#	                                            <div id="numberTracks-{{ forloop.counter }}"><b>{{ track.count }}</b></div>#}
@@ -226,8 +314,7 @@
 			                                        <div id="myModal-{{ track.id }}" class="modal">
 		                                                <div class="modal-content">
 		                                                    <div class="heder-modal">
-		                                                        <span id="close-{{ track.id }}"
-		                                                              class="close">&times;</span>
+			                                                    <h5>{{ track.date }}</h5>
 		                                                    </div>
 		                                                    <div class="positi">
 		                                                        <table class="modal-table">
@@ -283,14 +370,24 @@
 	                                            <div class="position-remains">
 	                                            Занято: {{ table_cell.useful_len }} мм
 	                                            <br>
-	                                            Остаток: {{ table_cell.free_len }} мм
+		                                            {% if table_cell.free_len > 2500 %}
+			                                            <b style="font-weight: bolder">Остаток: {{ table_cell.free_len }} мм</b>
+		                                            {% else %}
+	                                                    Остаток: {{ table_cell.free_len }} мм
+		                                            {% endif %}
 	                                            </div>
 	                                        </td>
 		                                {% elif table_cell.free_len %}
 			                                <td style="background-color: rgb(255, 241, 183)">
 	                                            <div class="position-info">
 	                                            </div>
-	                                            <div class="position-remains">Остаток: {{ table_cell.free_len }} мм</div>
+	                                            <div class="position-remains">
+		                                            {% if table_cell.free_len > 2500 %}
+			                                            <b style="font-weight: bolder">Остаток: {{ table_cell.free_len }} мм</b>
+		                                            {% else %}
+			                                            Остаток: {{ table_cell.free_len }} мм
+		                                            {% endif %}
+	                                            </div>
 	                                        </td>
 		                                {% else %}
 			                                <td style="background-color: rgb(255, 193, 193)">
@@ -513,7 +610,10 @@
 </div>
 </body>
 <script>
-    {% for track in available_tracks %}
+
+	// Wait for DOM to load before accessing elements
+
+	{% for track in available_tracks %}
 		// Модальное окно
 		document.addEventListener("DOMContentLoaded", function () {
 			const modal = document.getElementById("myModal-{{ track.id }}");
@@ -542,29 +642,48 @@
 <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 
 <script>
-    function updateAvailableTracks(day, count) {
-		let csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-		$.ajax({
-			url: '/change-available-tracks/',
-			type: 'POST',
-			data: {
-				'day': day,
-				'count': count,
-				'csrfmiddlewaretoken': csrftoken
-			},
-			success: function (response) {
-				if (response.status !== 'success') {
-					alert('Ошибка обновления треков');
-				}
-				alert("Данные успешно обновлены")
-			},
-			error: function () {
-				alert('Ошибка обновления треков');
-			}
-		});
-	}
 
 	document.addEventListener('DOMContentLoaded', function () {
+		$('#mainForm').on('submit', async function (e) {
+			e.preventDefault();
+			$('.loader').show()
+			$('.position-screen').css('opacity', '0.5')
+			$('.position-screen').css('pointer-events', 'none')
+
+			const formData = new FormData(this);
+
+			// Добавляем/изменяем данные
+			const tracksInputs = document.querySelectorAll('.track-input');
+			let tracksData = []
+
+			tracksInputs.forEach(input => {
+				const dataId = input.getAttribute('data-id');
+				if (dataId) {
+					tracksData.push(input.value)
+				}
+			});
+
+			formData.append('tracks', tracksData);
+
+			try {
+				const response = await fetch(this.action, {
+					method: 'POST',
+					body: formData,
+				});
+
+				if (response.ok) {
+					// Перенаправляем на ту же страницу (имитация стандартной отправки)
+					window.location.href = window.location.href;
+				} else {
+					alert('Ошибка сервера');
+				}
+			}
+			catch (error) {
+				alert('Ошибка сети');
+			}
+		});
+
+
 		// Получаем элементы input
 		const dateFrom = document.getElementById('dateTracksFrom');
 
