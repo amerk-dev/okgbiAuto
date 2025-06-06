@@ -140,7 +140,7 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                             <li>Занято дорожек:<label for="" id="tracksToday"> {{ stats.tracks }} шт</label></li>
                             <li>Изготовления:<label for="" id="tiles"> {{ stats.plates }} плит</label></li>
                             <li>Занято:<label for=""
-                                              id="occupiedMM"> {{ stats.length }}/{{ stats.length_max }} мм</label></li>
+                                              id="occupiedMM"> {{ stats.useful }} %</label></li>
                         </ul>
                     </div>
                 </form>
@@ -158,6 +158,8 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                                                               id="occupiedMM"> {{ all_stats.retool_count }} шт</label></li>
                             <li>Стоимость:<label for=""
                                                  id="occupiedMM"> {{ all_stats.all_cost }} р</label></li>
+                            <li>Дата готовности:<label for=""
+                                                 id="occupiedMM"> {{ last_complete_date }}</label></li>
 	                        {% if unplaced_plates|length > 0 %}
 		                        <li style="color: #ff5151; cursor: pointer">
                                 <a id="ordersAndRemaindersStat">Неразмещенные плиты:<label for=""
@@ -171,43 +173,6 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
             </div>
             <!-- Рассчет -->
             <div class="con-payment-mode">
-                <form style="width: 300px" id="mainForm" action="{% url 'fetch_production_plan' %}" method="post">
-                    {% csrf_token %}
-                    <div class="header-con payment-header">
-                        Выберите режим расчетов
-                    </div>
-                    {% csrf_token %}
-                    <div>
-                        <div class="style-btn-radio">
-                            <input {% if parameters.last_used_mode == 0 %} checked {% endif %}
-                                                                           type="radio"
-                                                                           id="minCost"
-                                                                           value="1"
-                                                                           name="option">
-                            <label for="minCost">Минимальная стоимость</label>
-                        </div>
-                        <div class="style-btn-radio">
-                            <input {% if parameters.last_used_mode == 1 %} checked {% endif %} type="radio"
-                                                                           id="maxCompletion" value="2" name="option">
-                            <label for="maxCompletion">Максимальное заполнение</label>
-                        </div>
-                        <div class="style-btn-radio">
-                            <input {% if parameters.last_used_mode == 2 %} checked {% endif %} type="radio"
-                                                                           id="minMixing" value="3" name="option">
-                            <label for="minMixing">Минимальное смешивания</label>
-                        </div>
-                        <div class="style-btn-radio">
-                            <input {% if parameters.last_used_mode == 3 %} checked {% endif %} type="radio"
-                                                                           id="minReadjustments" value="4"
-                                                                           name="option">
-                            <label for="minReadjustments">Минимальные переналадки</label>
-                        </div>
-                    </div>
-
-                    <div class="position-btn-payment">
-                        <button class="style-btn-payment">Рассчитать</button>
-                    </div>
-                </form>
             </div>
         </div>
     </header>
@@ -232,11 +197,34 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
         </div>
         <!-- Секция дорожек -->
         <section class="tracks section hidden" id="trackAvailabilitySection">
-            <div class="heading-tracks">
-                Сколько дорожек занять:
+            <div class="" style="display: flex; align-items: end; justify-content: space-between">
+	            <div class="search-container">
+                <div class="autocomplete-container">
+                    <input type="text"
+                           id="liveSearch"
+                           class="live-search-input"
+                           placeholder="Поиск по номеру заказа или параметрам плит...">
+                    <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
+                </div>
+                <button id="clearSearch" class="clear-search-btn" title="Сбросить фильтр">✕</button>
             </div>
+				<form style="width: auto; display: flex; justify-content: space-evenly; gap: 1vw; margin-right: 100px;"
+				      id="mainForm"
+				      action="{% url 'fetch_production_plan' %}"
+				      method="post">
+                    {% csrf_token %}
+
+                    <div class="header-con payment-header">
+                        Запуск расчета:
+                    </div>
+                    <div class="position-btn-payment">
+                        <button class="style-btn-payment">Рассчитать</button>
+                    </div>
+                </form>
+            </div>
+
             <div class="position-table">
-                    <table id="dynamicTable1" style="width: 30px; height: 1371px">
+                    <table id="dynamicTable1" style="width: 30px; height: {{ table_height }}px">
                         <thead style="height: 130px">
 	                        <tr id="headerRow">
 	                            <th>
@@ -251,14 +239,13 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                                 <th class="style-traks-row" {% if forloop.last %}style="height: 115px" {% endif %}>
                                     <b>Дорожка {{ forloop.counter }}
                                         <br>
-	                                    {% if forloop.last %}РЕЗЕРВ{% endif %}
                                     </b>
                                 </th>
                             </tr>
                         {% endfor %}
                         </tbody>
                     </table>
-                    <div style="overflow-x: scroll; padding-bottom: 5px">
+                    <div style="overflow-x: scroll; overflow-y: hidden; padding-bottom: 5px">
 	                    <table id="dynamicTable" style="width: 90%">
 	                        <thead style="height: 130px">
 	                        <tr id="headerRow">
@@ -267,15 +254,15 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 	                                    <div>
 	                                        <div class="con-bnt-table">
 	                                            <label for="numberTracks-{{ forloop.counter }}">Дорожек:</label>
-	                                            <input id="numberTracks-{{ forloop.counter }}"
-	                                                       data-id="{{ forloop.counter }}"
-	                                                       class="track-input"
-	                                                       onchange="this.value = Math.max(0, Math.min(7, parseInt(this.value) || 0))"
-	                                                       type="number"
-	                                                       step="1"
-	                                                       min='0'
-	                                                       max='7'
-	                                                       value="{{ track.count }}">
+	                                            <input id="numberTracks-{{ forloop.counter }}" style="width: 40px;"
+	                                                   data-id="{{ forloop.counter }}"
+	                                                   class="track-input"
+	                                                   onchange="this.value = Math.max(0, Math.min(7, parseInt(this.value) || 0))"
+	                                                   type="number"
+	                                                   step="1"
+	                                                   min='0'
+	                                                   max='7'
+	                                                   value="{{ track.count }}">
 	                                        </div>
 	                                        <div class="style-date-table" id="date-tracks">{{ track.date }}</div>
 	                                        <div>
@@ -351,9 +338,16 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 	                                                <div>Проволока Верх: {{ table_cell.wire_top }} шт</div>
 	                                                <div>Проволока Низ: {{ table_cell.wire_bottom }} шт</div>
 	                                                <div>Бетон: {{ table_cell.concrete_class }}</div>
-	                                                {% if table_cell.has_overdue_deadline %}
-	                                                <div style="color: red; font-weight: bold;">Просрочен дедлайн!</div>
-	                                                {% endif %}
+		                                            {% if table_cell.has_overdue_deadline %}
+			                                            <div style="color: red; font-weight: bold;">Просрочен дедлайн!</div>
+		                                            {% endif %}
+		                                            <!-- Скрытая информация о заказах и плитах для поиска -->
+                                                    <div class="hidden-search-info" style="display: none;">
+                                                        {% for plate in table_cell.plates.all %}
+	                                                        <div>Заказ: {{ plate.order }}</div>
+	                                                        <div>Плита: {{ plate.clean_name }}</div>
+                                                        {% endfor %}
+                                                    </div>
 	                                            </div>
 	                                            <div class="position-remains">
 	                                            Занято: {{ table_cell.useful_len }} мм
@@ -361,7 +355,7 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 		                                            {% if table_cell.free_len > 2500 %}
 			                                            <b style="font-weight: bolder">Остаток: {{ table_cell.free_len }} мм</b>
 		                                            {% else %}
-	                                                    Остаток: {{ table_cell.free_len }} мм
+	                                            Остаток: {{ table_cell.free_len }} мм
 		                                            {% endif %}
 	                                            </div>
 	                                        </td>
@@ -382,17 +376,17 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 	                                            <div class="position-info">
 	                                            </div>
 	                                            <div class="position-remains"></div>
-                                                {% with col_index=forloop.counter0 %}
-                                                    {% for track in available_tracks %}
-                                                        {% if forloop.counter0 == col_index %}
-                                                            {% if track.count == 0 and track.is_weekend_day %}
-                                                                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; transform: rotate(-45deg); color: #000000; font-weight: bold; font-size: 20px;">
+				                                {% with col_index=forloop.counter0 %}
+					                                {% for track in available_tracks %}
+						                                {% if forloop.counter0 == col_index %}
+							                                {% if track.count == 0 and track.is_weekend_day %}
+								                                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; transform: rotate(-45deg); color: #000000; font-weight: bold; font-size: 20px;">
                                                                     Выходной
                                                                 </div>
-                                                            {% endif %}
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                {% endwith %}
+							                                {% endif %}
+						                                {% endif %}
+					                                {% endfor %}
+				                                {% endwith %}
 	                                        </td>
 		                                {% endif %}
 	                                {% endfor %}
@@ -410,6 +404,8 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                 <table class="custom-table" style="width: 100%;">
                     <thead>
                     <tr class="position-text">
+                        <th>Дата отгрузки</th>
+                        <th>Дата изготовления</th>
                         <th>Номер заказа</th>
                         <th>Наименование</th>
                         <th>Длина, мм</th>
@@ -420,12 +416,14 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                         <th>Проволока верх, шт</th>
                         <th>Проволока низ, шт</th>
                         <th>Количество, шт</th>
-                        <th>Дедлайн по заказу</th>
                     </tr>
                     </thead>
                     <tbody>
                     {% for order in orders %}
-	                    <tr class="position-text" {% if order.is_overdue %}style="background-color: rgb(255, 150, 150);"{% endif %}>
+	                    <tr class="position-text"
+	                        {% if order.is_overdue %}style="background-color: rgb(255, 150, 150);"{% endif %}>
+                            <td {% if order.is_overdue %}style="color: red; font-weight: bold;"{% endif %}>{{ order.deadline|date:"d.m.Y" }}</td>
+                            <td>{{ order.plate_complete_date|date:"d.m.Y" }}</td>
                             <td>{{ order.order_number }}</td>
                             <td>{{ order.product.clean_name }}</td>
                             <td>{{ order.product.length }}</td>
@@ -436,7 +434,6 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                             <td>{{ order.product.wire_top }}</td>
                             <td>{{ order.product.wire_bottom }}</td>
                             <td>{{ order.count }}</td>
-                            <td {% if order.is_overdue %}style="color: red; font-weight: bold;"{% endif %}>{{ order.deadline|date:"d.m.Y" }}</td>
                         </tr>
                     {% endfor %}
                     </tbody>
@@ -697,12 +694,283 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 		}
 
 		// Добавляем обработчики событий
-		dateFrom.addEventListener('change', updateDates);
+		dateFrom?.addEventListener('change', updateDates);
 
 		// Устанавливаем начальные значения из GET-параметров, если они есть
 		const urlParams = new URLSearchParams(window.location.search);
-		if (urlParams.has('date_from')) {
+		if (urlParams.has('date_from') && dateFrom) {
 			dateFrom.value = urlParams.get('date_from');
+		}
+// Функционал живого поиска
+		const searchInput = document.getElementById('liveSearch');
+		const clearSearchBtn = document.getElementById('clearSearch');
+		const dynamicTable = document.getElementById('dynamicTable');
+		const autocompleteDropdown = document.getElementById('autocompleteDropdown');
+
+		if (searchInput && clearSearchBtn && dynamicTable && autocompleteDropdown) {
+			// Собираем все уникальные номера заказов и наименования плит
+			let allOrderNumbers = new Set();
+			let allPlateNames = new Set();
+
+			function collectSuggestions() {
+				// Очищаем предыдущие значения
+				allOrderNumbers.clear();
+				allPlateNames.clear();
+
+				// Получаем все скрытые блоки с информацией о заказах и плитах
+				const hiddenInfoDivs = document.querySelectorAll('.hidden-search-info');
+
+				hiddenInfoDivs.forEach(div => {
+					// Ищем все элементы с информацией о заказах
+					const orderDivs = div.querySelectorAll('div');
+					orderDivs.forEach(orderDiv => {
+						const text = orderDiv.textContent.trim();
+						if (text.startsWith('Заказ:')) {
+							const orderNumber = text.replace('Заказ:', '').trim();
+							if (orderNumber) {
+								allOrderNumbers.add(orderNumber);
+							}
+						} else if (text.startsWith('Плита:')) {
+							const plateName = text.replace('Плита:', '').trim();
+							if (plateName) {
+								allPlateNames.add(plateName);
+							}
+						}
+					});
+				});
+
+				console.log('Collected order numbers:', Array.from(allOrderNumbers));
+				console.log('Collected plate names:', Array.from(allPlateNames));
+			}
+
+			// Вызываем функцию сбора данных при загрузке страницы
+			collectSuggestions();
+
+			// Функция для фильтрации подсказок
+			function filterSuggestions(searchTerm) {
+				if (!searchTerm) return [];
+
+				const orderMatches = Array.from(allOrderNumbers)
+					.filter(order => order.toLowerCase().includes(searchTerm))
+					.map(order => ({type: 'order', value: order}));
+
+				const plateMatches = Array.from(allPlateNames)
+					.filter(plate => plate.toLowerCase().includes(searchTerm))
+					.map(plate => ({type: 'plate', value: plate}));
+
+				// Объединяем результаты, сначала заказы, потом плиты
+				return [...orderMatches, ...plateMatches].slice(0, 10); // Ограничиваем до 10 результатов
+			}
+
+			// Функция для отображения подсказок
+			function showSuggestions(suggestions) {
+				// Очищаем предыдущие подсказки
+				autocompleteDropdown.innerHTML = '';
+
+				if (suggestions.length === 0) {
+					autocompleteDropdown.classList.remove('show');
+					return;
+				}
+
+				// Добавляем новые подсказки
+				suggestions.forEach((suggestion, index) => {
+					const item = document.createElement('div');
+					item.className = 'autocomplete-item';
+					item.dataset.index = index;
+
+					const category = document.createElement('span');
+					category.className = 'autocomplete-category';
+					category.textContent = suggestion.type === 'order' ? 'Заказ:' : 'Плита:';
+
+					item.appendChild(category);
+					item.appendChild(document.createTextNode(' ' + suggestion.value));
+
+					item.addEventListener('click', () => {
+						selectSuggestion(suggestion);
+					});
+
+					autocompleteDropdown.appendChild(item);
+				});
+
+				// Показываем выпадающий список
+				autocompleteDropdown.classList.add('show');
+			}
+
+			// Функция для выбора подсказки
+			function selectSuggestion(suggestion) {
+				searchInput.value = suggestion.value;
+				autocompleteDropdown.classList.remove('show');
+				filterTable();
+			}
+
+			// Переменная для отслеживания выбранной подсказки при навигации с клавиатуры
+			let selectedIndex = -1;
+
+			// Обработчик клавиатурной навигации
+			searchInput.addEventListener('keydown', function (e) {
+				const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+
+				// Стрелка вниз
+				if (e.key === 'ArrowDown') {
+					e.preventDefault();
+					if (selectedIndex < items.length - 1) {
+						if (selectedIndex >= 0) {
+							items[selectedIndex].classList.remove('selected');
+						}
+						selectedIndex++;
+						items[selectedIndex].classList.add('selected');
+						items[selectedIndex].scrollIntoView({block: 'nearest'});
+					}
+				}
+				// Стрелка вверх
+				else if (e.key === 'Enter') {
+					e.preventDefault();
+					if (selectedIndex >= 0 && items[selectedIndex]) {
+						items[selectedIndex].click();
+						selectedIndex = -1;
+					} else {
+						filterTable();
+					}
+				}
+				// Стрелка вверх
+				else if (e.key === 'ArrowUp') {
+					e.preventDefault();
+					if (selectedIndex > 0) {
+						items[selectedIndex].classList.remove('selected');
+						selectedIndex--;
+						items[selectedIndex].classList.add('selected');
+						items[selectedIndex].scrollIntoView({block: 'nearest'});
+					}
+				}
+				// Escape
+				else if (e.key === 'Escape') {
+					autocompleteDropdown.classList.remove('show');
+					selectedIndex = -1;
+				}
+			});
+
+			// Функция для фильтрации таблицы
+			function filterTable() {
+				console.log('Starting table filter');
+				const searchTerm = searchInput.value.toLowerCase();
+				console.log('Search term:', searchTerm);
+
+				// Показать/скрыть кнопку очистки
+				clearSearchBtn.style.display = searchTerm ? 'block' : 'none';
+
+				// Скрываем выпадающий список при пустом поиске или при выборе подсказки
+				if (!searchTerm || document.activeElement !== searchInput) {
+					autocompleteDropdown.classList.remove('show');
+					selectedIndex = -1;
+				}
+
+				if (!searchTerm) {
+					console.log('Empty search term, resetting filter');
+					// Если поиск пустой, сбросить все фильтры
+					resetFilter();
+					return;
+				}
+
+				// Показываем подсказки только если фокус на поле ввода
+				if (document.activeElement === searchInput) {
+					const suggestions = filterSuggestions(searchTerm);
+					showSuggestions(suggestions);
+				}
+
+				// Получаем все ячейки таблицы с данными (исключая заголовки)
+				const cells = dynamicTable.querySelectorAll('tbody tr td');
+				console.log('Found table cells:', cells.length);
+
+				// Сначала помечаем все ячейки как отфильтрованные
+				cells.forEach(cell => {
+					cell.classList.add('filtered-out');
+					cell.classList.remove('filtered-match');
+				});
+
+				// Ищем совпадения
+				let foundMatch = false;
+				cells.forEach(cell => {
+					const cellContent = cell.textContent.toLowerCase();
+					const infoDiv = cell.querySelector('.position-info');
+
+					// Проверяем содержимое ячейки, div.position-info и скрытую информацию о заказах и плитах
+					const hiddenInfoDiv = cell.querySelector('.hidden-search-info');
+					if (cellContent.includes(searchTerm) ||
+						(infoDiv && infoDiv.textContent.toLowerCase().includes(searchTerm)) ||
+						(hiddenInfoDiv && hiddenInfoDiv.textContent.toLowerCase().includes(searchTerm))) {
+
+						cell.classList.remove('filtered-out');
+						cell.classList.add('filtered-match');
+						foundMatch = true;
+
+						// Логируем, где именно найдено совпадение
+						if (hiddenInfoDiv && hiddenInfoDiv.textContent.toLowerCase().includes(searchTerm)) {
+							console.log('Found match in hidden info:', hiddenInfoDiv.textContent);
+						} else {
+							console.log('Found match in cell content:', cellContent);
+						}
+
+						// Также находим соответствующую строку и колонку
+						const rowIndex = cell.parentElement.rowIndex;
+						const colIndex = Array.from(cell.parentElement.children).indexOf(cell);
+
+						// Подсвечиваем заголовок колонки (день)
+						const headerCell = dynamicTable.querySelector(`thead tr th:nth-child(${colIndex + 1})`);
+						if (headerCell) {
+							headerCell.classList.remove('filtered-out');
+						}
+
+						// Подсвечиваем заголовок строки (дорожку)
+						const rowHeaderTable = document.getElementById('dynamicTable1');
+						if (rowHeaderTable) {
+							const rowHeader = rowHeaderTable.querySelector(`tbody tr:nth-child(${rowIndex}) th`);
+							if (rowHeader) {
+								rowHeader.classList.remove('filtered-out');
+							}
+						}
+					}
+				});
+
+				// Если ничего не найдено, показываем все
+				if (!foundMatch) {
+					resetFilter();
+				}
+			}
+
+			// Функция для сброса фильтра
+			function resetFilter() {
+				const allElements = document.querySelectorAll('.filtered-out, .filtered-match');
+
+				allElements.forEach(el => {
+					el.classList.remove('filtered-out', 'filtered-match');
+				});
+
+				// Очищаем поле поиска и скрываем кнопку очистки и выпадающий список
+				if (this === clearSearchBtn) {
+					searchInput.value = '';
+					clearSearchBtn.style.display = 'none';
+					autocompleteDropdown.classList.remove('show');
+					selectedIndex = -1;
+				}
+			}
+
+			// Скрываем выпадающий список при клике вне его
+			document.addEventListener('click', function (e) {
+				if (!autocompleteDropdown.contains(e.target) && e.target !== searchInput) {
+					autocompleteDropdown.classList.remove('show');
+					selectedIndex = -1;
+				}
+			});
+
+			// Обработчики событий
+			searchInput.addEventListener('input', filterTable);
+			searchInput.addEventListener('focus', function () {
+				if (searchInput.value) {
+					const suggestions = filterSuggestions(searchInput.value.toLowerCase());
+					showSuggestions(suggestions);
+				}
+			});
+			clearSearchBtn.addEventListener('click', resetFilter);
 		}
 	});
 </script>

@@ -191,32 +191,22 @@ class SingletonModel(models.Model):
 
 class Parameters(SingletonModel):
     road_length = models.PositiveIntegerField(verbose_name="Длина дорожки")
-    retooler_last_width = models.IntegerField(default=0,
-                                              verbose_name='Последняя ширина переналадчика')
-    retooler_last_height = models.IntegerField(default=0,
-                                               verbose_name='Последняя высота переналадчика')
     default_available_tracks = models.PositiveIntegerField(default=4,
                                                            verbose_name='Количество дорожек по умолчанию')
+    tracks_count = models.PositiveIntegerField(default=7, verbose_name="Количество дорожек")
+    production_lag = models.PositiveIntegerField(default=3,
+                                                verbose_name='Производственный лаг (в днях)')
     url_1c = models.CharField(max_length=255, verbose_name='URL 1c', default='')
     sign_1c = models.CharField(max_length=255, verbose_name='Пароль 1с', default='123456788')
 
     # Weekend day settings
-    monday_weekend = models.BooleanField(default=False, verbose_name='Понедельник выходной')
-    tuesday_weekend = models.BooleanField(default=False, verbose_name='Вторник выходной')
-    wednesday_weekend = models.BooleanField(default=False, verbose_name='Среда выходной')
-    thursday_weekend = models.BooleanField(default=False, verbose_name='Четверг выходной')
-    friday_weekend = models.BooleanField(default=False, verbose_name='Пятница выходной')
-    saturday_weekend = models.BooleanField(default=True, verbose_name='Суббота выходной')
-    sunday_weekend = models.BooleanField(default=True, verbose_name='Воскресенье выходной')
-
-    class ModeChoice(models.IntegerChoices):
-        MINIMAL_COST = 0, 'Минимальная стоимость'
-        MAXIMUM_FILL = 1, 'Максимальное заполнение'
-        MINIMAL_MIXING = 2, 'Минимальное смешивание'
-        MINIMAL_RETOOLING = 3, 'Минимальные переналадки'
-
-    last_used_mode = models.PositiveIntegerField(default=ModeChoice.MINIMAL_COST, choices=ModeChoice.choices,
-                                                 verbose_name='Последний режим расчета')
+    monday_weekend = models.BooleanField(default=False, verbose_name='Понедельник')
+    tuesday_weekend = models.BooleanField(default=False, verbose_name='Вторник')
+    wednesday_weekend = models.BooleanField(default=False, verbose_name='Среда')
+    thursday_weekend = models.BooleanField(default=False, verbose_name='Четверг')
+    friday_weekend = models.BooleanField(default=False, verbose_name='Пятница')
+    saturday_weekend = models.BooleanField(default=True, verbose_name='Суббота')
+    sunday_weekend = models.BooleanField(default=True, verbose_name='Воскресенье')
 
     class Meta:
         verbose_name = "Параметры"

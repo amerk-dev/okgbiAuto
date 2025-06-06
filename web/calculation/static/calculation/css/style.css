@@ -11,6 +11,8 @@
 
 .position-blocks {
     display: flex;
+    gap: 5vw;
+    min-height: 250px;
 }
 
 /* Загаловки хэдеров  */
@@ -178,6 +180,7 @@
     font-size: 22px;
     padding: 3px 20px;
     transition: all .3s;
+    cursor: pointer;
 }
 
 .style-btn-payment:hover {
@@ -511,4 +514,108 @@ tr.position-text td {
 .active {
     background-color: #000; /* Цвет активной кнопки */
     color: white;
+}
+
+/* Стили для живого поиска */
+.search-container {
+    display: flex;
+    align-items: center;
+    max-width: 600px;
+}
+
+.live-search-input {
+    flex-grow: 1;
+    border: 2px solid #000;
+    border-radius: 7px;
+    font-size: 16px;
+    padding: 8px 12px;
+    margin-right: 10px;
+    transition: all 0.3s;
+    width: 400px;
+}
+
+.live-search-input:focus {
+    outline: none;
+    border-color: #555555;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+.clear-search-btn {
+    background-color: #fff;
+    border: 2px solid #000;
+    border-radius: 7px;
+    font-size: 16px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: none; /* Initially hidden, will be shown when search has content */
+}
+
+.clear-search-btn:hover {
+    background-color: #000;
+    color: #fff;
+}
+
+/* Стили для отфильтрованных элементов */
+.filtered-out {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.filtered-match {
+    opacity: 1;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+    z-index: 1;
+    position: relative;
+}
+
+/* Стили для выпадающего списка автозаполнения */
+.autocomplete-container {
+    position: relative;
+    flex-grow: 1;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: white;
+    border: 2px solid #000;
+    border-radius: 0 0 7px 7px;
+    z-index: 10;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    display: none;
+    width: 400px;
+}
+
+.autocomplete-dropdown.show {
+    display: block;
+}
+
+.autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.2s;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover {
+    background-color: #f5f5f5;
+}
+
+.autocomplete-item.selected {
+    background-color: #e0e0e0;
+}
+
+.autocomplete-category {
+    font-weight: bold;
+    color: #555;
+    margin-right: 5px;
 }

@@ -159,28 +159,19 @@ class ProductionPlanAdmin(admin.ModelAdmin):
 class ParametersAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {
-            'fields': ('road_length', 'default_available_tracks', 'retooler_last_width', 'retooler_last_height')
+            'fields': ('road_length', 'default_available_tracks', 'tracks_count',
+                       'production_lag')
         }),
         ('Выходные дни', {
-            'fields': ('monday_weekend', 'tuesday_weekend', 'wednesday_weekend', 'thursday_weekend', 
+            'fields': ('monday_weekend', 'tuesday_weekend', 'wednesday_weekend', 'thursday_weekend',
                       'friday_weekend', 'saturday_weekend', 'sunday_weekend'),
             'description': 'Укажите, какие дни недели считать выходными (количество доступных дорожек будет 0)'
         }),
         ('Настройки 1C', {
             'fields': ('url_1c', 'sign_1c'),
-            'classes': ('collapse',),
-        }),
-        ('Прочие настройки', {
-            'fields': ('last_used_mode',),
-            'classes': ('collapse',),
+            'classes': ('grp-collapse grp-closed',),
         }),
     )
-
-    def get_fields(self, request, obj=None):
-        fields = super().get_fields(request, obj)
-        if request.user.is_superuser:
-            return fields
-        return list(set(fields) - {'url_1c', 'sign_1c', 'last_used_mode'})
 
 admin.site.register(ProductionDay, ProductionDayAdmin)
 admin.site.register(UsedReadyPlate, UsedReadyPlateAdmin)

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from django.db.models import F
@@ -47,7 +47,7 @@ def prepare_data(date_from, date_to):
         order_dates = set(Order.objects.filter(order_number=order_number).values_list('deadline', flat=True))
         for order_date in order_dates:
             completion_date = {
-                    "date": order_date.strftime("%Y-%m-%d") if order_date else None,
+                    "date": (order_date - timedelta(days=params.production_lag)).strftime("%Y-%m-%d") if order_date else None,
                     "plates": [
                         {
                             "count": order.count,
@@ -77,10 +77,6 @@ def prepare_data(date_from, date_to):
                 "length": params.road_length
             }
         },
-        "retooler": {
-            "height": params.retooler_last_height,
-            "width": params.retooler_last_width
-        },
         "ready_plates": [
             {
                 "count": inv.count,
@@ -98,21 +94,13 @@ def prepare_data(date_from, date_to):
     }
 
 
-option_urls = {
-    '1': 'http://api:8080/api/v1/calculate/default/',
-    '2': 'http://api:8080/api/v1/calculate/optimal-track/',
-    '3': 'http://api:8080/api/v1/calculate/optimal-mix/',
-    '4': 'http://api:8080/api/v1/calculate/optimal-retool/',
-
-}
-
-def calculate_plan(date_from, date_to, option: str = '1'):
+def calculate_plan(date_from, date_to):
     # Получаем данные из API
     headers = {'api-key': '12345678'}
     payload = json.dumps(prepare_data(date_from, date_to), ensure_ascii=False, cls=DecimalEncoder)
     with open('output.json', 'w', encoding='utf-8') as f:
         f.write(payload)
-    url = option_urls[option]
+    url = 'http://api:8080/api/v1/calculate/default/'
     r = requests.post(url, headers=headers, data=payload)
     r.raise_for_status()
     data = r.json()
@@ -138,11 +126,6 @@ def calculate_plan(date_from, date_to, option: str = '1'):
                 to_height=changes['to']['height'],
             )
         daily_retoolings.append(daily_retooling)
-
-    params = Parameters.get_solo()
-    params.retooler_last_width = retooling_data.get('last_state', {}).get('width', 0)
-    params.retooler_last_height = retooling_data.get('last_state', {}).get('height', 0)
-    params.save()
 
     retooling_info = RetoolingInfo.objects.create(
         price=retooling_data.get('price', 0),

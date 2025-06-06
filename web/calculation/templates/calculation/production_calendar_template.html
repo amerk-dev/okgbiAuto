@@ -16,7 +16,7 @@
 	    }
 
 	    .track-section {
-		    page-break-before: always;
+		    {#page-break-before: always;#}
 		    margin-top: 20px;
 	    }
 
@@ -54,15 +54,16 @@
 	</style>
 </head>
 <body>
+<h1>Печать производственного плана на {{ date }}</h1>
 	{% for track in tracks %}
 		<div class="track-section">
             <h3>{{ track.name }}</h3>
-			<p>{{ date }}</p>
             <table class="table-wrapper">
                 <thead>
                     <tr>
+                        <th>Дата отгрузки</th>
                         <th>Номер</th>
-                        <th>Наименование</th>
+                        <th>Плита</th>
                         <th>Длина, мм</th>
                         <th>Ширина, мм</th>
                         <th>Высота, мм</th>
@@ -74,18 +75,19 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for order in track.orders %}
+                    {% for plate in track.plates %}
 	                    <tr>
-                            <td>{{ order.номер }}</td>
-                            <td>{{ order.наименование }}</td>
-                            <td>{{ order.длина }}</td>
-                            <td>{{ order.ширина }}</td>
-                            <td>{{ order.высота }}</td>
-                            <td>{{ order.нагрузка }}</td>
-                            <td>{{ order.класс_бетона }}</td>
-                            <td>{{ order.проволока_верх }}</td>
-                            <td>{{ order.проволока_низ }}</td>
-                            <td>{{ order.количество }}</td>
+                            <td>{{ plate.deadline|default:"-" }}</td>
+                            <td>{{ plate.order }}</td>
+                            <td>{{ plate.clean_name }}</td>
+                            <td>{{ plate.length }}</td>
+                            <td>{{ plate.width }}</td>
+                            <td>{{ plate.height }}</td>
+                            <td>{{ plate.capacity }}</td>
+                            <td>{{ plate.concrete_class }}</td>
+                            <td>{{ plate.wire_top }}</td>
+                            <td>{{ plate.wire_bottom }}</td>
+                            <td>{{ plate.count }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>
