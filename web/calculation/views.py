@@ -48,6 +48,14 @@ def index(request):
         if track.count and len(production_days[track.date]) == 0:
             padding_days -= 1
 
+    # Get all orders with their deadlines
+    orders = Order.objects.all()
+    order_deadlines = {}
+    for order in orders:
+        order_deadlines[order.order_number] = order.deadline
+        # Check if the order deadline is overdue compared to today
+        order.is_overdue = order.deadline and order.deadline < datetime.date.today()
+
     table_data = []
     for i in range(7):
         table_data.append([])
@@ -56,9 +64,16 @@ def index(request):
                 table_data[i].append(None)
                 continue
 
-
             if i < len(day_roads):
-                table_data[i].append(day_roads[i])
+                production_day = day_roads[i]
+                # Check if any plates in this production day have overdue deadlines
+                for plate in production_day.plates.all():
+                    if plate.order and plate.order in order_deadlines:
+                        deadline = order_deadlines[plate.order]
+                        if deadline and deadline < production_day.date:
+                            production_day.has_overdue_deadline = True
+                            break
+                table_data[i].append(production_day)
             else:
                 table_data[i].append({
                     'free_len': Parameters.get_solo().road_length,
@@ -96,7 +111,7 @@ def index(request):
         'inventory': Inventory.objects.all(),
         'unplaced_plates': UnplacedPlate.objects.all(),
         'used_ready_plates': UsedReadyPlate.objects.all(),
-        'orders': Order.objects.all(),
+        'orders': orders,
         'available_tracks': available_tracks,
         'today': datetime.date.today(),
         'stats': today_stats,
