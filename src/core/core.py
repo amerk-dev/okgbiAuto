@@ -1,8 +1,9 @@
 from copy import deepcopy
 from collections import defaultdict
+from itertools import groupby
+
 import models
 import time
-
 
 
 def profile_time(func):
@@ -172,7 +173,7 @@ def merge_plates(tmp_need_plates):
 
 def bestPlates(trackDay, track_len: int, needPlates, prices):
     tracks_config = []
-    global_plates_with_deadline=[]
+    global_plates_with_deadline = []
     for tracks in trackDay:
         for _ in range(tracks.count):
             track_remaining = track_len
@@ -193,8 +194,8 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
                     else:
                         plates_without_deadline.append(plate)
 
-            # Сортируем каждую группу по длине (от большего к меньшему)
-            plates_with_deadline.sort(key=lambda x: (x.width, x.height), reverse=True) #ToDo добавить высоту совсместно с шириной
+            plates_with_deadline.sort(key=lambda x: (x.width, x.height),
+                                      reverse=True)  # ToDo добавить высоту совсместно с шириной
             plates_without_deadline.sort(key=lambda x: (x.width, x.height), reverse=True)
 
             # Объединяем группы: сначала плиты с дедлайном, потом без
@@ -242,13 +243,17 @@ def bestPlates(trackDay, track_len: int, needPlates, prices):
 
         tracks.count -= 1
 
-    post_calculating(tracks_config, global_plates_with_deadline)
+    # post_calculating(tracks_config, global_plates_with_deadline)
 
     return tracks_config
 
 
-def count_of_retooling(tracks, price,
-                       retooler) -> dict:  # ToDo  переделать/оптимизировать (порядок дорожек в течении дня не важен)
+def count_of_retooling(tracks, price, retooler) -> dict:
+    """
+    Рассчитывает стоимость и количество переналадок с условием,
+    что в начале каждого нового дня оснастка считается снятой
+    (т.е. сравнение идет с исходным состоянием 'retooler').
+    """
     if not tracks:
         return {
             "price": 0,
@@ -260,6 +265,10 @@ def count_of_retooling(tracks, price,
     prev_track = retooler
 
     for current_track in tracks:
+        if prev_track is not retooler and current_track.day != prev_track.day:
+            prev_track.width, prev_track.height = 0, 0
+
+        # Основная проверка на необходимость переналадки
         if prev_track.width != current_track.width or prev_track.height != current_track.height:
             change_date = current_track.day
             daily_changes[change_date].append({
@@ -289,8 +298,8 @@ def count_of_retooling(tracks, price,
         })
 
     last_state = {
-        "width": prev_track.width,
-        "height": prev_track.height
+        "width": tracks[-1].width,
+        "height": tracks[-1].height
     } if tracks else None
 
     return {
@@ -321,7 +330,7 @@ def calculate_price(track_config, prices):
 
 
 def post_calculating(track_config, plates_with_deadline):
-    for index in range(len(track_config)-1):
+    for index in range(len(track_config) - 1):
         track = track_config[index]
         if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
             for plate in track.plates:
