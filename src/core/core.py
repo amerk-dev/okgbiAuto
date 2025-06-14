@@ -1,8 +1,11 @@
 from copy import deepcopy
 from collections import defaultdict
+from datetime import date
+from itertools import chain
+from typing import List, Tuple, Optional, Dict
+
 import models
 import time
-
 
 
 def profile_time(func):
@@ -14,62 +17,92 @@ def profile_time(func):
 
     return wrapper
 
+TRACK_LENGTH = 85000
 
 @profile_time
 def calculate_plan(spec: models.ProductionSpecification):
+    global TRACK_LENGTH
+    TRACK_LENGTH = spec.directory.track.length
     available_tracks = spec.available_tracks
     track_len = spec.directory.track.length
     orders = spec.orders
     original_ready_plates = [deepcopy(plate) for plate in spec.ready_plates]
     ready_plates = [deepcopy(plate) for plate in spec.ready_plates]
 
+    # Вычитаем готовые плиты со склада из общей потребности
     need_create_plates, updated_ready_plates = hasReadyPlate(orders, ready_plates)
 
+    # Определяем, какие именно готовые плиты были использованы
     used_ready_plates = []
     for original in original_ready_plates:
         updated = next(
             (p for p in updated_ready_plates
-             if (p.length == original.length and
-                 p.width == original.width and
-                 p.height == original.height and
-                 p.concrete_class == original.concrete_class and
-                 p.wire_bottom == original.wire_bottom and
+             if (p.length == original.length and p.width == original.width and p.height == original.height and
+                 p.concrete_class == original.concrete_class and p.wire_bottom == original.wire_bottom and
                  p.wire_top == original.wire_top)),
             None
         )
+        used_count = original.count
         if updated:
-            used_count = original.count - updated.count
-            if used_count > 0:
-                used_plate = deepcopy(original)
-                used_plate.count = used_count
-                used_ready_plates.append(used_plate)
-        else:
+            used_count -= updated.count
+
+        if used_count > 0:
             used_plate = deepcopy(original)
-            used_plate.count = original.count
+            used_plate.count = used_count
             used_ready_plates.append(used_plate)
 
-    # Добавим order к использованным плитам по аналогии с соответствующими заказами
+    # Присваиваем номер заказа использованным плитам
     for plate in used_ready_plates:
+        if plate.order: continue
         for order in orders:
-            for date in order.completion_dates:
-                for p in date.plates:
+            for c_date in order.completion_dates:
+                for p in c_date.plates:
                     if (plate.length == p.length and plate.width == p.width and plate.height == p.height and
                             plate.concrete_class == p.concrete_class and plate.wire_bottom == p.wire_bottom and plate.wire_top == p.wire_top):
                         plate.order = order.number
+                        break
+            if plate.order:
+                break
 
+    # Проверяем, достаточно ли теоретически дорожек для производства
     is_real = reality_check(need_create_plates, available_tracks, track_len)
+
+    # Создаем производственный план
     tracks_config = bestPlates(available_tracks, track_len, need_create_plates, spec.directory)
 
-    unplaced_plates = []
+    # ПОДСЧЕТ НЕРАЗМЕЩЕННЫХ ПЛИТ
+    placed_counts = defaultdict(int)
+    for track_conf in tracks_config:
+        for p in track_conf.plates:
+            # Создаем уникальный ключ для каждого типа плиты
+            plate_key = (p.length, p.width, p.height, p.concrete_class, p.wire_bottom, p.wire_top, p.name, p.order)
+            placed_counts[plate_key] += 1  # В плане у каждой плиты count=1
+
+    # Сравниваем потребность с тем, что разместили
+    unplaced_plates_data = []
     for date_entry in need_create_plates:
-        date = date_entry["date"]
-        for plate in date_entry["plate"]:
-            if plate.count > 0:
-                unplaced_plates.append({
-                    "date": date,
-                    "plate": [deepcopy(plate)]
-                })
-    unplaced_plates_merged = merge_plates(unplaced_plates)
+        unplaced_for_date = []
+        for required_plate in date_entry["plate"]:
+            plate_key = (required_plate.length, required_plate.width, required_plate.height,
+                         required_plate.concrete_class, required_plate.wire_bottom, required_plate.wire_top,
+                         required_plate.name, required_plate.order)
+
+            num_required = required_plate.count
+            num_placed = placed_counts.get(plate_key, 0)
+
+            num_unplaced = num_required - num_placed
+
+            if num_unplaced > 0:
+                unplaced_plate = deepcopy(required_plate)
+                unplaced_plate.count = num_unplaced
+                unplaced_for_date.append(unplaced_plate)
+
+                placed_counts[plate_key] = 0
+
+        if unplaced_for_date:
+            unplaced_plates_data.append({"date": date_entry["date"], "plate": unplaced_for_date})
+
+    unplaced_plates_merged = merge_plates(unplaced_plates_data)
 
     retooling_cost = count_of_retooling(tracks_config, spec.directory.retooling.price, spec.retooler)
 
@@ -170,96 +203,128 @@ def merge_plates(tmp_need_plates):
     return result
 
 
-def bestPlates(trackDay, track_len: int, needPlates, prices):
+def bestPlates(
+        trackDay: List[models.AvailableTrack],
+        track_len: int,
+        needPlates: List[Dict],
+        directory: models.Directory
+) -> List[models.TrackConfig]:
+    """
+    Размещает плиты по дорожкам с приоритетом на плиты с дедлайном.
+    """
     tracks_config = []
-    global_plates_with_deadline=[]
-    for tracks in trackDay:
-        for _ in range(tracks.count):
-            track_remaining = track_len
-            current_config = None
-            available_size = None
 
-            # Разделяем плиты на две группы: с дедлайном и без
-            plates_with_deadline = []
-            plates_without_deadline = []
+    all_plates_to_produce: List[Tuple[Optional[date], models.PlateSpecification]] = []
+    for item in needPlates:
+        for plate in item['plate']:
+            all_plates_to_produce.append((item.get('date'), deepcopy(plate)))
 
-            for order in needPlates:
-                for plate in order["plate"]:
-                    if plate.count <= 0:
-                        continue
-                    if order['date'] is not None:
-                        plates_with_deadline.append(plate)
-                        global_plates_with_deadline.append(plate)
-                    else:
-                        plates_without_deadline.append(plate)
+    deadline_items = sorted(
+        [item for item in all_plates_to_produce if item[0] is not None],
+        key=lambda item: (item[0], -item[1].width, -item[1].height)  # Сначала дата, потом размер
+    )
+    deadline_items_copy = deadline_items # для постобработки
+    filler_items = sorted(
+        [item for item in all_plates_to_produce if item[0] is None],
+        key=lambda item: (-item[1].width, -item[1].height)  # Просто по размеру
+    )
 
-            # Сортируем каждую группу по длине (от большего к меньшему)
-            plates_with_deadline.sort(key=lambda x: (x.width, x.height), reverse=True) #ToDo добавить высоту совсместно с шириной
-            plates_without_deadline.sort(key=lambda x: (x.width, x.height), reverse=True)
+    available_tracks_iterator = iter(
+        (d.day) for d in sorted(trackDay, key=lambda x: x.day) for _ in range(d.count)
+    )
 
-            # Объединяем группы: сначала плиты с дедлайном, потом без
-            sorted_plates = plates_with_deadline + plates_without_deadline
+    while deadline_items or filler_items:
+        try:
+            current_day = next(available_tracks_iterator)
+        except StopIteration:
+            break  # Дорожки закончились
 
-            for plate in sorted_plates:
-                if track_remaining <= 0:
-                    break
+        anchor_item = deadline_items[0] if deadline_items else filler_items[0]
+        anchor_plate = anchor_item[1]
+        target_size = (anchor_plate.width, anchor_plate.height)
 
-                if current_config:
-                    if (plate.width, plate.height) != available_size:
-                        continue
-                else:
-                    wire_top = max(sorted_plates, key=lambda plate: sorted_plates).wire_top
-                    wire_bottom = max(sorted_plates, key=lambda plate: sorted_plates).wire_bottom
-                    concrete_class = max(sorted_plates, key=lambda plate: sorted_plates).concrete_class
-                    current_config = models.TrackConfig(
-                        day=tracks.day,
-                        height=plate.height,
-                        width=plate.width,
-                        concrete_class=concrete_class,
-                        wire_bottom=wire_bottom,
-                        wire_top=wire_top,
-                        free_len=track_len,
-                        useful_len=0,
-                        total_cost=0,
-                        plates=[],
-                        free_cost=0,
-                        full_cost=0
-                    )
-                    available_size = (plate.width, plate.height)
-                    tracks_config.append(current_config)
+        same_size_plates = [
+            item[1] for item in chain(deadline_items, filler_items)
+            if (item[1].width, item[1].height) == target_size
+        ]
 
-                max_plates = min(plate.count, track_remaining // plate.length)
-                if max_plates > 0:
-                    for _ in range(max_plates):
-                        current_config.plates.append(deepcopy(plate))
-                    current_config.free_len -= plate.length * max_plates
-                    current_config.useful_len += plate.length * max_plates
-                    plate.count -= max_plates
-                    track_remaining -= plate.length * max_plates
+        if not same_size_plates:
+            continue  # На всякий случай, если что-то пошло не так
 
-                    current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
-                        current_config, prices)
+        wire_top = max(p.wire_top for p in same_size_plates)
+        wire_bottom = max(p.wire_bottom for p in same_size_plates)
+        concrete_class = max(p.concrete_class for p in same_size_plates)
 
-        tracks.count -= 1
+        current_config = models.TrackConfig(
+            day=current_day,
+            width=anchor_plate.width,
+            height=anchor_plate.height,
+            concrete_class=concrete_class,
+            wire_bottom=wire_bottom,
+            wire_top=wire_top,
+            free_len=track_len,
+            useful_len=0,
+            total_cost=0,
+            plates=[]
+        )
+        tracks_config.append(current_config)
 
-    post_calculating(tracks_config, global_plates_with_deadline)
+        track_remaining = track_len
+
+        def place_plates_on_track(item_list: List[Tuple[Optional[date], models.PlateSpecification]]):
+            nonlocal track_remaining
+            for _, plate in item_list:
+                if track_remaining <= 0: return
+                if plate.count > 0 and (plate.width, plate.height) == target_size:
+                    if plate.length == 0: continue  # Защита от деления на ноль
+
+                    max_plates = min(plate.count, track_remaining // plate.length)
+                    if max_plates > 0:
+                        # Добавляем каждую плиту отдельно, чтобы сохранить информацию о заказе
+                        for _ in range(max_plates):
+                            plate_instance = deepcopy(plate)
+                            plate_instance.count = 1
+                            current_config.plates.append(plate_instance)
+
+                        current_config.free_len -= plate.length * max_plates
+                        current_config.useful_len += plate.length * max_plates
+                        plate.count -= max_plates
+                        track_remaining -= plate.length * max_plates
+
+        place_plates_on_track(deadline_items)
+        place_plates_on_track(filler_items)
+
+        deadline_items = [item for item in deadline_items if item[1].count > 0]
+        filler_items = [item for item in filler_items if item[1].count > 0]
+
+        current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
+            current_config, directory)
+
+    post_calculating(tracks_config, deadline_items_copy)
 
     return tracks_config
 
 
-def count_of_retooling(tracks, price,
-                       retooler) -> dict:  # ToDo  переделать/оптимизировать (порядок дорожек в течении дня не важен)
+def count_of_retooling(tracks, price, retooler) -> dict:
+    """
+    Рассчитывает стоимость и количество переналадок с условием,
+    что в начале каждого нового дня оснастка считается снятой
+    (т.е. сравнение идет с исходным состоянием 'retooler').
+    """
     if not tracks:
         return {
             "price": 0,
             "daily_retoolings": [],
             "last_state": None
         }
-
     daily_changes = defaultdict(list)
     prev_track = retooler
 
     for current_track in tracks:
+        if prev_track is not retooler and current_track.day != prev_track.day:
+            prev_track = retooler
+        retooler.width, retooler.height = 0, 0
+        # Основная проверка на необходимость переналадки
         if prev_track.width != current_track.width or prev_track.height != current_track.height:
             change_date = current_track.day
             daily_changes[change_date].append({
@@ -289,8 +354,8 @@ def count_of_retooling(tracks, price,
         })
 
     last_state = {
-        "width": prev_track.width,
-        "height": prev_track.height
+        "width": tracks[-1].width,
+        "height": tracks[-1].height
     } if tracks else None
 
     return {
@@ -308,8 +373,8 @@ def calculate_price(track_config, prices):
 
     for plate in track_config.plates:
         cost += (((plate.length * track_config.height * track_config.width) / 10 ** 9) * concrete_price) * 0.65
-    cost += 85000 / 1000 * prices.wire.price * (
-            track_config.wire_bottom + track_config.wire_top)  # ToDo вынести 85000 в конфиг или еще что-то
+    cost += TRACK_LENGTH / 1000 * prices.wire.price * (
+            track_config.wire_bottom + track_config.wire_top)
 
     total_cost = cost
 
@@ -320,14 +385,24 @@ def calculate_price(track_config, prices):
     return total_cost, free_cost, full_cost
 
 
-def post_calculating(track_config, plates_with_deadline):
-    for index in range(len(track_config)-1):
+def post_calculating(track_config, plates_with_date):
+    for index in range(len(track_config) - 1):
         track = track_config[index]
         if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
+            found_plate_with_deadline = False
             for plate in track.plates:
-                if plate in plates_with_deadline:
+                for deadline_plate in plates_with_date:
+                    if (plate.name == deadline_plate[1].name and plate.length == deadline_plate[
+                        1].length and plate.width == deadline_plate[1].width
+                            and plate.height == deadline_plate[1].height and plate.concrete_class == deadline_plate[
+                                1].concrete_class and plate.wire_top == deadline_plate[1].wire_top
+                    ):
+                        found_plate_with_deadline = True
+                        break
+                if found_plate_with_deadline:
                     break
-            else:
+
+            if not found_plate_with_deadline:
                 p1 = track.free_cost - 15000
                 p2 = track_config[index + 1].total_cost
                 if p1 < p2:
