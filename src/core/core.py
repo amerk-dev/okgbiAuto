@@ -301,6 +301,8 @@ def bestPlates(
             current_config, directory)
 
     post_calculating(tracks_config, deadline_items_copy)
+    # post_calculating(tracks_config, deadline_items_copy) Можно делать двойную пост обработку, но толку больше не особо она даст
+
 
     return tracks_config
 
@@ -403,9 +405,7 @@ def post_calculating(track_config, plates_with_date):
                     break
 
             if not found_plate_with_deadline:
-                p1 = track.free_cost - 15000
-                p2 = track_config[index + 1].total_cost
-                if p1 < p2:
+                if track.free_len > 2000: # ToDo Я бы потом вынес в конфиг
                     swap_to_end(index, track_config)
                     continue
 
