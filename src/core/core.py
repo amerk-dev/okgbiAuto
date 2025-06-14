@@ -220,6 +220,7 @@ def bestPlates(
         [item for item in all_plates_to_produce if item[0] is not None],
         key=lambda item: (item[0], -item[1].width, -item[1].height)  # Сначала дата, потом размер
     )
+    deadline_items_copy = deadline_items # для постобработки
     filler_items = sorted(
         [item for item in all_plates_to_produce if item[0] is None],
         key=lambda item: (-item[1].width, -item[1].height)  # Просто по размеру
@@ -295,6 +296,8 @@ def bestPlates(
 
         current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
             current_config, directory)
+
+    post_calculating(tracks_config, deadline_items_copy)
 
     return tracks_config
 
@@ -380,13 +383,25 @@ def calculate_price(track_config, prices):
 
 
 def post_calculating(track_config, plates_with_date):
+    print(plates_with_date)
     for index in range(len(track_config) - 1):
         track = track_config[index]
         if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
+            found_plate_with_deadline = False
             for plate in track.plates:
-                if plate in plates_with_date:
+                for deadline_plate in plates_with_date:
+                    if (plate.name == deadline_plate[1].name and plate.length == deadline_plate[
+                        1].length and plate.width == deadline_plate[1].width
+                            and plate.height == deadline_plate[1].height and plate.concrete_class == deadline_plate[
+                                1].concrete_class and plate.wire_top == deadline_plate[1].wire_top
+                    ):
+                        print("есть плита с дедлайном", plate, deadline_plate[1])
+                        found_plate_with_deadline = True
+                        break
+                if found_plate_with_deadline:
                     break
-            else:
+
+            if not found_plate_with_deadline:
                 p1 = track.free_cost - 15000
                 p2 = track_config[index + 1].total_cost
                 if p1 < p2:
