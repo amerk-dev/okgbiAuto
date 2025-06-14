@@ -17,9 +17,12 @@ def profile_time(func):
 
     return wrapper
 
+TRACK_LENGTH = 85000
 
 @profile_time
 def calculate_plan(spec: models.ProductionSpecification):
+    global TRACK_LENGTH
+    TRACK_LENGTH = spec.directory.track.length
     available_tracks = spec.available_tracks
     track_len = spec.directory.track.length
     orders = spec.orders
@@ -370,8 +373,8 @@ def calculate_price(track_config, prices):
 
     for plate in track_config.plates:
         cost += (((plate.length * track_config.height * track_config.width) / 10 ** 9) * concrete_price) * 0.65
-    cost += 85000 / 1000 * prices.wire.price * (
-            track_config.wire_bottom + track_config.wire_top)  # ToDo вынести 85000 в конфиг или еще что-то
+    cost += TRACK_LENGTH / 1000 * prices.wire.price * (
+            track_config.wire_bottom + track_config.wire_top)
 
     total_cost = cost
 
@@ -383,7 +386,6 @@ def calculate_price(track_config, prices):
 
 
 def post_calculating(track_config, plates_with_date):
-    print(plates_with_date)
     for index in range(len(track_config) - 1):
         track = track_config[index]
         if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
@@ -395,7 +397,6 @@ def post_calculating(track_config, plates_with_date):
                             and plate.height == deadline_plate[1].height and plate.concrete_class == deadline_plate[
                                 1].concrete_class and plate.wire_top == deadline_plate[1].wire_top
                     ):
-                        print("есть плита с дедлайном", plate, deadline_plate[1])
                         found_plate_with_deadline = True
                         break
                 if found_plate_with_deadline:
