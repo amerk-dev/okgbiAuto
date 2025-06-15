@@ -26,6 +26,7 @@ class Directory(BaseModel):
     retooling: RetoolingConfig
     track: ProductionTrack
     tail_len: int = Field(default=2000)
+    force_tail: bool = Field(default=False)
 
 
 class PlateSpecification(BaseModel):
