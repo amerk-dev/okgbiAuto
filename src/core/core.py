@@ -255,17 +255,15 @@ def bestPlates(
         if not same_size_plates:
             continue  # На всякий случай, если что-то пошло не так
 
-        wire_top = max(p.wire_top for p in same_size_plates)
-        wire_bottom = max(p.wire_bottom for p in same_size_plates)
-        concrete_class = max(p.concrete_class for p in same_size_plates)
+        concrete_class = max(same_size_plates, key=lambda plate: same_size_plates).concrete_class
 
         current_config = models.TrackConfig(
             day=current_day,
             width=anchor_plate.width,
             height=anchor_plate.height,
             concrete_class=concrete_class,
-            wire_bottom=wire_bottom,
-            wire_top=wire_top,
+            wire_bottom=0,
+            wire_top=0,
             free_len=track_len,
             useful_len=0,
             total_cost=0,
@@ -300,6 +298,9 @@ def bestPlates(
 
         deadline_items = [item for item in deadline_items if item[1].count > 0]
         filler_items = [item for item in filler_items if item[1].count > 0]
+        for plate in current_config.plates:
+            current_config.wire_top = max(current_config.wire_top, plate.wire_top)
+            current_config.wire_bottom = max(current_config.wire_bottom, plate.wire_bottom)
 
         current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
             current_config, directory)
