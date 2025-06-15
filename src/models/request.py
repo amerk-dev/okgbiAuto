@@ -70,7 +70,7 @@ class RetoolerSetting(BaseModel):
 
 class ProductionSpecification(BaseModel):
     directory: Directory
-    retooler: RetoolerSetting
+    retooler: RetoolerSetting = Field(default_factory=lambda: RetoolerSetting(height=0, width=0))
     ready_plates: List[PlateSpecification] = Field(default_factory=list)
     available_tracks: List[AvailableTrack] = Field(default_factory=list)
     orders: List[Order] = Field(default_factory=list)
