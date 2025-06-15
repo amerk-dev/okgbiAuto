@@ -25,6 +25,7 @@ class Directory(BaseModel):
     wire: WireConfig
     retooling: RetoolingConfig
     track: ProductionTrack
+    tail_len: int = Field(default=2000)
 
 
 class PlateSpecification(BaseModel):
