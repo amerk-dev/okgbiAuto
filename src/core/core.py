@@ -304,8 +304,8 @@ def bestPlates(
         current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
             current_config, directory)
 
-    post_calculating(tracks_config, deadline_items_copy)
-    # post_calculating(tracks_config, deadline_items_copy) Можно делать двойную пост обработку, но толку больше не особо она даст
+    post_calculating(tracks_config, deadline_items_copy, directory.force_tail)
+    post_calculating(tracks_config, deadline_items_copy, directory.force_tail) # Можно делать двойную пост обработку, но толку больше не особо она даст
 
 
     return tracks_config
@@ -391,10 +391,30 @@ def calculate_price(track_config, prices):
     return total_cost, free_cost, full_cost
 
 
-def post_calculating(track_config, plates_with_date):
+def post_calculating(track_config, plates_with_date, force):
     for index in range(len(track_config) - 1):
         track = track_config[index]
-        if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
+        if not force:
+            if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
+                found_plate_with_deadline = False
+                for plate in track.plates:
+                    for deadline_plate in plates_with_date:
+                        if (plate.name == deadline_plate[1].name and plate.length == deadline_plate[
+                            1].length and plate.width == deadline_plate[1].width
+                                and plate.height == deadline_plate[1].height and plate.concrete_class == deadline_plate[
+                                    1].concrete_class and plate.wire_top == deadline_plate[
+                                    1].wire_top and plate.wire_bottom == deadline_plate[1].wire_bottom and plate.order == deadline_plate[1].order
+                        ):
+                            found_plate_with_deadline = True
+                            break
+                    if found_plate_with_deadline:
+                        break
+
+                if not found_plate_with_deadline:
+                    if track.free_len > TAIL_LENGTH:
+                        swap_to_end(index, track_config)
+                        continue
+        else:
             found_plate_with_deadline = False
             for plate in track.plates:
                 for deadline_plate in plates_with_date:
@@ -402,7 +422,8 @@ def post_calculating(track_config, plates_with_date):
                         1].length and plate.width == deadline_plate[1].width
                             and plate.height == deadline_plate[1].height and plate.concrete_class == deadline_plate[
                                 1].concrete_class and plate.wire_top == deadline_plate[
-                                1].wire_top and plate.wire_bottom == deadline_plate[1].wire_bottom and plate.order == deadline_plate[1].order
+                                1].wire_top and plate.wire_bottom == deadline_plate[1].wire_bottom and plate.order ==
+                            deadline_plate[1].order
                     ):
                         found_plate_with_deadline = True
                         break
@@ -413,7 +434,6 @@ def post_calculating(track_config, plates_with_date):
                 if track.free_len > TAIL_LENGTH:
                     swap_to_end(index, track_config)
                     continue
-
 
 def swap_to_end(index, track_config):
     while index < len(track_config) - 1:
