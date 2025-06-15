@@ -17,8 +17,10 @@ def profile_time(func):
 
     return wrapper
 
+
 TRACK_LENGTH = 85000
 TAIL_LENGTH = 2000
+
 
 @profile_time
 def calculate_plan(spec: models.ProductionSpecification):
@@ -27,7 +29,6 @@ def calculate_plan(spec: models.ProductionSpecification):
     global TAIL_LENGTH
     TAIL_LENGTH = spec.directory.tail_len
     available_tracks = spec.available_tracks
-    track_len = spec.directory.track.length
     orders = spec.orders
     original_ready_plates = [deepcopy(plate) for plate in spec.ready_plates]
     ready_plates = [deepcopy(plate) for plate in spec.ready_plates]
@@ -68,10 +69,10 @@ def calculate_plan(spec: models.ProductionSpecification):
                 break
 
     # Проверяем, достаточно ли теоретически дорожек для производства
-    is_real = reality_check(need_create_plates, available_tracks, track_len)
+    is_real = reality_check(need_create_plates, available_tracks, TRACK_LENGTH)
 
     # Создаем производственный план
-    tracks_config = bestPlates(available_tracks, track_len, need_create_plates, spec.directory)
+    tracks_config = bestPlates(available_tracks, TRACK_LENGTH, need_create_plates, spec.directory)
 
     # ПОДСЧЕТ НЕРАЗМЕЩЕННЫХ ПЛИТ
     placed_counts = defaultdict(int)
@@ -226,7 +227,7 @@ def bestPlates(
         [item for item in all_plates_to_produce if item[0] is not None],
         key=lambda item: (item[0], -item[1].width, -item[1].height)  # Сначала дата, потом размер
     )
-    deadline_items_copy = deadline_items # для постобработки
+    deadline_items_copy = deadline_items  # для постобработки
     filler_items = sorted(
         [item for item in all_plates_to_produce if item[0] is None],
         key=lambda item: (-item[1].width, -item[1].height)  # Просто по размеру
@@ -400,7 +401,8 @@ def post_calculating(track_config, plates_with_date):
                     if (plate.name == deadline_plate[1].name and plate.length == deadline_plate[
                         1].length and plate.width == deadline_plate[1].width
                             and plate.height == deadline_plate[1].height and plate.concrete_class == deadline_plate[
-                                1].concrete_class and plate.wire_top == deadline_plate[1].wire_top
+                                1].concrete_class and plate.wire_top == deadline_plate[
+                                1].wire_top and plate.wire_bottom == deadline_plate[1].wire_bottom and plate.order == deadline_plate[1].order
                     ):
                         found_plate_with_deadline = True
                         break
