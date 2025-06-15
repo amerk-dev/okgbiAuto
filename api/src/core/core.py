@@ -18,11 +18,14 @@ def profile_time(func):
     return wrapper
 
 TRACK_LENGTH = 85000
+TAIL_LENGTH = 2000
 
 @profile_time
 def calculate_plan(spec: models.ProductionSpecification):
     global TRACK_LENGTH
     TRACK_LENGTH = spec.directory.track.length
+    global TAIL_LENGTH
+    TAIL_LENGTH = spec.directory.tail_len
     available_tracks = spec.available_tracks
     track_len = spec.directory.track.length
     orders = spec.orders
@@ -405,7 +408,7 @@ def post_calculating(track_config, plates_with_date):
                     break
 
             if not found_plate_with_deadline:
-                if track.free_len > 2000: # ToDo Я бы потом вынес в конфиг
+                if track.free_len > TAIL_LENGTH:
                     swap_to_end(index, track_config)
                     continue
 
