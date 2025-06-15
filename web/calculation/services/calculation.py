@@ -75,7 +75,8 @@ def prepare_data(date_from, date_to):
             },
             "track": {
                 "length": params.road_length
-            }
+            },
+            "tail_len": params.tail_length
         },
         "ready_plates": [
             {
@@ -95,6 +96,7 @@ def prepare_data(date_from, date_to):
 
 
 def calculate_plan(date_from, date_to):
+    params = Parameters.get_solo()
     # Получаем данные из API
     headers = {'api-key': '12345678'}
     payload = json.dumps(prepare_data(date_from, date_to), ensure_ascii=False, cls=DecimalEncoder)

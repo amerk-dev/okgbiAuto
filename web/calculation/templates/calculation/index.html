@@ -257,11 +257,11 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 	                                            <input id="numberTracks-{{ forloop.counter }}" style="width: 40px;"
 	                                                   data-id="{{ forloop.counter }}"
 	                                                   class="track-input"
-	                                                   onchange="this.value = Math.max(0, Math.min(7, parseInt(this.value) || 0))"
+	                                                   onchange="this.value = Math.max(0, Math.min({{ parameters.tracks_count }}, parseInt(this.value) || 0))"
 	                                                   type="number"
 	                                                   step="1"
 	                                                   min='0'
-	                                                   max='7'
+	                                                   max='{{ parameters.tracks_count }}'
 	                                                   value="{{ track.count }}">
 	                                        </div>
 	                                        <div class="style-date-table" id="date-tracks">{{ track.date }}</div>

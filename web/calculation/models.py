@@ -196,6 +196,10 @@ class Parameters(SingletonModel):
     tracks_count = models.PositiveIntegerField(default=7, verbose_name="Количество дорожек")
     production_lag = models.PositiveIntegerField(default=3,
                                                 verbose_name='Производственный лаг (в днях)')
+    tail_length = models.PositiveIntegerField(default=2000,
+                                           help_text='Критическая длина хвоста в мм., при превышении которой'
+                                                     ' хвост будет перенесен в конец',
+                                           verbose_name='Длина хвоста')
     url_1c = models.CharField(max_length=255, verbose_name='URL 1c', default='')
     sign_1c = models.CharField(max_length=255, verbose_name='Пароль 1с', default='123456788')
 
@@ -211,78 +215,56 @@ class Parameters(SingletonModel):
     class Meta:
         verbose_name = "Параметры"
         verbose_name_plural = "Параметры"
+        constraints = [models.CheckConstraint(
+            check=models.Q(tracks_count__gte=models.F('default_available_tracks')),
+            name='check_tracks_count',
+            violation_error_message='Количество дорожек должно быть больше количества дорожек по умолчанию')]
 
     def __str__(self):
         return "Главные параметры"
 
     def save(self, *args, **kwargs):
         prev_params = Parameters.get_solo()
-        changes_made = False
-
-        # Check if default_available_tracks has changed
-        if prev_params.default_available_tracks != self.default_available_tracks:
-            changes_made = True
-            obj = super().save(*args, **kwargs)
-
-            # Update all non-weekend days with the new default_available_tracks
-            for track in AvailableTrack.objects.all():
-                weekday = track.date.weekday()
-                is_weekend = (
-                    (weekday == 0 and self.monday_weekend) or
-                    (weekday == 1 and self.tuesday_weekend) or
-                    (weekday == 2 and self.wednesday_weekend) or
-                    (weekday == 3 and self.thursday_weekend) or
-                    (weekday == 4 and self.friday_weekend) or
-                    (weekday == 5 and self.saturday_weekend) or
-                    (weekday == 6 and self.sunday_weekend)
-                )
-                if not is_weekend:
-                    track.count = self.default_available_tracks
-                    track.save()
-
-            return obj
-
-        # Check if any weekend day settings have changed
-        weekend_changes = (
-            prev_params.monday_weekend != self.monday_weekend or
-            prev_params.tuesday_weekend != self.tuesday_weekend or
-            prev_params.wednesday_weekend != self.wednesday_weekend or
-            prev_params.thursday_weekend != self.thursday_weekend or
-            prev_params.friday_weekend != self.friday_weekend or
-            prev_params.saturday_weekend != self.saturday_weekend or
-            prev_params.sunday_weekend != self.sunday_weekend
+    
+        # Проверяем изменения в настройках доступных дорожек или выходных дней
+        tracks_changed = prev_params.default_available_tracks != self.default_available_tracks
+    
+        weekend_settings = [
+            (0, 'monday_weekend'),
+            (1, 'tuesday_weekend'),
+            (2, 'wednesday_weekend'),
+            (3, 'thursday_weekend'),
+            (4, 'friday_weekend'),
+            (5, 'saturday_weekend'),
+            (6, 'sunday_weekend')
+        ]
+    
+        weekend_changed = any(
+            getattr(prev_params, day_attr) != getattr(self, day_attr)
+            for _, day_attr in weekend_settings
         )
-
-        if weekend_changes:
-            changes_made = True
+    
+        if tracks_changed or weekend_changed:
+            # Сначала сохраняем объект
             obj = super().save(*args, **kwargs)
-
-            # Update all tracks based on their weekday and the new weekend settings
+    
+            # Обновляем все дорожки на основе новых настроек
             for track in AvailableTrack.objects.all():
                 weekday = track.date.weekday()
-                is_weekend = False
-
-                if weekday == 0 and self.monday_weekend:
-                    is_weekend = True
-                elif weekday == 1 and self.tuesday_weekend:
-                    is_weekend = True
-                elif weekday == 2 and self.wednesday_weekend:
-                    is_weekend = True
-                elif weekday == 3 and self.thursday_weekend:
-                    is_weekend = True
-                elif weekday == 4 and self.friday_weekend:
-                    is_weekend = True
-                elif weekday == 5 and self.saturday_weekend:
-                    is_weekend = True
-                elif weekday == 6 and self.sunday_weekend:
-                    is_weekend = True
-
+    
+                # Проверяем, является ли день выходным
+                is_weekend = any(
+                    weekday == day_num and getattr(self, day_attr)
+                    for day_num, day_attr in weekend_settings
+                )
+    
+                # Устанавливаем количество дорожек в зависимости от того, выходной день или нет
                 track.count = 0 if is_weekend else self.default_available_tracks
                 track.save()
-
+    
             return obj
-
-        if not changes_made:
+        else:
+            # Если никаких изменений не было, просто сохраняем объект
             return super().save(*args, **kwargs)
 
 

@@ -89,10 +89,10 @@ def index(request):
                 })
 
     today_production_day = list(ProductionDay.objects.filter(date=datetime.date.today()))
-    today_max_length = (AvailableTrack.objects.filter(date=datetime.date.today()).first().count
+    today_max_length = (AvailableTrack.get_tracks(datetime.date.today()).filter(date=datetime.date.today()).first().count
                         * Parameters.get_solo().road_length)
     today_useful = sum([sum([ip.count * ip.length for ip in i.plates.all()])
-                       for i in today_production_day]) / today_max_length
+                        for i in today_production_day]) / today_max_length if today_max_length else 0
     today_stats = {
         'tracks': len(today_production_day),
         'plates': sum([sum([ip.count for ip in i.plates.all()]) for i in today_production_day]),
@@ -104,7 +104,7 @@ def index(request):
     retool_price = sum([i for i in DailyRetooling.objects.all().values_list('price', flat=True)])
     all_cost = sum(ProductionDay.objects.all().values_list('total_cost', flat=True)) + retool_price
     useful = (sum([sum([ip.count * ip.length for ip in i.plates.all()])
-                       for i in ProductionDay.objects.all()]) / all_max_length)
+                       for i in ProductionDay.objects.all()]) / all_max_length if all_max_length else 0)
     all_stats = {
         'tracks': len(ProductionDay.objects.all()),
         'plates': sum([sum([ip.count for ip in i.plates.all()]) for i in ProductionDay.objects.all()]),
