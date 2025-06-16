@@ -348,15 +348,15 @@ def count_of_retooling(tracks, price, retooler) -> dict:
 
     sorted_dates = sorted(daily_changes.keys())
     daily_retoolings = []
-    total_count = sum(len(changes) for changes in daily_changes.values())
+    total_count = sum(len(changes[:-1]) for changes in daily_changes.values())
     total_price = total_count * price
 
     for date in sorted_dates:
         changes = daily_changes[date]
         daily_retoolings.append({
             "date": date,
-            "count": len(changes),
-            "price": len(changes) * price,
+            "count": len(changes) - 1,
+            "price": (len(changes) - 1) * price,
             "changes": changes
         })
 
