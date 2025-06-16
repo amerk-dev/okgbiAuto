@@ -36,7 +36,7 @@ def prepare_data(date_from, date_to):
     inventory = Inventory.objects.all()
     available_tracks = list(AvailableTrack.get_tracks(date_from, date_to).annotate(day=F('date')).values('day', 'count'))
     available_tracks = [{'day': str(t['day']), 'count': t['count']} for t in available_tracks]
-    orders_numbers = set(Order.objects.all().values_list('order_number', flat=True))
+    orders_numbers = sorted(set(Order.objects.all().values_list('order_number', flat=True)))
     orders_data = []
     for order_number in orders_numbers:
         order_data = {
@@ -44,7 +44,7 @@ def prepare_data(date_from, date_to):
             "production_days": 0,
             "completion_dates": []
         }
-        order_dates = set(Order.objects.filter(order_number=order_number).values_list('deadline', flat=True))
+        order_dates = sorted(set(Order.objects.filter(order_number=order_number).values_list('deadline', flat=True)))
         for order_date in order_dates:
             completion_date = {
                     "date": (order_date - timedelta(days=params.production_lag)).strftime("%Y-%m-%d") if order_date else None,
@@ -76,7 +76,8 @@ def prepare_data(date_from, date_to):
             "track": {
                 "length": params.road_length
             },
-            "tail_len": params.tail_length
+            "tail_len": params.tail_length,
+            "force_tail": params.force_tail
         },
         "ready_plates": [
             {

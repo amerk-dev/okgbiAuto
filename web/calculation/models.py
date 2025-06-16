@@ -200,6 +200,9 @@ class Parameters(SingletonModel):
                                            help_text='Критическая длина хвоста в мм., при превышении которой'
                                                      ' хвост будет перенесен в конец',
                                            verbose_name='Длина хвоста')
+    force_tail = models.BooleanField(default=False,
+                                     verbose_name='Переносить хвост в любом случае',
+                                     help_text='Если выключено, хвост переносится даже в ущерб переналадкам')
     url_1c = models.CharField(max_length=255, verbose_name='URL 1c', default='')
     sign_1c = models.CharField(max_length=255, verbose_name='Пароль 1с', default='123456788')
 

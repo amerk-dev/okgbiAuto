@@ -110,7 +110,7 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
     <header class="con-header">
         <div class="position-blocks">
             <!-- Блок для печати -->
-            <div class="con-print">
+            <div class="con-print" style="min-width: 480px">
                 <div class="header-con">
                     Печать план на день:
                 </div>
@@ -130,6 +130,17 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                         </div>
                     </div>
                 </form>
+
+	            <div class="search-container">
+	                <div class="autocomplete-container">
+	                    <input type="text"
+	                           id="liveSearch"
+	                           class="live-search-input"
+	                           placeholder="Поиск по номеру заказа или параметрам плит...">
+	                    <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
+                    </div>
+                    <button id="clearSearch" class="clear-search-btn" title="Сбросить фильтр">✕</button>
+                </div>
             </div>
             <!-- Статиксика -->
             <div class="con-statistica">
@@ -159,7 +170,7 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                             <li>Стоимость:<label for=""
                                                  id="occupiedMM"> {{ all_stats.all_cost }} р</label></li>
                             <li>Дата готовности:<label for=""
-                                                 id="occupiedMM"> {{ last_complete_date }}</label></li>
+                                                       id="occupiedMM"> {{ last_complete_date }}</label></li>
 	                        {% if unplaced_plates|length > 0 %}
 		                        <li style="color: #ff5151; cursor: pointer">
                                 <a id="ordersAndRemaindersStat">Неразмещенные плиты:<label for=""
@@ -173,6 +184,19 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
             </div>
             <!-- Рассчет -->
             <div class="con-payment-mode">
+				<form style="width: auto; display: flex; justify-content: space-evenly; gap: 1vw; margin-right: 100px;"
+				      id="mainForm"
+				      action="{% url 'fetch_production_plan' %}"
+				      method="post">
+                    {% csrf_token %}
+
+                    <div class="header-con payment-header">
+                        Запуск расчета:
+                    </div>
+                    <div class="position-btn-payment">
+                        <button class="style-btn-payment">Рассчитать</button>
+                    </div>
+                </form>
             </div>
         </div>
     </header>
@@ -197,31 +221,6 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
         </div>
         <!-- Секция дорожек -->
         <section class="tracks section hidden" id="trackAvailabilitySection">
-            <div class="" style="display: flex; align-items: end; justify-content: space-between">
-	            <div class="search-container">
-                <div class="autocomplete-container">
-                    <input type="text"
-                           id="liveSearch"
-                           class="live-search-input"
-                           placeholder="Поиск по номеру заказа или параметрам плит...">
-                    <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
-                </div>
-                <button id="clearSearch" class="clear-search-btn" title="Сбросить фильтр">✕</button>
-            </div>
-				<form style="width: auto; display: flex; justify-content: space-evenly; gap: 1vw; margin-right: 100px;"
-				      id="mainForm"
-				      action="{% url 'fetch_production_plan' %}"
-				      method="post">
-                    {% csrf_token %}
-
-                    <div class="header-con payment-header">
-                        Запуск расчета:
-                    </div>
-                    <div class="position-btn-payment">
-                        <button class="style-btn-payment">Рассчитать</button>
-                    </div>
-                </form>
-            </div>
 
             <div class="position-table">
                     <table id="dynamicTable1" style="width: 30px; height: {{ table_height }}px">
@@ -380,7 +379,7 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 					                                {% for track in available_tracks %}
 						                                {% if forloop.counter0 == col_index %}
 							                                {% if track.count == 0 and track.is_weekend_day %}
-								                                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; transform: rotate(-45deg); color: #000000; font-weight: bold; font-size: 20px;">
+								                                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; transform: rotate(-45deg); color: #000000; font-size: 20px;">
                                                                     Выходной
                                                                 </div>
 							                                {% endif %}

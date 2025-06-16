@@ -11,8 +11,8 @@
 
 .position-blocks {
     display: flex;
-    gap: 5vw;
-    min-height: 250px;
+    gap: 2vw;
+    min-height: 190px;
 }
 
 /* Загаловки хэдеров  */
@@ -84,7 +84,6 @@
 
 /*Блок режим рассчетов */
 .con-payment-mode {
-    margin: 0 0 0 auto;
 }
 
 .payment-header {
@@ -521,6 +520,7 @@ tr.position-text td {
     display: flex;
     align-items: center;
     max-width: 600px;
+    margin-top: 15%;
 }
 
 .live-search-input {

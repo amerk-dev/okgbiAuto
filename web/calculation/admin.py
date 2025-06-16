@@ -159,8 +159,8 @@ class ProductionPlanAdmin(admin.ModelAdmin):
 class ParametersAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {
-            'fields': ('road_length', 'default_available_tracks', 'tail_length',
-                       'tracks_count', 'production_lag')
+            'fields': ('road_length', 'tracks_count', 'default_available_tracks',
+                       'tail_length', 'force_tail', 'production_lag')
         }),
         ('Выходные дни', {
             'fields': ('monday_weekend', 'tuesday_weekend', 'wednesday_weekend', 'thursday_weekend',
