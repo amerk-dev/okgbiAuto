@@ -294,19 +294,20 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 		                                                                <th>Ширина, мм</th>
 		                                                                <th>Высота, мм</th>
 		                                                            </tr>
-			                                                        {% with track.retooling_info.changes.all.0 as start_day %}
-				                                                        <tr class="position-text">
-		                                                                    <td>Начало дня</td>
-		                                                                    <td>{{ start_day.from_width }}</td>
-		                                                                    <td>{{ start_day.from_height }}</td>
-		                                                                </tr>
-			                                                        {% endwith %}
 			                                                        {% for changes in track.retooling_info.changes.all %}
-				                                                        <tr class="position-text">
-		                                                                    <td>Переналадка {{ forloop.counter }}</td>
-		                                                                    <td>{{ changes.to_width }}</td>
-		                                                                    <td>{{ changes.to_height }}</td>
-		                                                                </tr>
+				                                                        {% if forloop.first %}
+					                                                        <tr class="position-text">
+			                                                                    <td>Начало дня</td>
+			                                                                    <td>{{ changes.to_width }}</td>
+			                                                                    <td>{{ changes.to_height }}</td>
+		                                                                    </tr>
+				                                                        {% else %}
+					                                                        <tr class="position-text">
+			                                                                    <td>Переналадка {{ forloop.counter0 }}</td>
+			                                                                    <td>{{ changes.to_width }}</td>
+			                                                                    <td>{{ changes.to_height }}</td>
+		                                                                    </tr>
+				                                                        {% endif %}
 			                                                        {% endfor %}
 		                                                        </table>
 		                                                    </div>

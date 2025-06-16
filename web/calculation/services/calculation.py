@@ -9,6 +9,15 @@ from calculation.models import AvailableTrack, DailyRetooling, DailyRetoolingCha
     ProductionDay, ProductionDayPlate, ProductionPlan, RetoolingInfo, UnitPrice, UnplacedPlate, UsedReadyPlate
 from calculation.utils import DecimalEncoder
 
+weekend_settings = [
+            (0, 'monday_weekend'),
+            (1, 'tuesday_weekend'),
+            (2, 'wednesday_weekend'),
+            (3, 'thursday_weekend'),
+            (4, 'friday_weekend'),
+            (5, 'saturday_weekend'),
+            (6, 'sunday_weekend')
+        ]
 
 def clear_old_data(date_from):
     ProductionPlan.objects.all().delete()
@@ -46,8 +55,17 @@ def prepare_data(date_from, date_to):
         }
         order_dates = sorted(set(Order.objects.filter(order_number=order_number).values_list('deadline', flat=True)))
         for order_date in order_dates:
+            production_date = None
+            if order_date:
+                producion_lag = params.production_lag
+                for i in range(params.production_lag):
+                    day = order_date - timedelta(days=i)
+                    if getattr(params, weekend_settings[day.weekday()][1]):
+                        producion_lag += 1
+                production_date = order_date - timedelta(days=producion_lag)
+                production_date = production_date.strftime("%Y-%m-%d")
             completion_date = {
-                    "date": (order_date - timedelta(days=params.production_lag)).strftime("%Y-%m-%d") if order_date else None,
+                    "date": production_date,
                     "plates": [
                         {
                             "count": order.count,
