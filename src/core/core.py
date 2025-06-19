@@ -1,3 +1,4 @@
+import datetime
 from copy import deepcopy
 from collections import defaultdict
 from datetime import date
@@ -72,7 +73,7 @@ def calculate_plan(spec: models.ProductionSpecification):
     is_real = reality_check(need_create_plates, available_tracks, TRACK_LENGTH)
 
     # Создаем производственный план
-    tracks_config = bestPlates(available_tracks, TRACK_LENGTH, need_create_plates, spec.directory)
+    tracks_config = bestPlates(available_tracks, TRACK_LENGTH, need_create_plates, spec.directory, spec)
 
     # ПОДСЧЕТ НЕРАЗМЕЩЕННЫХ ПЛИТ
     placed_counts = defaultdict(int)
@@ -211,7 +212,8 @@ def bestPlates(
         trackDay: List[models.AvailableTrack],
         track_len: int,
         needPlates: List[Dict],
-        directory: models.Directory
+        directory: models.Directory,
+        spec: models.ProductionSpecification
 ) -> List[models.TrackConfig]:
     """
     Размещает плиты по дорожкам с приоритетом на плиты с дедлайном.
@@ -305,9 +307,9 @@ def bestPlates(
         current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
             current_config, directory)
 
-    post_calculating(tracks_config, deadline_items_copy, directory.force_tail)
-    post_calculating(tracks_config, deadline_items_copy, directory.force_tail) # Можно делать двойную пост обработку, но толку больше не особо она даст
-
+    post_calculating(tracks_config, deadline_items_copy, spec)
+    post_calculating(tracks_config, deadline_items_copy,
+                     spec)  # Можно делать двойную пост обработку, но толку больше не особо она даст
 
     return tracks_config
 
@@ -392,10 +394,10 @@ def calculate_price(track_config, prices):
     return total_cost, free_cost, full_cost
 
 
-def post_calculating(track_config, plates_with_date, force):
+def post_calculating(track_config, plates_with_date, spec: models.ProductionSpecification):
     for index in range(len(track_config) - 1):
         track = track_config[index]
-        if not force:
+        if spec.directory.force_tail == 0:
             if track.width != track_config[index + 1].width or track.height != track_config[index + 1].height:
                 found_plate_with_deadline = False
                 for plate in track.plates:
@@ -404,7 +406,8 @@ def post_calculating(track_config, plates_with_date, force):
                             1].length and plate.width == deadline_plate[1].width
                                 and plate.height == deadline_plate[1].height and plate.concrete_class == deadline_plate[
                                     1].concrete_class and plate.wire_top == deadline_plate[
-                                    1].wire_top and plate.wire_bottom == deadline_plate[1].wire_bottom and plate.order == deadline_plate[1].order
+                                    1].wire_top and plate.wire_bottom == deadline_plate[
+                                    1].wire_bottom and plate.order == deadline_plate[1].order
                         ):
                             found_plate_with_deadline = True
                             break
@@ -415,7 +418,7 @@ def post_calculating(track_config, plates_with_date, force):
                     if track.free_len > TAIL_LENGTH:
                         swap_to_end(index, track_config)
                         continue
-        else:
+        elif spec.directory.force_tail == 1:
             found_plate_with_deadline = False
             for plate in track.plates:
                 for deadline_plate in plates_with_date:
@@ -436,6 +439,11 @@ def post_calculating(track_config, plates_with_date, force):
                     swap_to_end(index, track_config)
                     continue
 
+        elif spec.directory.force_tail == 2:
+            if track.free_len > TAIL_LENGTH:
+                swap_to_deadline(index, track_config, spec)
+
+
 def swap_to_end(index, track_config):
     while index < len(track_config) - 1:
         if track_config[index + 1].width == 0 or track_config[index + 1].height == 0:
@@ -444,3 +452,40 @@ def swap_to_end(index, track_config):
         track_config[index], track_config[index + 1] = track_config[index + 1], track_config[index]
 
         index += 1
+
+
+def swap_to_deadline(index, track_config, spec: models.ProductionSpecification):
+    while track_config[index].day < last_day_for_plate(track_config[index], spec):
+        if track_config[index + 1].width == 0 or track_config[index + 1].height == 0:
+            break
+        track_config[index].day, track_config[index + 1].day = track_config[index + 1].day, track_config[index].day
+        track_config[index], track_config[index + 1] = track_config[index + 1], track_config[index]
+        # ToDo добавить проверку на дедлайн
+        index += 1
+
+
+def last_day_for_plate(track, spec: models.ProductionSpecification):
+    last_day = datetime.date(2025, 1, 1)
+    for plate in track.plates:
+        plate_deadline = get_plate_deadline(plate, spec)
+        if plate_deadline is None:
+            break
+        last_day = max(last_day, plate_deadline)
+
+    return datetime.date.min if last_day == datetime.date(2025, 1, 1) else last_day
+
+
+def get_plate_deadline(plate, spec: models.ProductionSpecification):
+    for order in spec.orders:
+        if plate.order == order.number:
+            for ord_dates in order.completion_dates:
+                for ord_plates in ord_dates.plates:
+                    if (plate.length == ord_plates.length and
+                            plate.width == ord_plates.width and
+                            plate.height == ord_plates.height and
+                            plate.concrete_class == ord_plates.concrete_class and
+                            plate.wire_bottom == ord_plates.wire_bottom and
+                            plate.wire_top == ord_plates.wire_top):
+                        return ord_dates.date
+        return None
+    return None
