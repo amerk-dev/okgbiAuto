@@ -26,7 +26,13 @@ class Directory(BaseModel):
     retooling: RetoolingConfig
     track: ProductionTrack
     tail_len: int = Field(default=2000)
-    force_tail: bool = Field(default=False)
+    force_tail: int = Field(default=0)
+
+    @validator('force_tail')
+    def validate_force_tail(cls, v):
+        if v not in [0, 1, 2]:
+            raise ValueError('force_tail must be 0 - lite, 1 - medium, or 2 - hard')
+        return v
 
 
 class PlateSpecification(BaseModel):
