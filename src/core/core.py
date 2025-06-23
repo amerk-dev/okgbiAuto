@@ -455,12 +455,17 @@ def swap_to_end(index, track_config):
 
 
 def swap_to_deadline(index, track_config, spec: models.ProductionSpecification):
-    while track_config[index].day < last_day_for_plate(track_config[index], spec):
+    current_day_str = track_config[index].day
+    current_day = date.fromisoformat(current_day_str) if isinstance(current_day_str, str) else current_day_str
+    while current_day  < last_day_for_plate(track_config[index], spec):
         if track_config[index + 1].width == 0 or track_config[index + 1].height == 0:
             break
         track_config[index].day, track_config[index + 1].day = track_config[index + 1].day, track_config[index].day
         track_config[index], track_config[index + 1] = track_config[index + 1], track_config[index]
         # ToDo добавить проверку на дедлайн
+
+        current_day_str = track_config[index].day
+        current_day = date.fromisoformat(current_day_str) if isinstance(current_day_str, str) else current_day_str
         index += 1
 
 
@@ -487,5 +492,5 @@ def get_plate_deadline(plate, spec: models.ProductionSpecification):
                             plate.wire_bottom == ord_plates.wire_bottom and
                             plate.wire_top == ord_plates.wire_top):
                         return ord_dates.date
-        return None
+        else: continue
     return None
