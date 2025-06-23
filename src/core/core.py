@@ -457,12 +457,17 @@ def swap_to_end(index, track_config):
 def swap_to_deadline(index, track_config, spec: models.ProductionSpecification):
     current_day_str = track_config[index].day
     current_day = date.fromisoformat(current_day_str) if isinstance(current_day_str, str) else current_day_str
-    while current_day  < last_day_for_plate(track_config[index], spec):
+    deadline = last_day_for_plate(track_config[index], spec)
+
+    while current_day  < deadline:
+        next_track = track_config[index + 1]
+        if next_track.width == 0 or next_track.height == 0:
+            break
+
         if track_config[index + 1].width == 0 or track_config[index + 1].height == 0:
             break
         track_config[index].day, track_config[index + 1].day = track_config[index + 1].day, track_config[index].day
         track_config[index], track_config[index + 1] = track_config[index + 1], track_config[index]
-        # ToDo добавить проверку на дедлайн
 
         current_day_str = track_config[index].day
         current_day = date.fromisoformat(current_day_str) if isinstance(current_day_str, str) else current_day_str
@@ -470,14 +475,13 @@ def swap_to_deadline(index, track_config, spec: models.ProductionSpecification):
 
 
 def last_day_for_plate(track, spec: models.ProductionSpecification):
-    last_day = datetime.date(2025, 1, 1)
+    last_day = datetime.date(2035, 1, 1)
     for plate in track.plates:
         plate_deadline = get_plate_deadline(plate, spec)
-        if plate_deadline is None:
-            break
-        last_day = max(last_day, plate_deadline)
-
-    return datetime.date.min if last_day == datetime.date(2025, 1, 1) else last_day
+        if plate_deadline is not None:
+            last_day = min(last_day, plate_deadline)
+    print(last_day)
+    return last_day
 
 
 def get_plate_deadline(plate, spec: models.ProductionSpecification):
@@ -492,5 +496,4 @@ def get_plate_deadline(plate, spec: models.ProductionSpecification):
                             plate.wire_bottom == ord_plates.wire_bottom and
                             plate.wire_top == ord_plates.wire_top):
                         return ord_dates.date
-        else: continue
     return None
