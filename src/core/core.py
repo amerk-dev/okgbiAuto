@@ -1,4 +1,5 @@
 import datetime
+import difflib
 from copy import deepcopy
 from collections import defaultdict
 from datetime import date
@@ -307,12 +308,43 @@ def bestPlates(
         current_config.total_cost, current_config.free_cost, current_config.full_cost = calculate_price(
             current_config, directory)
 
-    post_calculating(tracks_config, deadline_items_copy, spec)
-    post_calculating(tracks_config, deadline_items_copy,
-                     spec)  # Можно делать двойную пост обработку, но толку больше не особо она даст
+    c = 1
+    track_history = []
+    max_iterations = 30
+    while c <= max_iterations:
+        current_state = deepcopy(tracks_config)
+        track_history.append(current_state)
 
-    return tracks_config
+        post_calculating(tracks_config, deadline_items_copy, spec)
 
+        # Проверяем, не повторяется ли состояние через одну итерацию
+        if len(track_history) >= 3 and compare_nested_lists(track_history[-3], track_history[-1]):
+            break
+
+        c += 1
+    sorted_tracks_config = sort_by_width_and_height(tracks_config)
+    return sorted_tracks_config
+
+
+def compare_nested_lists(list1, list2):
+    # Если оба объекта не являются списками, просто сравниваем их
+    if not isinstance(list1, list) and not isinstance(list2, list):
+        return list1 == list2
+
+    # Если один из объектов список, а другой нет - они не равны
+    if isinstance(list1, list) != isinstance(list2, list):
+        return False
+
+    # Если оба списка, сравниваем их длину
+    if len(list1) != len(list2):
+        return False
+
+    # Рекурсивно сравниваем элементы списков
+    for item1, item2 in zip(list1, list2):
+        if not compare_nested_lists(item1, item2):
+            return False
+
+    return True
 
 def count_of_retooling(tracks, price, retooler) -> dict:
     """
@@ -457,13 +489,9 @@ def swap_to_end(index, track_config):
 def swap_to_deadline(index, track_config, spec: models.ProductionSpecification):
     current_day_str = track_config[index].day
     current_day = date.fromisoformat(current_day_str) if isinstance(current_day_str, str) else current_day_str
-    deadline = last_day_for_plate(track_config[index], spec)
+    deadline = last_day_for_plate(track_config[index], spec, track_config)
 
-    while current_day  < deadline:
-        next_track = track_config[index + 1]
-        if next_track.width == 0 or next_track.height == 0:
-            break
-
+    while current_day < deadline:
         if track_config[index + 1].width == 0 or track_config[index + 1].height == 0:
             break
         track_config[index].day, track_config[index + 1].day = track_config[index + 1].day, track_config[index].day
@@ -474,14 +502,13 @@ def swap_to_deadline(index, track_config, spec: models.ProductionSpecification):
         index += 1
 
 
-def last_day_for_plate(track, spec: models.ProductionSpecification):
-    last_day = datetime.date(2035, 1, 1)
+def last_day_for_plate(track, spec: models.ProductionSpecification, track_config):
+    last_track_day = track_config[-1].day
     for plate in track.plates:
         plate_deadline = get_plate_deadline(plate, spec)
         if plate_deadline is not None:
-            last_day = min(last_day, plate_deadline)
-    print(last_day)
-    return last_day
+            last_track_day = min(last_track_day, plate_deadline)
+    return last_track_day
 
 
 def get_plate_deadline(plate, spec: models.ProductionSpecification):
@@ -497,3 +524,7 @@ def get_plate_deadline(plate, spec: models.ProductionSpecification):
                             plate.wire_top == ord_plates.wire_top):
                         return ord_dates.date
     return None
+
+
+def sort_by_width_and_height(track_config):
+    return sorted(track_config, key=lambda x: (x.day, x.width, x.height))
