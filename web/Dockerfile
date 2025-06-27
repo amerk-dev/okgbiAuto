@@ -29,9 +29,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копирование кода проекта
 COPY . .
 
+# Make entrypoint script executable
+RUN chmod +x /code/entrypoint.sh
+
 # Сбор статики, если требуется
 RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
 
+# CMD is overridden by entrypoint in docker-compose.yml
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "okgbi.wsgi:application"]

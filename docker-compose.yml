@@ -16,11 +16,14 @@ services:
   web:
     build:
       context: web
-    command: bash -c "python manage.py collectstatic --noinput && gunicorn --reload -w 4 okgbi.wsgi:application --bind 0.0.0.0:8000"
+    entrypoint: /code/entrypoint.sh
     volumes:
       - ./web:/code
     environment:
       - DJANGO_SETTINGS_MODULE=okgbi.settings
+      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME:-admin}
+      - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-admin}
     env_file:
       - .env
     depends_on:
