@@ -197,6 +197,21 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                         <button class="style-btn-payment">Рассчитать</button>
                     </div>
                 </form>
+
+                <!-- Кнопка выгрузки в 1С -->
+                <form style="width: auto; display: flex; justify-content: space-evenly; gap: 1vw; margin-right: 100px; margin-top: 10px"
+				      id="export1CForm"
+				      action="{% url 'export_to_1c' %}"
+				      method="post">
+                    {% csrf_token %}
+
+                    <div class="header-con payment-header">
+                        Выгрузка в 1С:
+                    </div>
+                    <div class="position-btn-payment">
+                        <button class="style-btn-payment">Выгрузить</button>
+                    </div>
+                </form>
             </div>
         </div>
     </header>
@@ -357,6 +372,8 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 		                                            {% else %}
 	                                            Остаток: {{ table_cell.free_len }} мм
 		                                            {% endif %}
+                                                <br>
+                                                Стоимость: {{ table_cell.total_cost|floatformat:2 }} ₽
 	                                            </div>
 	                                        </td>
 		                                {% elif table_cell.free_len %}
@@ -399,41 +416,109 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
         </section>
         <!-- Секция заказов и остатков -->
         <section class="balances-and-orders section hidden" id="ordersAndRemaindersSection">
-            <div style="margin-top: 20px" class="heading-tracks">Заказы</div>
+            <div style="margin-top: 20px" class="heading-tracks">
+                Заказы
+                <div class="filter-controls">
+                    <select id="orderFilterContractor" class="filter-select">
+                        <option value="">Все контрагенты</option>
+                        {% for contractor in contractors %}
+                            <option value="{{ contractor.name }}">{{ contractor.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button id="showDeletedOrders" class="toggle-btn">Показать удаленные</button>
+                </div>
+            </div>
             <div id="ordersTableContainer" style="width: 95%;">
-                <table class="custom-table" style="width: 100%;">
+                <table class="custom-table" style="width: 100%;" id="ordersTable">
                     <thead>
                     <tr class="position-text">
-                        <th>Дата отгрузки</th>
-                        <th>Дата изготовления</th>
-                        <th>Номер заказа</th>
-                        <th>Наименование</th>
-                        <th>Длина, мм</th>
-                        <th>Ширина, мм</th>
-                        <th>Высота, мм</th>
-                        <th>Нагрузка</th>
-                        <th>Класс бетона</th>
-                        <th>Проволока верх, шт</th>
-                        <th>Проволока низ, шт</th>
-                        <th>Количество, шт</th>
+                        <th class="sortable" data-sort="deadline">Дата отгрузки <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="complete_date">Дата изготовления <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="order_number">Номер заказа <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="contractor">Контрагент <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="name">Наименование <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="length">Длина, мм <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="width">Ширина, мм <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="height">Высота, мм <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="capacity">Нагрузка <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="concrete">Класс бетона <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="wire_top">Проволока верх, шт <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="wire_bottom">Проволока низ, шт <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="count">Количество, шт <i class="fas fa-sort"></i></th>
+                        <th>Действия</th>
                     </tr>
                     </thead>
                     <tbody>
                     {% for order in orders %}
-	                    <tr class="position-text"
+	                    <tr class="position-text order-row" data-id="{{ order.id }}" data-contractor="{{ order.contractor.name|default:'' }}"
 	                        {% if order.is_overdue %}style="background-color: rgb(255, 150, 150);"{% endif %}>
-                            <td {% if order.is_overdue %}style="color: red; font-weight: bold;"{% endif %}>{{ order.deadline|date:"d.m.Y" }}</td>
-                            <td>{{ order.plate_complete_date|date:"d.m.Y" }}</td>
+                            <td {% if order.is_overdue %}style="color: red; font-weight: bold;"{% endif %} data-value="{{ order.deadline|date:'Y-m-d'|default:'9999-12-31' }}">{{ order.deadline|date:"d.m.Y"|default:"-" }}</td>
+                            <td data-value="{{ order.plate_complete_date|date:'Y-m-d'|default:'9999-12-31' }}">{{ order.plate_complete_date|date:"d.m.Y"|default:"-" }}</td>
                             <td>{{ order.order_number }}</td>
+                            <td>{{ order.contractor.name|default:"-" }}</td>
                             <td>{{ order.product.clean_name }}</td>
-                            <td>{{ order.product.length }}</td>
-                            <td>{{ order.product.width }}</td>
-                            <td>{{ order.product.height }}</td>
-                            <td>{{ order.product.capacity }}</td>
+                            <td data-value="{{ order.product.length }}">{{ order.product.length }}</td>
+                            <td data-value="{{ order.product.width }}">{{ order.product.width }}</td>
+                            <td data-value="{{ order.product.height }}">{{ order.product.height }}</td>
+                            <td data-value="{{ order.product.capacity }}">{{ order.product.capacity }}</td>
                             <td>{{ order.product.concrete_class }}</td>
-                            <td>{{ order.product.wire_top }}</td>
-                            <td>{{ order.product.wire_bottom }}</td>
-                            <td>{{ order.count }}</td>
+                            <td data-value="{{ order.product.wire_top }}">{{ order.product.wire_top }}</td>
+                            <td data-value="{{ order.product.wire_bottom }}">{{ order.product.wire_bottom }}</td>
+                            <td data-value="{{ order.count }}">{{ order.count }}</td>
+                            <td>
+                                <button class="delete-order-btn" data-id="{{ order.id }}" title="Удалить заказ">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Удаленные заказы -->
+            <div id="deletedOrdersContainer" style="width: 95%; display: none;">
+                <div style="margin-top: 20px" class="heading-tracks">Удаленные заказы</div>
+                <table class="custom-table" style="width: 100%;" id="deletedOrdersTable">
+                    <thead>
+                    <tr class="position-text">
+                        <th class="sortable" data-sort="deadline">Дата отгрузки <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="complete_date">Дата изготовления <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="order_number">Номер заказа <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="contractor">Контрагент <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="name">Наименование <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="length">Длина, мм <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="width">Ширина, мм <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="height">Высота, мм <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="capacity">Нагрузка <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="concrete">Класс бетона <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="wire_top">Проволока верх, шт <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="wire_bottom">Проволока низ, шт <i class="fas fa-sort"></i></th>
+                        <th class="sortable" data-sort="count">Количество, шт <i class="fas fa-sort"></i></th>
+                        <th>Действия</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for order in deleted_orders %}
+	                    <tr class="position-text deleted-order-row" data-id="{{ order.id }}" data-contractor="{{ order.contractor.name|default:'' }}">
+                            <td data-value="{{ order.deadline|date:'Y-m-d'|default:'9999-12-31' }}">{{ order.deadline|date:"d.m.Y"|default:"-" }}</td>
+                            <td data-value="{{ order.plate_complete_date|date:'Y-m-d'|default:'9999-12-31' }}">{{ order.plate_complete_date|date:"d.m.Y"|default:"-" }}</td>
+                            <td>{{ order.order_number }}</td>
+                            <td>{{ order.contractor.name|default:"-" }}</td>
+                            <td>{{ order.product.clean_name }}</td>
+                            <td data-value="{{ order.product.length }}">{{ order.product.length }}</td>
+                            <td data-value="{{ order.product.width }}">{{ order.product.width }}</td>
+                            <td data-value="{{ order.product.height }}">{{ order.product.height }}</td>
+                            <td data-value="{{ order.product.capacity }}">{{ order.product.capacity }}</td>
+                            <td>{{ order.product.concrete_class }}</td>
+                            <td data-value="{{ order.product.wire_top }}">{{ order.product.wire_top }}</td>
+                            <td data-value="{{ order.product.wire_bottom }}">{{ order.product.wire_bottom }}</td>
+                            <td data-value="{{ order.count }}">{{ order.count }}</td>
+                            <td>
+                                <button class="restore-order-btn" data-id="{{ order.id }}" title="Восстановить заказ">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                            </td>
                         </tr>
                     {% endfor %}
                     </tbody>
@@ -632,346 +717,277 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 
 	<!-- Логика работы кнопок -->
 <script src="{% static 'calculation/js/btn_page.js' %}"></script>
+<script src="{% static 'calculation/js/order_management.js' %}"></script>
+<script src="{% static 'calculation/js/drag_drop.js' %}"></script>
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 
 <script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Удаление заказа
+    function deleteOrder(orderId) {
+        if (!confirm('Вы действительно хотите удалить этот заказ?')) return;
 
-	document.addEventListener('DOMContentLoaded', function () {
-		$('#mainForm').on('submit', async function (e) {
-			e.preventDefault();
-			$('.loader').show()
-			$('.position-screen').css('opacity', '0.5')
-			$('.position-screen').css('pointer-events', 'none')
+        fetch(`/delete-order/${orderId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const row = document.querySelector(`.order-row[data-id="${orderId}"]`);
+                if (row) row.style.display = 'none';
+                window.location.reload();
+            } else {
+                alert('Ошибка при удалении заказа');
+            }
+        })
+        .catch(() => alert('Ошибка при удалении заказа'));
+    }
 
-			const formData = new FormData(this);
+    // Восстановление заказа
+    function restoreOrder(orderId) {
+        if (!confirm('Вы действительно хотите восстановить этот заказ?')) return;
 
-			// Добавляем/изменяем данные
-			const tracksInputs = document.querySelectorAll('.track-input');
-			let tracksData = []
+        fetch(`/restore-order/${orderId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const row = document.querySelector(`.deleted-order-row[data-id="${orderId}"]`);
+                if (row) row.style.display = 'none';
+                window.location.reload();
+            } else {
+                alert('Ошибка при восстановлении заказа');
+            }
+        })
+        .catch(() => alert('Ошибка при отправке запроса'));
+    }
 
-			tracksInputs.forEach(input => {
-				const dataId = input.getAttribute('data-id');
-				if (dataId) {
-					tracksData.push(input.value)
-				}
-			});
+    // Отправка формы
+    $('#mainForm').on('submit', async function (e) {
+        e.preventDefault();
+        $('.loader').show();
+        $('.position-screen').css({'opacity':'0.5','pointer-events':'none'});
 
-			formData.append('tracks', tracksData);
+        const formData = new FormData(this);
 
-			try {
-				const response = await fetch(this.action, {
-					method: 'POST',
-					body: formData,
-				});
+        // Добавляем дорожки
+        const tracksInputs = document.querySelectorAll('.track-input');
+        const tracksData = [];
+        tracksInputs.forEach(input => {
+            const dataId = input.getAttribute('data-id');
+            if (dataId) tracksData.push(input.value);
+        });
+        formData.append('tracks', JSON.stringify(tracksData));
 
-				if (response.ok) {
-					// Перенаправляем на ту же страницу (имитация стандартной отправки)
-					window.location.href = window.location.href;
-				} else {
-					alert('Ошибка сервера');
-				}
-			}
-			catch (error) {
-				alert('Ошибка сети');
-			}
-		});
+        try {
+            const response = await fetch(this.action, { method: 'POST', body: formData });
+            if (response.ok) {
+                window.location.href = window.location.href;
+            } else {
+                alert('Ошибка сервера');
+            }
+        } catch {
+            alert('Ошибка сети');
+        }
+    });
 
+    // Фильтр дат
+    const dateFrom = document.getElementById('dateTracksFrom');
+    if (dateFrom) {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('date_from')) dateFrom.value = urlParams.get('date_from');
+        dateFrom.addEventListener('change', () => {
+            const params = new URLSearchParams(window.location.search);
+            params.set('date_from', dateFrom.value);
+            window.location.search = params.toString();
+        });
+    }
 
-		// Получаем элементы input
-		const dateFrom = document.getElementById('dateTracksFrom');
+    // Живой поиск
+    const searchInput = document.getElementById('liveSearch');
+    const clearSearchBtn = document.getElementById('clearSearch');
+    const dynamicTable = document.getElementById('dynamicTable');
+    const autocompleteDropdown = document.getElementById('autocompleteDropdown');
 
-		// Функция для обновления URL с новыми параметрами дат
-		function updateDates() {
-			const params = new URLSearchParams(window.location.search);
+    if (searchInput && clearSearchBtn && dynamicTable && autocompleteDropdown) {
+        let allOrderNumbers = new Set();
+        let allPlateNames = new Set();
 
-			// Обновляем параметры с выбранными датами
-			params.set('date_from', dateFrom.value);
+        function collectSuggestions() {
+            allOrderNumbers.clear();
+            allPlateNames.clear();
+            document.querySelectorAll('.hidden-search-info').forEach(div => {
+                div.querySelectorAll('div').forEach(orderDiv => {
+                    const text = orderDiv.textContent.trim();
+                    if (text.startsWith('Заказ:')) {
+                        allOrderNumbers.add(text.replace('Заказ:', '').trim());
+                    } else if (text.startsWith('Плита:')) {
+                        allPlateNames.add(text.replace('Плита:', '').trim());
+                    }
+                });
+            });
+        }
+        collectSuggestions();
 
-			// Перезагружаем страницу с новыми параметрами
-			window.location.search = params.toString();
-		}
+        function filterSuggestions(searchTerm) {
+            const term = searchTerm.toLowerCase();
+            const orderMatches = Array.from(allOrderNumbers)
+                .filter(order => order.toLowerCase().includes(term))
+                .map(order => ({type:'order', value:order}));
+            const plateMatches = Array.from(allPlateNames)
+                .filter(plate => plate.toLowerCase().includes(term))
+                .map(plate => ({type:'plate', value:plate}));
+            return [...orderMatches, ...plateMatches].slice(0, 10);
+        }
 
-		// Добавляем обработчики событий
-		dateFrom?.addEventListener('change', updateDates);
+        function showSuggestions(suggestions) {
+            autocompleteDropdown.innerHTML = '';
+            if (!suggestions.length) {
+                autocompleteDropdown.classList.remove('show');
+                return;
+            }
+            suggestions.forEach((sug, idx) => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.dataset.index = idx;
+                const category = document.createElement('span');
+                category.className = 'autocomplete-category';
+                category.textContent = sug.type === 'order' ? 'Заказ:' : 'Плита:';
+                item.appendChild(category);
+                item.appendChild(document.createTextNode(' ' + sug.value));
+                item.addEventListener('click', () => selectSuggestion(sug));
+                autocompleteDropdown.appendChild(item);
+            });
+            autocompleteDropdown.classList.add('show');
+        }
 
-		// Устанавливаем начальные значения из GET-параметров, если они есть
-		const urlParams = new URLSearchParams(window.location.search);
-		if (urlParams.has('date_from') && dateFrom) {
-			dateFrom.value = urlParams.get('date_from');
-		}
-// Функционал живого поиска
-		const searchInput = document.getElementById('liveSearch');
-		const clearSearchBtn = document.getElementById('clearSearch');
-		const dynamicTable = document.getElementById('dynamicTable');
-		const autocompleteDropdown = document.getElementById('autocompleteDropdown');
+        function selectSuggestion(suggestion) {
+            searchInput.value = suggestion.value;
+            autocompleteDropdown.classList.remove('show');
+            filterTable();
+        }
 
-		if (searchInput && clearSearchBtn && dynamicTable && autocompleteDropdown) {
-			// Собираем все уникальные номера заказов и наименования плит
-			let allOrderNumbers = new Set();
-			let allPlateNames = new Set();
+        let selectedIndex = -1;
 
-			function collectSuggestions() {
-				// Очищаем предыдущие значения
-				allOrderNumbers.clear();
-				allPlateNames.clear();
+        searchInput.addEventListener('keydown', function (e) {
+            const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (selectedIndex < items.length - 1) {
+                    if (selectedIndex >= 0) items[selectedIndex].classList.remove('selected');
+                    selectedIndex++;
+                    items[selectedIndex].classList.add('selected');
+                    items[selectedIndex].scrollIntoView({block: 'nearest'});
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (selectedIndex > 0) {
+                    items[selectedIndex].classList.remove('selected');
+                    selectedIndex--;
+                    items[selectedIndex].classList.add('selected');
+                    items[selectedIndex].scrollIntoView({block: 'nearest'});
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedIndex >= 0 && items[selectedIndex]) {
+                    items[selectedIndex].click();
+                    selectedIndex = -1;
+                } else {
+                    filterTable();
+                }
+            } else if (e.key === 'Escape') {
+                autocompleteDropdown.classList.remove('show');
+                selectedIndex = -1;
+            }
+        });
 
-				// Получаем все скрытые блоки с информацией о заказах и плитах
-				const hiddenInfoDivs = document.querySelectorAll('.hidden-search-info');
+        function filterTable() {
+            const term = searchInput.value.toLowerCase();
+            clearSearchBtn.style.display = term ? 'block' : 'none';
 
-				hiddenInfoDivs.forEach(div => {
-					// Ищем все элементы с информацией о заказах
-					const orderDivs = div.querySelectorAll('div');
-					orderDivs.forEach(orderDiv => {
-						const text = orderDiv.textContent.trim();
-						if (text.startsWith('Заказ:')) {
-							const orderNumber = text.replace('Заказ:', '').trim();
-							if (orderNumber) {
-								allOrderNumbers.add(orderNumber);
-							}
-						} else if (text.startsWith('Плита:')) {
-							const plateName = text.replace('Плита:', '').trim();
-							if (plateName) {
-								allPlateNames.add(plateName);
-							}
-						}
-					});
-				});
+            if (!term) {
+                resetFilter();
+                return;
+            }
 
-				console.log('Collected order numbers:', Array.from(allOrderNumbers));
-				console.log('Collected plate names:', Array.from(allPlateNames));
-			}
+            if (document.activeElement === searchInput) {
+                const suggestions = filterSuggestions(term);
+                showSuggestions(suggestions);
+            }
 
-			// Вызываем функцию сбора данных при загрузке страницы
-			collectSuggestions();
+            const cells = dynamicTable.querySelectorAll('tbody tr td');
+            cells.forEach(cell => {
+                cell.classList.add('filtered-out');
+                cell.classList.remove('filtered-match');
+            });
 
-			// Функция для фильтрации подсказок
-			function filterSuggestions(searchTerm) {
-				if (!searchTerm) return [];
+            let found = false;
+            cells.forEach(cell => {
+                const cellContent = cell.textContent.toLowerCase();
+                const infoDiv = cell.querySelector('.position-info');
+                const hiddenDiv = cell.querySelector('.hidden-search-info');
 
-				const orderMatches = Array.from(allOrderNumbers)
-					.filter(order => order.toLowerCase().includes(searchTerm))
-					.map(order => ({type: 'order', value: order}));
+                if (cellContent.includes(term) ||
+                    (infoDiv && infoDiv.textContent.toLowerCase().includes(term)) ||
+                    (hiddenDiv && hiddenDiv.textContent.toLowerCase().includes(term))) {
 
-				const plateMatches = Array.from(allPlateNames)
-					.filter(plate => plate.toLowerCase().includes(searchTerm))
-					.map(plate => ({type: 'plate', value: plate}));
+                    cell.classList.remove('filtered-out');
+                    cell.classList.add('filtered-match');
+                    found = true;
 
-				// Объединяем результаты, сначала заказы, потом плиты
-				return [...orderMatches, ...plateMatches].slice(0, 10); // Ограничиваем до 10 результатов
-			}
+                    const rowIndex = cell.parentElement.rowIndex;
+                    const colIndex = Array.from(cell.parentElement.children).indexOf(cell);
+                    const headerCell = dynamicTable.querySelector(`thead tr th:nth-child(${colIndex + 1})`);
+                    if (headerCell) headerCell.classList.remove('filtered-out');
 
-			// Функция для отображения подсказок
-			function showSuggestions(suggestions) {
-				// Очищаем предыдущие подсказки
-				autocompleteDropdown.innerHTML = '';
+                    const rowHeaderTable = document.getElementById('dynamicTable1');
+                    if (rowHeaderTable) {
+                        const rowHeader = rowHeaderTable.querySelector(`tbody tr:nth-child(${rowIndex}) th`);
+                        if (rowHeader) rowHeader.classList.remove('filtered-out');
+                    }
+                }
+            });
 
-				if (suggestions.length === 0) {
-					autocompleteDropdown.classList.remove('show');
-					return;
-				}
+            if (!found) resetFilter();
+        }
 
-				// Добавляем новые подсказки
-				suggestions.forEach((suggestion, index) => {
-					const item = document.createElement('div');
-					item.className = 'autocomplete-item';
-					item.dataset.index = index;
+        function resetFilter() {
+            document.querySelectorAll('.filtered-out, .filtered-match')
+                .forEach(el => el.classList.remove('filtered-out', 'filtered-match'));
+            searchInput.value = '';
+            clearSearchBtn.style.display = 'none';
+            autocompleteDropdown.classList.remove('show');
+            selectedIndex = -1;
+        }
 
-					const category = document.createElement('span');
-					category.className = 'autocomplete-category';
-					category.textContent = suggestion.type === 'order' ? 'Заказ:' : 'Плита:';
+        document.addEventListener('click', e => {
+            if (!autocompleteDropdown.contains(e.target) && e.target !== searchInput) {
+                autocompleteDropdown.classList.remove('show');
+                selectedIndex = -1;
+            }
+        });
 
-					item.appendChild(category);
-					item.appendChild(document.createTextNode(' ' + suggestion.value));
-
-					item.addEventListener('click', () => {
-						selectSuggestion(suggestion);
-					});
-
-					autocompleteDropdown.appendChild(item);
-				});
-
-				// Показываем выпадающий список
-				autocompleteDropdown.classList.add('show');
-			}
-
-			// Функция для выбора подсказки
-			function selectSuggestion(suggestion) {
-				searchInput.value = suggestion.value;
-				autocompleteDropdown.classList.remove('show');
-				filterTable();
-			}
-
-			// Переменная для отслеживания выбранной подсказки при навигации с клавиатуры
-			let selectedIndex = -1;
-
-			// Обработчик клавиатурной навигации
-			searchInput.addEventListener('keydown', function (e) {
-				const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
-
-				// Стрелка вниз
-				if (e.key === 'ArrowDown') {
-					e.preventDefault();
-					if (selectedIndex < items.length - 1) {
-						if (selectedIndex >= 0) {
-							items[selectedIndex].classList.remove('selected');
-						}
-						selectedIndex++;
-						items[selectedIndex].classList.add('selected');
-						items[selectedIndex].scrollIntoView({block: 'nearest'});
-					}
-				}
-				// Стрелка вверх
-				else if (e.key === 'Enter') {
-					e.preventDefault();
-					if (selectedIndex >= 0 && items[selectedIndex]) {
-						items[selectedIndex].click();
-						selectedIndex = -1;
-					} else {
-						filterTable();
-					}
-				}
-				// Стрелка вверх
-				else if (e.key === 'ArrowUp') {
-					e.preventDefault();
-					if (selectedIndex > 0) {
-						items[selectedIndex].classList.remove('selected');
-						selectedIndex--;
-						items[selectedIndex].classList.add('selected');
-						items[selectedIndex].scrollIntoView({block: 'nearest'});
-					}
-				}
-				// Escape
-				else if (e.key === 'Escape') {
-					autocompleteDropdown.classList.remove('show');
-					selectedIndex = -1;
-				}
-			});
-
-			// Функция для фильтрации таблицы
-			function filterTable() {
-				console.log('Starting table filter');
-				const searchTerm = searchInput.value.toLowerCase();
-				console.log('Search term:', searchTerm);
-
-				// Показать/скрыть кнопку очистки
-				clearSearchBtn.style.display = searchTerm ? 'block' : 'none';
-
-				// Скрываем выпадающий список при пустом поиске или при выборе подсказки
-				if (!searchTerm || document.activeElement !== searchInput) {
-					autocompleteDropdown.classList.remove('show');
-					selectedIndex = -1;
-				}
-
-				if (!searchTerm) {
-					console.log('Empty search term, resetting filter');
-					// Если поиск пустой, сбросить все фильтры
-					resetFilter();
-					return;
-				}
-
-				// Показываем подсказки только если фокус на поле ввода
-				if (document.activeElement === searchInput) {
-					const suggestions = filterSuggestions(searchTerm);
-					showSuggestions(suggestions);
-				}
-
-				// Получаем все ячейки таблицы с данными (исключая заголовки)
-				const cells = dynamicTable.querySelectorAll('tbody tr td');
-				console.log('Found table cells:', cells.length);
-
-				// Сначала помечаем все ячейки как отфильтрованные
-				cells.forEach(cell => {
-					cell.classList.add('filtered-out');
-					cell.classList.remove('filtered-match');
-				});
-
-				// Ищем совпадения
-				let foundMatch = false;
-				cells.forEach(cell => {
-					const cellContent = cell.textContent.toLowerCase();
-					const infoDiv = cell.querySelector('.position-info');
-
-					// Проверяем содержимое ячейки, div.position-info и скрытую информацию о заказах и плитах
-					const hiddenInfoDiv = cell.querySelector('.hidden-search-info');
-					if (cellContent.includes(searchTerm) ||
-						(infoDiv && infoDiv.textContent.toLowerCase().includes(searchTerm)) ||
-						(hiddenInfoDiv && hiddenInfoDiv.textContent.toLowerCase().includes(searchTerm))) {
-
-						cell.classList.remove('filtered-out');
-						cell.classList.add('filtered-match');
-						foundMatch = true;
-
-						// Логируем, где именно найдено совпадение
-						if (hiddenInfoDiv && hiddenInfoDiv.textContent.toLowerCase().includes(searchTerm)) {
-							console.log('Found match in hidden info:', hiddenInfoDiv.textContent);
-						} else {
-							console.log('Found match in cell content:', cellContent);
-						}
-
-						// Также находим соответствующую строку и колонку
-						const rowIndex = cell.parentElement.rowIndex;
-						const colIndex = Array.from(cell.parentElement.children).indexOf(cell);
-
-						// Подсвечиваем заголовок колонки (день)
-						const headerCell = dynamicTable.querySelector(`thead tr th:nth-child(${colIndex + 1})`);
-						if (headerCell) {
-							headerCell.classList.remove('filtered-out');
-						}
-
-						// Подсвечиваем заголовок строки (дорожку)
-						const rowHeaderTable = document.getElementById('dynamicTable1');
-						if (rowHeaderTable) {
-							const rowHeader = rowHeaderTable.querySelector(`tbody tr:nth-child(${rowIndex}) th`);
-							if (rowHeader) {
-								rowHeader.classList.remove('filtered-out');
-							}
-						}
-					}
-				});
-
-				// Если ничего не найдено, показываем все
-				if (!foundMatch) {
-					resetFilter();
-				}
-			}
-
-			// Функция для сброса фильтра
-			function resetFilter() {
-				const allElements = document.querySelectorAll('.filtered-out, .filtered-match');
-
-				allElements.forEach(el => {
-					el.classList.remove('filtered-out', 'filtered-match');
-				});
-
-				// Очищаем поле поиска и скрываем кнопку очистки и выпадающий список
-				if (this === clearSearchBtn) {
-					searchInput.value = '';
-					clearSearchBtn.style.display = 'none';
-					autocompleteDropdown.classList.remove('show');
-					selectedIndex = -1;
-				}
-			}
-
-			// Скрываем выпадающий список при клике вне его
-			document.addEventListener('click', function (e) {
-				if (!autocompleteDropdown.contains(e.target) && e.target !== searchInput) {
-					autocompleteDropdown.classList.remove('show');
-					selectedIndex = -1;
-				}
-			});
-
-			// Обработчики событий
-			searchInput.addEventListener('input', filterTable);
-			searchInput.addEventListener('focus', function () {
-				if (searchInput.value) {
-					const suggestions = filterSuggestions(searchInput.value.toLowerCase());
-					showSuggestions(suggestions);
-				}
-			});
-			clearSearchBtn.addEventListener('click', resetFilter);
-		}
-	});
+        searchInput.addEventListener('input', filterTable);
+        searchInput.addEventListener('focus', () => {
+            if (searchInput.value) {
+                const suggestions = filterSuggestions(searchInput.value.toLowerCase());
+                showSuggestions(suggestions);
+            }
+        });
+        clearSearchBtn.addEventListener('click', resetFilter);
+    }
+});
 </script>
+
 </html>

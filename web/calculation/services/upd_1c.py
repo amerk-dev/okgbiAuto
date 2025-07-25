@@ -33,7 +33,7 @@ def update_data():
             )
             Inventory.objects.create(
                 product=product,
-                count=ready_plate['count'],
+                count=max(ready_plate['count'], 1), #TODO: tmp fix
             )
 
         for order_data in orders:

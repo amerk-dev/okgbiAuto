@@ -107,7 +107,7 @@ def delete_unitprices(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('calculation', '0017_alter_parameters_force_tail'),
+        ('calculation', '0001_initial'),
     ]
 
     operations = [

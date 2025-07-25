@@ -1,16 +1,20 @@
 import datetime
 
+import json
+
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect, render, get_object_or_404
 from django.template.loader import render_to_string
+from django.views.decorators.http import require_POST
 from loguru import logger
 from weasyprint import HTML
 
-from .models import (AvailableTrack, DailyRetooling, Inventory, Order, Parameters, ProductionDay,
+from .models import (AvailableTrack, Contractor, DailyRetooling, Inventory, Order, Parameters, ProductionDay,
                      ProductionDayPlate, UnitPrice, UnplacedPlate, UsedReadyPlate)
 from .services.calculation import calculate_plan, clear_old_data
+from .services.export_1c import export_to_1c
 from .services.upd_1c import update_data
 from .utils import handle_view_exception
 
@@ -54,7 +58,7 @@ def index(request):
         plates_complete_dates[(plate.order, plate.name)] = plate.production_day.date
 
     # Get all orders with their deadlines
-    orders = Order.objects.all().prefetch_related('product')
+    orders = Order.objects.filter(is_deleted=False).prefetch_related('product').select_related('contractor')
     order_deadlines = {}
     for order in orders:
         order_deadlines[order.order_number] = order.deadline
@@ -114,15 +118,23 @@ def index(request):
     }
     last_complete_date = max(plates_complete_dates.values(), default=None)
 
+    # Get deleted orders
+    deleted_orders = Order.objects.filter(is_deleted=True).prefetch_related('product').select_related('contractor')
+
+    # Get all contractors
+    contractors = Contractor.objects.all()
+
     return render(request, 'calculation/index.html', {
         'table_data': table_data,
         'price_table_data': UnitPrice.objects.all(),
         'parameters': parameters,
         'inventory': Inventory.objects.all(),
-        'unplaced_plates': UnplacedPlate.objects.all(),
-        'used_ready_plates': UsedReadyPlate.objects.all(),
+        'unplaced_plates': UnplacedPlate.objects.filter(is_deleted=False),
+        'used_ready_plates': UsedReadyPlate.objects.filter(is_deleted=False),
         'orders': sorted(orders,
                          key=lambda x: (not x.is_overdue, x.deadline or datetime.date.max, x.plate_complete_date or datetime.date.max)),
+        'deleted_orders': deleted_orders,
+        'contractors': contractors,
         'available_tracks': available_tracks,
         'today': datetime.date.today(),
         'stats': today_stats,
@@ -145,7 +157,16 @@ def fetch_and_save_production_plan(request):
     if request.method == 'POST':
         date_from, date_to = get_date_range_from_request(request)
         date_to = date_from + datetime.timedelta(days=100)
-        tracks = list(map(int, request.POST['tracks'].split(',')))
+        # Корректная обработка треков
+        raw_tracks = request.POST.get('tracks', '[]')
+        try:
+            # Убираем лишние слои кавычек
+            tracks = json.loads(raw_tracks)
+            # Преобразуем в int
+            tracks = [int(x) for x in tracks]
+        except json.JSONDecodeError:
+            # fallback, если пришла строка "5,0,0,5"
+            tracks = [int(x) for x in raw_tracks.split(',') if x.strip().isdigit()]
         update_available_tracks(tracks, date_from, date_to)
 
         with transaction.atomic():
@@ -173,6 +194,144 @@ def change_available_tracks(request):
 
 @handle_view_exception
 @login_required(login_url='/admin/login/')
+@require_POST
+@handle_view_exception
+@login_required(login_url='/admin/login/')
+def delete_order(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    order.is_deleted = True
+    order.save()
+    return JsonResponse({'status': 'success'})
+
+
+@require_POST
+@handle_view_exception
+@login_required(login_url='/admin/login/')
+def restore_order(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    order.is_deleted = False
+    order.save()
+    return JsonResponse({'status': 'success'})
+
+
+@require_POST
+@handle_view_exception
+@login_required(login_url='/admin/login/')
+def delete_plate(request, plate_type, plate_id):
+    plate_models = {
+        'unplaced': UnplacedPlate,
+        'used_ready': UsedReadyPlate,
+        'production_day': ProductionDayPlate,
+    }
+
+    if plate_type not in plate_models:
+        return JsonResponse({'status': 'error', 'message': 'Invalid plate type'}, status=400)
+
+    plate = get_object_or_404(plate_models[plate_type], id=plate_id)
+    plate.is_deleted = True
+    plate.save()
+    return JsonResponse({'status': 'success'})
+
+
+@require_POST
+@handle_view_exception
+@login_required(login_url='/admin/login/')
+def restore_plate(request, plate_type, plate_id):
+    plate_models = {
+        'unplaced': UnplacedPlate,
+        'used_ready': UsedReadyPlate,
+        'production_day': ProductionDayPlate,
+    }
+
+    if plate_type not in plate_models:
+        return JsonResponse({'status': 'error', 'message': 'Invalid plate type'}, status=400)
+
+    plate = get_object_or_404(plate_models[plate_type], id=plate_id)
+    plate.is_deleted = False
+    plate.save()
+    return JsonResponse({'status': 'success'})
+
+
+@require_POST
+@handle_view_exception
+@login_required(login_url='/admin/login/')
+def move_plate(request):
+    """
+    Обработчик для перемещения плиты между дорожками
+    """
+    try:
+        data = json.loads(request.body)
+        source_row = data.get('sourceRow')
+        source_col = data.get('sourceCol')
+        target_row = data.get('targetRow')
+        target_col = data.get('targetCol')
+
+        # Получаем даты из доступных дорожек
+        available_tracks = list(AvailableTrack.objects.all().order_by('date'))
+
+        # Получаем дату источника и цели
+        source_date = available_tracks[source_col].date
+        target_date = available_tracks[target_col].date
+
+        # Получаем плиту из исходной дорожки
+        source_production_day = ProductionDay.objects.filter(date=source_date).order_by('id')[source_row]
+
+        # Проверяем, существует ли целевая дорожка
+        target_production_days = ProductionDay.objects.filter(date=target_date)
+
+        # Если целевая дорожка не существует, создаем её
+        if target_row >= len(target_production_days):
+            # Создаем новую дорожку с такими же параметрами, как у исходной
+            target_production_day = ProductionDay.objects.create(
+                date=target_date,
+                height=source_production_day.height,
+                width=source_production_day.width,
+                useful_len=0,
+                free_len=Parameters.get_solo().road_length,
+                concrete_class=source_production_day.concrete_class,
+                wire_bottom=source_production_day.wire_bottom,
+                wire_top=source_production_day.wire_top,
+                total_cost=0,
+                free_cost=0,
+                full_cost=0
+            )
+        else:
+            target_production_day = target_production_days[target_row]
+
+        # Перемещаем все плиты из исходной дорожки в целевую
+        plates = source_production_day.plates.all()
+        for plate in plates:
+            plate.production_day = target_production_day
+            plate.save()
+
+        # Обновляем полезную длину и свободную длину
+        total_length = sum(plate.length * plate.count for plate in plates)
+        target_production_day.useful_len = total_length
+        target_production_day.free_len = Parameters.get_solo().road_length - total_length
+        target_production_day.save()
+
+        # Удаляем исходную дорожку, если она пуста
+        source_production_day.delete()
+
+        return JsonResponse({'status': 'success'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)})
+
+
+@require_POST
+@handle_view_exception
+@login_required(login_url='/admin/login/')
+def export_to_1c_view(request):
+    """
+    Обработчик для выгрузки данных в 1С
+    """
+    result = export_to_1c()
+    if result['status'] == 'success':
+        return JsonResponse({'status': 'success', 'message': result['message']})
+    else:
+        return JsonResponse({'status': 'error', 'message': result['message']}, status=500)
+
+
 def generate_production_calendar(request):
     deadlines = dict(Order.objects.values_list('order_number', 'deadline'))
     date = request.GET.get('date_print', datetime.date.today().strftime("%Y-%m-%d"))

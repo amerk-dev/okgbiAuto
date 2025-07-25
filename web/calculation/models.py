@@ -9,13 +9,12 @@ from django.utils import timezone
 from django.db.models import DecimalField
 
 
-class Plate(models.Model):
+class BaseProductMixin(models.Model):
+    """Base mixin for product-related models with common fields and methods"""
     name = models.CharField(max_length=255)
-    count = models.PositiveIntegerField()
     length = models.PositiveIntegerField()
     width = models.PositiveIntegerField()
     height = models.PositiveIntegerField()
-    order = models.CharField(max_length=255, null=True, blank=True)
     concrete_class = models.CharField(max_length=10)
     wire_bottom = models.PositiveIntegerField()
     wire_top = models.PositiveIntegerField()
@@ -23,19 +22,17 @@ class Plate(models.Model):
     class Meta:
         abstract = True
 
-
     @property
     def clean_name(self):
+        """Remove load information from name"""
         pattern = r'\s*((\d+,{,1}\d*))\s*нагрузка'  # Удаляет число и слово "нагрузка" с пробелами
-
         cleaned_text = re.sub(pattern, '', self.name).strip()
         return cleaned_text
 
-
     @property
     def capacity(self):
+        """Extract load capacity from name"""
         pattern = r'((\d+,{,1}\d*))\s*нагрузка'
-
         match = re.search(pattern, self.name)
         if match:
             number = match.group(1)
@@ -47,7 +44,31 @@ class Plate(models.Model):
             return 0
 
 
+class Plate(BaseProductMixin):
+    """Base model for all plate types"""
+    count = models.PositiveIntegerField()
+    order = models.CharField(max_length=255, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
+
+    # Add a type field to distinguish between different plate types
+    PLATE_TYPE_CHOICES = [
+        ('production', 'Production Day Plate'),
+        ('used', 'Used Ready Plate'),
+        ('unplaced', 'Unplaced Plate'),
+        ('left', 'Left Ready Plate'),
+    ]
+    plate_type = models.CharField(max_length=20, choices=PLATE_TYPE_CHOICES, default='production')
+
+    class Meta:
+        verbose_name = "Plate"
+        verbose_name_plural = "Plates"
+
+    def __str__(self):
+        return f"{self.name} ({self.length}x{self.width}x{self.height}), {self.count} шт."
+
+
 class ProductionDay(models.Model):
+    """Model representing a production day on a specific track"""
     date = models.DateField()
     height = models.PositiveIntegerField()
     width = models.PositiveIntegerField()
@@ -59,82 +80,109 @@ class ProductionDay(models.Model):
     total_cost = models.DecimalField(max_digits=16, decimal_places=2)
     free_cost = models.DecimalField(max_digits=16, decimal_places=2)
     full_cost = models.DecimalField(max_digits=16, decimal_places=2)
+    # Relationship to plates is defined through the ProductionDayPlate model
 
     class Meta:
         verbose_name = "Production Day"
         verbose_name_plural = "Production Days"
         ordering = ['date']
 
+    def __str__(self):
+        return f"Production Day {self.date} - {self.useful_len}/{self.free_len + self.useful_len}"
+
 
 class ProductionDayPlate(Plate):
+    """Plate assigned to a specific production day"""
     production_day = models.ForeignKey(ProductionDay, on_delete=models.CASCADE, related_name='plates')
 
     class Meta:
         verbose_name = "Production Day Plate"
         verbose_name_plural = "Production Day Plates"
 
+    def save(self, *args, **kwargs):
+        self.plate_type = 'production'
+        super().save(*args, **kwargs)
 
 
 class UsedReadyPlate(Plate):
+    """Plate that has been used from ready inventory"""
     class Meta:
         verbose_name = "Used Ready Plate"
         verbose_name_plural = "Used Ready Plates"
 
+    def save(self, *args, **kwargs):
+        self.plate_type = 'used'
+        super().save(*args, **kwargs)
+
 
 class UnplacedPlate(Plate):
+    """Plate that couldn't be placed in the production plan"""
     class Meta:
         verbose_name = "Unplaced Plate"
         verbose_name_plural = "Unplaced Plates"
 
+    def save(self, *args, **kwargs):
+        self.plate_type = 'unplaced'
+        super().save(*args, **kwargs)
+
 
 class LeftReadyPlate(Plate):
+    """Plate that is left over after production"""
     class Meta:
         verbose_name = "Left Ready Plate"
         verbose_name_plural = "Left Ready Plates"
 
+    def save(self, *args, **kwargs):
+        self.plate_type = 'left'
+        super().save(*args, **kwargs)
+
 
 class DailyRetooling(models.Model):
+    """Model representing retooling operations for a specific date"""
     date = models.DateField()
-    count = models.PositiveIntegerField()
-    price = models.DecimalField(max_digits=16, decimal_places=2)
+    count = models.PositiveIntegerField(help_text="Number of retooling operations on this date")
+    price = models.DecimalField(max_digits=16, decimal_places=2, help_text="Total cost of retooling operations")
 
     class Meta:
         verbose_name = "Daily Retooling"
         verbose_name_plural = "Daily Retoolings"
+        ordering = ['date']
+
+    def __str__(self):
+        return f"Retooling on {self.date}: {self.count} operations, {self.price}"
+
 
 class DailyRetoolingChanges(models.Model):
+    """Model representing specific changes made during a retooling operation"""
     daily_retooling = models.ForeignKey(DailyRetooling, on_delete=models.CASCADE, related_name='changes')
-    from_width = models.PositiveIntegerField()
-    from_height = models.PositiveIntegerField()
-    to_width = models.PositiveIntegerField()
-    to_height = models.PositiveIntegerField()
+    from_width = models.PositiveIntegerField(help_text="Original width setting")
+    from_height = models.PositiveIntegerField(help_text="Original height setting")
+    to_width = models.PositiveIntegerField(help_text="New width setting")
+    to_height = models.PositiveIntegerField(help_text="New height setting")
 
     class Meta:
-        verbose_name = "Daily Retooling Changes"
-        verbose_name_plural = "Daily Retoolings Changes"
+        verbose_name = "Retooling Change"
+        verbose_name_plural = "Retooling Changes"
+
+    def __str__(self):
+        return f"Change from {self.from_width}x{self.from_height} to {self.to_width}x{self.to_height}"
 
 
 class RetoolingInfo(models.Model):
-    price = models.DecimalField(max_digits=16, decimal_places=2)
-    last_state_width = models.PositiveIntegerField()
-    last_state_height = models.PositiveIntegerField()
+    """Model containing aggregated information about retooling operations"""
+    price = models.DecimalField(max_digits=16, decimal_places=2, help_text="Total cost of all retooling operations")
+    last_state_width = models.PositiveIntegerField(help_text="Last width setting after retooling")
+    last_state_height = models.PositiveIntegerField(help_text="Last height setting after retooling")
     daily_retoolings = models.ManyToManyField(DailyRetooling)
 
     class Meta:
         verbose_name = "Retooling Info"
-        verbose_name_plural = "Retooling Infos"
+        verbose_name_plural = "Retooling Info"
+
+    def __str__(self):
+        return f"Retooling Info: {self.price}, Last state: {self.last_state_width}x{self.last_state_height}"
 
 
-class ProductionPlan(models.Model):
-    plan = models.ManyToManyField(ProductionDay)
-    used_ready_plates = models.ManyToManyField(UsedReadyPlate)
-    unplaced_plates = models.ManyToManyField(UnplacedPlate)
-    left_ready_plates = models.ManyToManyField(LeftReadyPlate)
-    retooling_info = models.OneToOneField(RetoolingInfo, on_delete=models.CASCADE)
-
-    class Meta:
-        verbose_name = "Production Plan"
-        verbose_name_plural = "Production Plans"
 
 
 class UnitPrice(models.Model):
@@ -277,7 +325,7 @@ class Parameters(SingletonModel):
             return super().save(*args, **kwargs)
 
 
-class Product(models.Model):
+class Product(BaseProductMixin):
     """Базовая модель изделия (общие характеристики)"""
     name = models.CharField('Наименование', max_length=50)
     length = models.PositiveIntegerField('Длина, мм', validators=[MinValueValidator(1)])
@@ -297,30 +345,22 @@ class Product(models.Model):
             )
         ]
 
-    @property
-    def clean_name(self):
-        pattern = r'\s*((\d+,{,1}\d*))\s*нагрузка'  # Удаляет число и слово "нагрузка" с пробелами
-
-        cleaned_text = re.sub(pattern, '', self.name).strip()
-        return cleaned_text
-
-
-    @property
-    def capacity(self):
-        pattern = r'((\d+,{,1}\d*))\s*нагрузка'
-
-        match = re.search(pattern, self.name)
-        if match:
-            number = match.group(1)
-            try:
-                return int(number)
-            except ValueError:
-                return float(number.replace(',', '.'))
-        else:
-            return 0
-
     def __str__(self):
         return f"{self.clean_name} ({self.length}x{self.width}x{self.height}), бетон {self.concrete_class}"
+
+
+class Contractor(models.Model):
+    """Модель контрагента"""
+    name = models.CharField('Наименование', max_length=100)
+    contact_info = models.CharField('Контактная информация', max_length=255, blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Контрагент'
+        verbose_name_plural = 'Контрагенты'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
 
 
 class Order(models.Model):
@@ -329,6 +369,8 @@ class Order(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name='Изделие')
     count = models.PositiveIntegerField('Количество, шт', validators=[MinValueValidator(1)])
     deadline = models.DateField('Дедлайн по заказу', null=True)
+    contractor = models.ForeignKey(Contractor, on_delete=models.CASCADE, verbose_name='Контрагент', null=True)
+    is_deleted = models.BooleanField('Удален', default=False)
 
     class Meta:
         verbose_name = 'Заказ'
@@ -353,73 +395,63 @@ class Inventory(models.Model):
 
 
 class AvailableTrack(models.Model):
+    """Model representing available tracks for production on a specific date"""
     date = models.DateField()
     count = models.PositiveIntegerField()
-
+    contractor = models.ForeignKey(Contractor, on_delete=models.SET_NULL, verbose_name='Контрагент', null=True, blank=True)
+    is_favorite = models.BooleanField('Избранная', default=False)
 
     class Meta:
         ordering = ['date']
+        verbose_name = "Available Track"
+        verbose_name_plural = "Available Tracks"
 
+    def __str__(self):
+        return f"Tracks on {self.date}: {self.count}"
 
     @property
     def retooling_info(self):
+        """Get retooling information for this date"""
         return DailyRetooling.objects.filter(date=self.date).first()
+
+    @staticmethod
+    def check_is_weekend_day(date):
+        """Check if a date is marked as a weekend day in the admin panel"""
+        params = Parameters.get_solo()
+        weekday = date.weekday()  # 0 is Monday, 6 is Sunday
+
+        weekend_settings = [
+            (0, params.monday_weekend),
+            (1, params.tuesday_weekend),
+            (2, params.wednesday_weekend),
+            (3, params.thursday_weekend),
+            (4, params.friday_weekend),
+            (5, params.saturday_weekend),
+            (6, params.sunday_weekend)
+        ]
+
+        return any(day == weekday and is_weekend for day, is_weekend in weekend_settings)
 
     @property
     def is_weekend_day(self):
-        """Check if this day is marked as a weekend day in the admin panel"""
-        params = Parameters.get_solo()
-        weekday = self.date.weekday()  # 0 is Monday, 6 is Sunday
-
-        if weekday == 0 and params.monday_weekend:
-            return True
-        elif weekday == 1 and params.tuesday_weekend:
-            return True
-        elif weekday == 2 and params.wednesday_weekend:
-            return True
-        elif weekday == 3 and params.thursday_weekend:
-            return True
-        elif weekday == 4 and params.friday_weekend:
-            return True
-        elif weekday == 5 and params.saturday_weekend:
-            return True
-        elif weekday == 6 and params.sunday_weekend:
-            return True
-
-        return False
-
+        """Check if this track's date is a weekend day"""
+        return self.check_is_weekend_day(self.date)
 
     @classmethod
     def get_tracks(cls, date_from, date_to=None):
+        """Get or create tracks for a date range"""
         params = Parameters.get_solo()
         date_to = date_to or date_from + timedelta(days=6)
+
+        # Create tracks for each day in the range
         for day in range((date_to - date_from).days + 1):  # +1 to include date_to
             date = date_from + timedelta(days=day)
-            # Check if the day is marked as a weekend day
-            is_weekend = False
-            weekday = date.weekday()  # 0 is Monday, 6 is Sunday
-
-            if weekday == 0 and params.monday_weekend:
-                is_weekend = True
-            elif weekday == 1 and params.tuesday_weekend:
-                is_weekend = True
-            elif weekday == 2 and params.wednesday_weekend:
-                is_weekend = True
-            elif weekday == 3 and params.thursday_weekend:
-                is_weekend = True
-            elif weekday == 4 and params.friday_weekend:
-                is_weekend = True
-            elif weekday == 5 and params.saturday_weekend:
-                is_weekend = True
-            elif weekday == 6 and params.sunday_weekend:
-                is_weekend = True
-
             # Set count to 0 for weekend days, otherwise use default_available_tracks
-            track_count = 0 if is_weekend else params.default_available_tracks
+            track_count = 0 if cls.check_is_weekend_day(date) else params.default_available_tracks
             cls.objects.get_or_create(date=date, defaults={'count': track_count})
 
-        tracks = cls.objects.filter(date__gte=date_from, date__lte=date_to)
-        return tracks
+        # Return all tracks in the date range
+        return cls.objects.filter(date__gte=date_from, date__lte=date_to)
 
 
 class ErrorLog(models.Model):

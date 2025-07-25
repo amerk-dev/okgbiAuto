@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.conf import settings
 
-from .models import (LeftReadyPlate, ProductionDay, ProductionDayPlate, ProductionPlan, RetoolingInfo, UnplacedPlate,
+from .models import (LeftReadyPlate, ProductionDay, ProductionDayPlate, RetoolingInfo, UnplacedPlate,
                      UsedReadyPlate, Parameters, UnitPrice, Order, Product, Inventory, AvailableTrack)
 
 
@@ -99,61 +99,8 @@ class LeftReadyPlateAdmin(admin.ModelAdmin):
         return {}
 
 
-class ProductionDayInline(admin.TabularInline):
-    model = ProductionPlan.plan.through
-    extra = 0
-    verbose_name = "Production Day"
-    verbose_name_plural = "Production Days"
-    readonly_fields = ('productionday',)
 
 
-class UsedReadyPlateInline(admin.TabularInline):
-    model = ProductionPlan.used_ready_plates.through
-    extra = 0
-    verbose_name = "Used Ready Plate"
-    verbose_name_plural = "Used Ready Plates"
-    readonly_fields = ('usedreadyplate',)
-
-
-class UnplacedPlateInline(admin.TabularInline):
-    model = ProductionPlan.unplaced_plates.through
-    extra = 0
-    verbose_name = "Unplaced Plate"
-    verbose_name_plural = "Unplaced Plates"
-    readonly_fields = ('unplacedplate',)
-
-
-class LeftReadyPlateInline(admin.TabularInline):
-    model = ProductionPlan.left_ready_plates.through
-    extra = 0
-    verbose_name = "Left Ready Plate"
-    verbose_name_plural = "Left Ready Plates"
-    readonly_fields = ('leftreadyplate',)
-
-
-class ProductionPlanAdmin(admin.ModelAdmin):
-    list_display = ('id', 'retooling_info')
-    inlines = [
-        ProductionDayInline,
-        UsedReadyPlateInline,
-        UnplacedPlateInline,
-        LeftReadyPlateInline,
-    ]
-
-    def get_inline_instances(self, request, obj=None):
-        if obj:
-            return super().get_inline_instances(request, obj)
-        return []
-
-    def get_readonly_fields(self, request, obj=None):
-        if obj:
-            return [field.name for field in self.model._meta.fields]
-        return super().get_readonly_fields(request, obj)
-
-    def get_model_perms(self, request):
-        if request.user.is_superuser:
-            return super().get_model_perms(request)
-        return {}
 
 
 class ParametersAdmin(admin.ModelAdmin):
@@ -178,7 +125,6 @@ admin.site.register(UsedReadyPlate, UsedReadyPlateAdmin)
 admin.site.register(UnplacedPlate, UnplacedPlateAdmin)
 admin.site.register(LeftReadyPlate, LeftReadyPlateAdmin)
 admin.site.register(RetoolingInfo, RetoolingInfoAdmin)
-admin.site.register(ProductionPlan, ProductionPlanAdmin)
 admin.site.register(Inventory)
 admin.site.register(Product)
 admin.site.register(AvailableTrack)

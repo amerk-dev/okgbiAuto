@@ -6,7 +6,7 @@ from django.db.models import F
 
 from calculation.models import AvailableTrack, DailyRetooling, DailyRetoolingChanges, Inventory, LeftReadyPlate, Order, \
     Parameters, \
-    ProductionDay, ProductionDayPlate, ProductionPlan, RetoolingInfo, UnitPrice, UnplacedPlate, UsedReadyPlate
+    ProductionDay, ProductionDayPlate, RetoolingInfo, UnitPrice, UnplacedPlate, UsedReadyPlate
 from calculation.utils import DecimalEncoder
 
 weekend_settings = [
@@ -20,7 +20,6 @@ weekend_settings = [
         ]
 
 def clear_old_data(date_from):
-    ProductionPlan.objects.all().delete()
     ProductionDay.objects.all().delete()
     LeftReadyPlate.objects.all().delete()
     RetoolingInfo.objects.all().delete()
@@ -155,9 +154,6 @@ def calculate_plan(date_from, date_to):
     )
     retooling_info.daily_retoolings.set(daily_retoolings)
 
-    # Теперь создаем ProductionPlan с привязкой retooling_info
-    production_plan = ProductionPlan.objects.create(retooling_info=retooling_info)
-
     # Обрабатываем дни производства
     for day_data in data.get('plan', []):
         if params.road_length == day_data['free_len']:
@@ -206,8 +202,6 @@ def calculate_plan(date_from, date_to):
                     wire_top=plate_data['wire_top'],
                 )
 
-        production_plan.plan.add(production_day)
-
     # Обрабатываем использованные готовые плиты
     for plate_data in data.get('used_ready_plates', []):
         used_plate = UsedReadyPlate.objects.create(
@@ -221,7 +215,6 @@ def calculate_plan(date_from, date_to):
             wire_bottom=plate_data['wire_bottom'],
             wire_top=plate_data['wire_top'],
         )
-        production_plan.used_ready_plates.add(used_plate)
 
     # Обрабатываем неразмещенные плиты
     prev_plate = None
@@ -266,4 +259,3 @@ def calculate_plan(date_from, date_to):
             wire_bottom=plate_data['wire_bottom'],
             wire_top=plate_data['wire_top'],
         )
-        production_plan.left_ready_plates.add(left_plate)

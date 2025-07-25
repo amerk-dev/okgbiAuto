@@ -25,11 +25,7 @@ SECRET_KEY = 'django-insecure-kc%f)rw6=(=qj=@6ha(f4-&o14mt73)dmzc5utlq_#_j(_m9!9
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8000',
-                        'http://localhost:8001',
-                        'http://spicycode.ru:8000',
-                        'http://spicycode.ru:8001', 'https://xvlwnh-95-71-166-241.ru.tuna.am'
-                        ]
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://localhost:8001').split(',')
 
 # Application definition
 
