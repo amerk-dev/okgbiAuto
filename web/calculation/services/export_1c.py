@@ -4,7 +4,7 @@ import json
 import requests
 from django.conf import settings
 
-from calculation.models import Parameters, ProductionDay, ProductionDayPlate
+from calculation.models import Parameters
 
 
 def export_to_1c():

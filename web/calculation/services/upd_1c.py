@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import requests
 from django.db import transaction
 
-from calculation.models import Inventory, Order, Product, Parameters
+from calculation.models import Order, Parameters
 
 
 def update_data():

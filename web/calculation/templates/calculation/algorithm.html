@@ -1,0 +1,228 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'calculation/css/all.css' %}">
+    <link rel="icon" href="https://okgbi.ru/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <title>Алгоритм расчета</title>
+    <style>
+        .algorithm-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .algorithm-section {
+            margin-bottom: 30px;
+        }
+        
+        .algorithm-title {
+            font-size: 24px;
+            margin-bottom: 15px;
+            color: #2B6FB6;
+        }
+        
+        .algorithm-description {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        
+        .algorithm-step {
+            margin-bottom: 15px;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .algorithm-step:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #2B6FB6;
+        }
+        
+        .demo-form {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .form-button {
+            background-color: #2B6FB6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .form-button:hover {
+            background-color: #1e5a9a;
+        }
+        
+        .result-container {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .result-title {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #2B6FB6;
+        }
+        
+        .result-data {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background-color: #eee;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 30px;
+            color: #2B6FB6;
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="algorithm-container">
+        <h1 class="algorithm-title">Алгоритм расчета производственного плана</h1>
+        
+        <div class="algorithm-section">
+            <h2 class="algorithm-title">Описание алгоритма</h2>
+            <p class="algorithm-description">
+                Алгоритм расчета производственного плана оптимизирует размещение плит на дорожках с учетом различных параметров, 
+                таких как размеры плит, класс бетона, количество проволоки и другие характеристики. Ниже приведено подробное 
+                описание работы алгоритма:
+            </p>
+            
+            <div class="algorithm-step">
+                <strong>Шаг 1:</strong> Сбор данных о заказах и доступных дорожках. Система получает информацию о всех 
+                текущих заказах, их приоритетах, дедлайнах и характеристиках плит. Также учитывается информация о доступных 
+                дорожках на каждый день.
+            </div>
+            
+            <div class="algorithm-step">
+                <strong>Шаг 2:</strong> Сортировка заказов по приоритету. Заказы сортируются по дедлайну, чтобы в первую 
+                очередь обрабатывались те, которые нужно выполнить раньше.
+            </div>
+            
+            <div class="algorithm-step">
+                <strong>Шаг 3:</strong> Группировка плит по характеристикам. Плиты группируются по классу бетона, размерам 
+                и количеству проволоки, чтобы минимизировать количество переналадок.
+            </div>
+            
+            <div class="algorithm-step">
+                <strong>Шаг 4:</strong> Размещение плит на дорожках. Система последовательно размещает плиты на дорожках, 
+                учитывая их размеры и доступное пространство. При этом стремится максимально эффективно использовать 
+                доступное пространство.
+            </div>
+            
+            <div class="algorithm-step">
+                <strong>Шаг 5:</strong> Оптимизация переналадок. Алгоритм минимизирует количество переналадок, группируя 
+                плиты с одинаковыми характеристиками на одной дорожке.
+            </div>
+            
+            <div class="algorithm-step">
+                <strong>Шаг 6:</strong> Расчет стоимости. Для каждой дорожки рассчитывается стоимость производства с учетом 
+                стоимости материалов, переналадок и других факторов.
+            </div>
+            
+            <div class="algorithm-step">
+                <strong>Шаг 7:</strong> Формирование итогового плана. Система формирует итоговый производственный план, 
+                включающий информацию о размещении плит на дорожках, датах производства, стоимости и других параметрах.
+            </div>
+        </div>
+        
+        <div class="algorithm-section">
+            <h2 class="algorithm-title">Демонстрация алгоритма</h2>
+            <p class="algorithm-description">
+                Вы можете загрузить файл с данными о заказах для демонстрации работы алгоритма. Система обработает данные 
+                и покажет результат расчета производственного плана.
+            </p>
+            
+            <div class="demo-form">
+                <form id="algorithmDemoForm" action="{% url 'algorithm_demo' %}" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label class="form-label" for="demoFile">Загрузите файл с данными (формат JSON):</label>
+                        <input class="form-input" type="file" id="demoFile" name="demo_file" accept=".json">
+                    </div>
+                    
+                    <div class="form-group">
+                        <a href="{% static 'calculation/demo/example.json' %}" download class="back-link">
+                            <i class="fas fa-download"></i> Скачать пример файла
+                        </a>
+                    </div>
+                    
+                    <button type="submit" class="form-button">Запустить демонстрацию</button>
+                </form>
+            </div>
+            
+            {% if result %}
+            <div class="result-container" style="display: block;">
+                <h3 class="result-title">Результат расчета:</h3>
+                <pre class="result-data">{{ result|safe }}</pre>
+            </div>
+            {% endif %}
+        </div>
+        
+        <a href="{% url 'index' %}" class="back-link">
+            <i class="fas fa-arrow-left"></i> Вернуться на главную
+        </a>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('algorithmDemoForm');
+            const resultContainer = document.querySelector('.result-container');
+            
+            form.addEventListener('submit', function(e) {
+                const fileInput = document.getElementById('demoFile');
+                if (!fileInput.files.length) {
+                    e.preventDefault();
+                    alert('Пожалуйста, выберите файл для загрузки.');
+                }
+            });
+            
+            {% if result %}
+            resultContainer.style.display = 'block';
+            resultContainer.scrollIntoView({ behavior: 'smooth' });
+            {% endif %}
+        });
+    </script>
+</body>
+</html>

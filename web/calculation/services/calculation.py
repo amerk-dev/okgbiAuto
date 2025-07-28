@@ -4,9 +4,8 @@ from datetime import datetime, timedelta
 import requests
 from django.db.models import F
 
-from calculation.models import AvailableTrack, DailyRetooling, DailyRetoolingChanges, Inventory, LeftReadyPlate, Order, \
-    Parameters, \
-    ProductionDay, ProductionDayPlate, RetoolingInfo, UnitPrice, UnplacedPlate, UsedReadyPlate
+from calculation.models import Order, \
+    Parameters, UnitPrice
 from calculation.utils import DecimalEncoder
 
 weekend_settings = [

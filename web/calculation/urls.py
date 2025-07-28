@@ -1,15 +1,19 @@
 from django.urls import path
 
 from .error_views import (error_list, report_error, resolve_error, view_error)
-from .views import (change_available_tracks, delete_order, delete_plate, export_to_1c_view, 
-                   fetch_and_save_production_plan, generate_production_calendar, index, 
-                   move_plate, restore_order, restore_plate)
+from .views import (algorithm, algorithm_demo, change_available_tracks, delete_order, delete_plate, 
+                   export_to_1c_view, fetch_and_save_production_plan, generate_production_calendar, 
+                   index, move_plate, restore_order, restore_plate)
 
 urlpatterns = [
     path('index/', index, name='index'),
     path('fetch-production-plan/', fetch_and_save_production_plan, name='fetch_production_plan'),
     path('change-available-tracks/', change_available_tracks, name='change_available_tracks'),
     path('generate-production-calendar/', generate_production_calendar, name='generate_production_calendar'),
+
+    # Algorithm URLs
+    path('algorithm/', algorithm, name='algorithm'),
+    path('algorithm-demo/', algorithm_demo, name='algorithm_demo'),
 
     # Order management URLs
     path('delete-order/<int:order_id>/', delete_order, name='delete_order'),
