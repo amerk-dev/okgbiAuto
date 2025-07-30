@@ -40,16 +40,36 @@ def get_parameters():
 def calculate_plan():
     track_len, tail_len= get_parameters()
 
-
-    print(track_len , tail_len)
     tracks = Track.get_tracks()
     orders = Order.objects.all()
     ready_plates = ReadyPlate.objects.all()
-
+    #ToDo Распределить какие готовые плиты можно использовать
+    if ready_plates:
+        pass
+    else:
+        print("Готовых плит нет.")
     plates = Plate.objects.filter(track__isnull=True)
+    is_real = reality_check(plates, tracks, track_len)
+    plan = create_plan()
+
+@profile_time
+def create_plan():
+    pass
 
 
 
 @profile_time
-def reality_check():
-    pass
+def reality_check(plates, tracks, track_len):
+    all_plates_len = 0
+    all_track_len = 0
+    for plate in plates:
+        all_plates_len += plate.length
+    for _ in tracks:
+        all_track_len += track_len
+    if all_track_len < all_plates_len:
+        print("Не хватает длинны дорожек для выполнения заказов")
+        return False
+    else:
+        print("Длинны дорожек хватает для выполнения заказов")
+        return True
+
