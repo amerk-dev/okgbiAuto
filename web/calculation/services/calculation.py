@@ -7,6 +7,7 @@ from django.db.models import F
 from calculation.models import Order, \
     Parameters, UnitPrice
 from calculation.utils import DecimalEncoder
+from .calculator import calculate_plan
 
 weekend_settings = [
             (0, 'monday_weekend'),
@@ -19,7 +20,6 @@ weekend_settings = [
         ]
 
 def clear_old_data(date_from):
-    ProductionDay.objects.all().delete()
     LeftReadyPlate.objects.all().delete()
     RetoolingInfo.objects.all().delete()
     DailyRetooling.objects.all().delete()
@@ -117,6 +117,7 @@ def calculate_plan(date_from, date_to):
     # Получаем данные из API
     headers = {'api-key': '12345678'}
     payload = json.dumps(prepare_data(date_from, date_to), ensure_ascii=False, cls=DecimalEncoder)
+    calculate_plan(payload)
     with open('output.json', 'w', encoding='utf-8') as f:
         f.write(payload)
     url = 'http://api:8080/api/v1/calculate/default/'

@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Копирование кода проекта
 COPY . .
-
+COPY ./entrypoint.sh /code/entrypoint.sh
 # Make entrypoint script executable
 RUN chmod +x /code/entrypoint.sh
 

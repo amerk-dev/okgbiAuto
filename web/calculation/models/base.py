@@ -38,6 +38,7 @@ class Order(models.Model):
     def last_deadline(self):
         return self.deadlines.last()
 
+
 class Deadline(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='deadlines')
     date = models.DateField(null=True, blank=True)
@@ -73,6 +74,10 @@ class Track(models.Model):
     @classmethod
     def get_today_tracks(cls):
         return cls.objects.filter(day=datetime.today().date())
+
+    @classmethod
+    def get_tracks(cls):
+        return cls.objects.all()
 
     @cached_property
     def useful_length(self):

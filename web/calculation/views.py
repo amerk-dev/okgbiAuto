@@ -13,8 +13,10 @@ from loguru import logger
 from weasyprint import HTML
 
 from .models import (Order, Parameters, ReadyPlate, Track, UnitPrice, Plate)
-from .services.calculation import calculate_plan, clear_old_data
+from .services.calculation import clear_old_data
+from .services.calculator import calculate_plan
 from .services.export_1c import export_to_1c
+from .services.manage_1c import Update1CDataCommand
 from .services.stats import Stats
 from .services.upd_1c import update_data
 from .utils import handle_view_exception
@@ -74,11 +76,6 @@ def index(request):
     })
 
 
-def update_available_tracks(tracks, date_from, date_to):
-    old_tracks = list(AvailableTrack.get_tracks(date_from, date_to))
-    for i, track in enumerate(tracks):
-        old_tracks[i].count = track
-    AvailableTrack.objects.bulk_update(old_tracks, ['count'])
 
 @logger.catch
 @handle_view_exception
@@ -97,12 +94,12 @@ def fetch_and_save_production_plan(request):
         except json.JSONDecodeError:
             # fallback, если пришла строка "5,0,0,5"
             tracks = [int(x) for x in raw_tracks.split(',') if x.strip().isdigit()]
-        update_available_tracks(tracks, date_from, date_to)
 
         with transaction.atomic():
-            clear_old_data(date_from)
-            update_data()
-            calculate_plan(date_from, date_to)
+            # clear_old_data(date_from)
+            # update_data()
+            Update1CDataCommand().execute()
+            calculate_plan()
         return redirect('index')
     return JsonResponse({'status': 'error', 'message': 'Only POST method is allowed'}, status=405)
 
@@ -113,7 +110,7 @@ def change_available_tracks(request):
     if request.method == 'POST':
         track_day = int(request.POST.get('day'))
         track_count = int(request.POST.get('count'))
-        available_tracks = AvailableTrack.objects.order_by('date').all()
+        available_tracks = Track.objects.order_by('date').all()
         available_track = available_tracks[track_day - 1]
         available_track.count = track_count
         available_track.save()
