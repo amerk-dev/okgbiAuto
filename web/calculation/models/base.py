@@ -111,6 +111,13 @@ class Track(models.Model):
         wire_cost = Decimal(str(wire_top_max + wire_bottom_max)) * wire_price * Decimal(str(self.useful_length / 1000))
         return plate_cost + wire_cost + self.retoolings_price
 
+    @cached_property
+    def get_size(self):
+        plates = self.plates.all()
+        if plates:
+            return plates[0].width, plates[0].height
+        else:
+            return None, None
 
 class AbstractPlate(models.Model):
     name = models.CharField(max_length=255)
@@ -122,7 +129,7 @@ class AbstractPlate(models.Model):
     height = models.FloatField()
 
     def __str__(self):
-        return self.name
+        return f'name - {self.name}, l - {self.length}, w:{self.width}, h:{self.height}, {self.concrete_class}, wb-{self.wire_bottom}, wt-{self.wire_top}'
 
     class Meta:
         abstract = True

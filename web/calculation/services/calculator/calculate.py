@@ -5,7 +5,6 @@ from typing import Any
 from calculation.models import Track, Order, ReadyPlate, Plate, Parameters
 
 
-
 def profile_time(func):
     def wrapper(*args, **kwargs):
         start = time.time()
@@ -15,6 +14,7 @@ def profile_time(func):
 
     return wrapper
 
+
 # Классы для валидации и удобства разработки
 class CustomTrack:
     id: int
@@ -23,9 +23,11 @@ class CustomTrack:
     customer: int
     day: datetime.date
 
+
 class Retooler:
     w: int
     h: int
+
 
 def get_parameters():
     """Получает и возвращает ключевые параметры для расчета плана."""
@@ -36,25 +38,105 @@ def get_parameters():
         # можно добавить и другие нужные параметры
     }
 
+
 @profile_time
 def calculate_plan():
-    track_len, tail_len= get_parameters()
+    track_len, tail_len = get_parameters()
 
     tracks = Track.get_tracks()
     orders = Order.objects.all()
     ready_plates = ReadyPlate.objects.all()
-    #ToDo Распределить какие готовые плиты можно использовать
+    # ToDo Распределить какие готовые плиты можно использовать
     if ready_plates:
         pass
     else:
         print("Готовых плит нет.")
     plates = Plate.objects.filter(track__isnull=True)
     is_real = reality_check(plates, tracks, track_len)
-    plan = create_plan()
+    plan = create_plan(tracks, track_len)
+    print({f"plan": plan,
+           "Use_ready_plates": 0, # Плиты со склада, которые подходят под заказ
+           "is_real": is_real}
+          )
+
 
 @profile_time
-def create_plan():
-    pass
+def create_plan(tracks, track_len):
+    """Основная функция - алгоритм распределения плит по дорожкам
+    Args:
+        tracks (list[Track]): Список доступных дорожек.
+        track_len (int): Максимальная длина каждой дорожки.
+        plates (Plate): Список плит, которые нужно разместить.
+    """
+
+    plates = Plate.objects.filter(track__isnull=True)
+    # sort by date and (w:h)
+    sorted_plates = sorted(
+        [item for item in plates],
+        key=lambda item: (
+            # Если дата есть, используем ее. Если нет (None), используем максимальную возможную дату.
+            item.deadline.date if item.deadline.date is not None else datetime.date.max,
+            item.width,
+            item.height
+        )
+    )
+    if not sorted_plates:
+        print("Нет плит для размещения. План пуст.")
+        return []
+
+    placed_plate_ids = set()
+
+    for i in sorted_plates:
+        print(i.deadline.date, i)
+    for track in tracks:
+        if track.customer:
+            print("Дорожка зарезервирована под заказчика")
+            continue
+        # ToDo Распределить новые плиты по дорожкам
+
+        remaining_length = track_len
+        current_track_properties = None
+
+        for plate in sorted_plates:
+            if plate.id in placed_plate_ids: continue
+
+            plate_properties = (
+                plate.width,
+                plate.height
+            )
+
+            # Если это первая плита для данной дорожки (дорожка еще не настроена)
+            if current_track_properties is None:
+                current_track_properties = plate_properties
+
+                # Размещаем плиту
+                remaining_length -= plate.length
+                add_plate_to_track(plate, track)
+                placed_plate_ids.add(plate.id)
+            elif plate_properties == current_track_properties:
+                if plate.length <= remaining_length:
+                    remaining_length -= plate.length
+                    add_plate_to_track(plate, track)
+                    placed_plate_ids.add(plate.id)
+
+    unplaced_plates = [plate for plate in sorted_plates if plate.id not in placed_plate_ids]
+    if unplaced_plates:
+        print(f"{len(unplaced_plates)} плит не удалось разместить.")
+
+        # if track.get_size is not None:
+        #     add_plate_to_track(sorted_plates[0], track)
+        #     sorted_plates.pop(0)
+        # else:
+        #     w, h = track.get_size
+        #     need_plate_for_track = Plate.objects.filter(track=track).filter(
+        #         deadline_date__isnull=True,
+        #         track__isnull=True,
+        #         width=w,
+        #         height=h
+        #     )
+        #     print(track, need_plate_for_track)
+
+    return True
 
 
 
@@ -73,3 +155,16 @@ def reality_check(plates, tracks, track_len):
         print("Длинны дорожек хватает для выполнения заказов")
         return True
 
+
+@profile_time
+def calc_retooling():
+    pass
+
+def add_plate_to_track(plate, track):
+    plate.track = track
+    try:
+        plate.save()
+        return True
+    except Exception as e:
+        print(f"Ошибка при добавлении плиты {plate} на дорожку {track}: {e}")
+        return False
