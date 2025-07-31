@@ -25,4 +25,4 @@ else:
 "
 
 # Start Gunicorn
-exec gunicorn --reload -w 4 okgbi.wsgi:application --bind 0.0.0.0:8000
+exec gunicorn --reload -w 4 okgbi.wsgi:application --timeout 300 --bind 0.0.0.0:8000
