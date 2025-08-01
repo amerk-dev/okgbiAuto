@@ -67,21 +67,29 @@ class Track(models.Model):
     def __str__(self):
         return f"Track {self.position} - {self.day}"
 
-    @cached_property
-    def has_overdue_deadline(self):
-        return any([plate.is_overdue for plate in self.plates.all()])
-
-    @classmethod
-    def get_today_tracks(cls):
-        return cls.objects.filter(day=datetime.today().date())
-
     @classmethod
     def get_tracks(cls):
         return cls.objects.all()
 
     @cached_property
+    def has_overdue_deadline(self):
+        return any([plate.is_overdue for plate in self.plates.all()])
+
+    @cached_property
+    def is_weekend_day(self):
+        return Parameters.check_is_weekend_day(self.day)
+
+    @classmethod
+    def get_today_tracks(cls):
+        return cls.objects.filter(day=datetime.today().date())
+
+    @cached_property
     def useful_length(self):
         return sum([plate.length for plate in self.plates.all()])
+
+    @cached_property
+    def free_length(self):
+        return Parameters.get_solo().road_length - self.useful_length
 
     @cached_property
     def retoolings(self):
@@ -112,12 +120,35 @@ class Track(models.Model):
         return plate_cost + wire_cost + self.retoolings_price
 
     @cached_property
-    def get_size(self):
+    def concrete_class(self):
+        plate_class_prices = UnitPrice.get_plates_prices()
+        using_plate_classes = set(plate.concrete_class for plate in self.plates.all())
+        return max(using_plate_classes, key=lambda plate_class: plate_class_prices[plate_class])
+
+
+    @cached_property
+    def width(self):
+        return self.plates.all()[0].width if self.plates.exists() else None
+
+    @cached_property
+    def height(self):
+        return self.plates.all()[0].height if self.plates.exists() else None
+
+    @cached_property
+    def wire_top(self):
         plates = self.plates.all()
-        if plates:
-            return plates[0].width, plates[0].height
-        else:
-            return None, None
+        wire_top_max = max([plate.wire_top for plate in plates], default=0)
+        return wire_top_max
+
+    @cached_property
+    def wire_bottom(self):
+        plates = self.plates.all()
+        wire_bottom_max = max([plate.wire_bottom for plate in plates], default=0)
+        return wire_bottom_max
+
+    @cached_property
+    def get_size(self):
+        return self.width, self.height
 
 class AbstractPlate(models.Model):
     name = models.CharField(max_length=255)

@@ -342,10 +342,9 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
 
 	                        {% for table_row in table_data %}
 		                        <tr>
-
 	                                {% for table_cell in table_row %}
 
-		                                {% if table_cell and table_cell.width %}
+		                                {% if table_cell and table_cell.plates.exists %}
 			                                <td style="background-color: {% if table_cell.has_overdue_deadline %}rgb(255, 150, 150){% else %}rgb(171, 233, 190){% endif %};">
 	                                            <div class="position-info">
 	                                                <div>Ширина: {{ table_cell.width }} мм.</div>
@@ -365,45 +364,43 @@ C26.802,12.701,25.851,10.224,24.27,8.279"></path></svg>
                                                     </div>
 	                                            </div>
 	                                            <div class="position-remains">
-	                                            Занято: {{ table_cell.useful_len }} мм
+	                                            Занято: {{ table_cell.useful_length }} мм
 	                                            <br>
-		                                            {% if table_cell.free_len > 2500 %}
-			                                            <b style="font-weight: bolder">Остаток: {{ table_cell.free_len }} мм</b>
+		                                            {% if table_cell.free_length > 2500 %}
+			                                            <b style="font-weight: bolder">Остаток: {{ table_cell.free_length }} мм</b>
 		                                            {% else %}
-	                                            Остаток: {{ table_cell.free_len }} мм
+	                                            Остаток: {{ table_cell.free_length }} мм
 		                                            {% endif %}
                                                 <br>
-                                                Стоимость: {{ table_cell.total_cost|floatformat:2 }} ₽
+                                                Стоимость: {{ table_cell.cost|floatformat:2 }} ₽
 	                                            </div>
 	                                        </td>
-		                                {% elif table_cell.free_len %}
+		                                {% elif table_cell %}
 			                                <td style="background-color: rgb(255, 241, 183)">
 	                                            <div class="position-info">
 	                                            </div>
 	                                            <div class="position-remains">
-		                                            {% if table_cell.free_len > 2500 %}
-			                                            <b style="font-weight: bolder">Остаток: {{ table_cell.free_len }} мм</b>
+		                                            {% if table_cell.free_length > 2500 %}
+			                                            <b style="font-weight: bolder">Остаток: {{ table_cell.free_length }} мм</b>
 		                                            {% else %}
-			                                            Остаток: {{ table_cell.free_len }} мм
+			                                            Остаток: {{ table_cell.free_length }} мм
 		                                            {% endif %}
 	                                            </div>
+	                                        </td>
+		                                {% elif table_cell.is_weekend_day %}
+			                                <td style="background-color: rgb(255, 193, 193, 0.2); position: relative;">
+	                                            <div class="position-info">
+	                                            </div>
+	                                            <div class="position-remains"></div>
+				                                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; transform: rotate(-45deg); color: #000000; font-size: 20px;">
+                                                    Выходной
+                                                </div>
 	                                        </td>
 		                                {% else %}
 			                                <td style="background-color: rgb(255, 193, 193, 0.2); position: relative;">
 	                                            <div class="position-info">
 	                                            </div>
 	                                            <div class="position-remains"></div>
-				                                {% with col_index=forloop.counter0 %}
-					                                {% for track in available_tracks %}
-						                                {% if forloop.counter0 == col_index %}
-							                                {% if track.count == 0 and track.is_weekend_day %}
-								                                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; transform: rotate(-45deg); color: #000000; font-size: 20px;">
-                                                                    Выходной
-                                                                </div>
-							                                {% endif %}
-						                                {% endif %}
-					                                {% endfor %}
-				                                {% endwith %}
 	                                        </td>
 		                                {% endif %}
 	                                {% endfor %}

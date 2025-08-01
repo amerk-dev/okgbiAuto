@@ -13,7 +13,6 @@ from loguru import logger
 from weasyprint import HTML
 
 from .models import (Order, Parameters, ReadyPlate, Track, UnitPrice, Plate)
-from .services.calculation import clear_old_data
 from .services.calculator import calculate_plan
 from .services.export_1c import export_to_1c
 from .services.manage_1c import Update1CDataCommand
@@ -50,6 +49,8 @@ def index(request):
 
     table_data = [raw_table_data[i] for i in sorted(raw_table_data.keys())]
 
+    print(table_data)
+
     last_complete_date = ''
     last_complete_track = Track.objects.order_by('-day').first()
     if last_complete_track and last_complete_track.plates.exists():
@@ -82,22 +83,7 @@ def index(request):
 @login_required(login_url='/admin/login/')
 def fetch_and_save_production_plan(request):
     if request.method == 'POST':
-        date_from, date_to = get_date_range_from_request(request)
-        date_to = date_from + datetime.timedelta(days=100)
-        # Корректная обработка треков
-        raw_tracks = request.POST.get('tracks', '[]')
-        try:
-            # Убираем лишние слои кавычек
-            tracks = json.loads(raw_tracks)
-            # Преобразуем в int
-            tracks = [int(x) for x in tracks]
-        except json.JSONDecodeError:
-            # fallback, если пришла строка "5,0,0,5"
-            tracks = [int(x) for x in raw_tracks.split(',') if x.strip().isdigit()]
-
         with transaction.atomic():
-            # clear_old_data(date_from)
-            # update_data()
             Update1CDataCommand().execute()
             calculate_plan()
         return redirect('index')

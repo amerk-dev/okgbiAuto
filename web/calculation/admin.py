@@ -6,6 +6,15 @@ from .models.params import Parameters, UnitPrice
 from .models.error import ErrorLog, ErrorReport
 
 
+class PlateInline(admin.TabularInline):
+    model = Plate
+    extra = 1
+
+
+class TrackAdmin(admin.ModelAdmin):
+    inlines = [PlateInline]
+
+
 
 
 
@@ -30,7 +39,7 @@ class ParametersAdmin(admin.ModelAdmin):
 admin.site.register(Customer)
 admin.site.register(Order)
 admin.site.register(Deadline)
-admin.site.register(Track)
+admin.site.register(Track, TrackAdmin)
 admin.site.register(Plate)
 admin.site.register(ReadyPlate)
 admin.site.register(ErrorLog)
