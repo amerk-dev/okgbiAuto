@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.status-booked {
+  background-color: #10B981;
+}
+
+.status-available {
+  background-color: #FBBF24;
+}
+
+.status-overdue {
+  background-color: #EF4444;
+}
+
+.drag-item {
+  cursor: move;
+  transition: all 0.2s ease;
+}
+
+.drag-item:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.dropzone {
+  min-height: 60px;
+  transition: background-color 0.3s ease;
+}
+
+.dropzone.highlight {
+  background-color: #EFF6FF;
+  border: 2px dashed #3B82F6;
+}
+
+@media (max-width: 768px) {
+  .responsive-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}

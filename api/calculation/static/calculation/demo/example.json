@@ -1,0 +1,126 @@
+{
+  "orders": [
+    {
+      "number": "ЗК-001",
+      "completion_date": "2023-12-15",
+      "plates": [
+        {
+          "name": "ПДН 2П 6x2 10 нагрузка",
+          "length": 6000,
+          "width": 2000,
+          "height": 140,
+          "class": "В25",
+          "wire_bottom": 8,
+          "wire_top": 8,
+          "count": 5
+        }
+      ]
+    },
+    {
+      "number": "ЗК-002",
+      "completion_date": "2023-12-20",
+      "plates": [
+        {
+          "name": "ПДН 2П 6x1.5 8 нагрузка",
+          "length": 6000,
+          "width": 1500,
+          "height": 140,
+          "class": "В25",
+          "wire_bottom": 6,
+          "wire_top": 6,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "number": "ЗК-003",
+      "completion_date": "2023-12-25",
+      "plates": [
+        {
+          "name": "ПДН 2П 6x2 10 нагрузка",
+          "length": 6000,
+          "width": 2000,
+          "height": 140,
+          "class": "В25",
+          "wire_bottom": 8,
+          "wire_top": 8,
+          "count": 2
+        },
+        {
+          "name": "ПДН 2П 6x1.5 8 нагрузка",
+          "length": 6000,
+          "width": 1500,
+          "height": 140,
+          "class": "В25",
+          "wire_bottom": 6,
+          "wire_top": 6,
+          "count": 4
+        }
+      ]
+    }
+  ],
+  "ready_plates": [
+    {
+      "name": "ПДН 2П 6x2 10 нагрузка",
+      "length": 6000,
+      "width": 2000,
+      "height": 140,
+      "class": "В25",
+      "wire_bottom": 8,
+      "wire_top": 8,
+      "count": 2
+    }
+  ],
+  "available_tracks": [
+    {
+      "date": "2023-12-10",
+      "count": 4
+    },
+    {
+      "date": "2023-12-11",
+      "count": 4
+    },
+    {
+      "date": "2023-12-12",
+      "count": 4
+    },
+    {
+      "date": "2023-12-13",
+      "count": 4
+    },
+    {
+      "date": "2023-12-14",
+      "count": 4
+    }
+  ],
+  "parameters": {
+    "road_length": 100000,
+    "tracks_count": 7,
+    "production_lag": 3,
+    "tail_length": 2000,
+    "force_tail": 0
+  },
+  "prices": [
+    {
+      "name": "Бетон В25",
+      "concrete_class": "В25",
+      "price": 5000,
+      "unit": 1
+    },
+    {
+      "name": "Проволока 6мм",
+      "price": 50,
+      "unit": 2
+    },
+    {
+      "name": "Проволока 8мм",
+      "price": 70,
+      "unit": 2
+    },
+    {
+      "name": "Переналадка",
+      "price": 2000,
+      "unit": 3
+    }
+  ]
+}

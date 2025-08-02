@@ -7,9 +7,10 @@ This repository contains a web application for automated calculation and optimiz
 The project consists of several components:
 
 1. **Web Application (Django)**: A web interface for managing calculations and viewing results
-2. **API Service (FastAPI)**: Provides endpoints for calculation and optimization of production schedules
-3. **Database (PostgreSQL)**: Stores application data
-4. **Nginx**: Serves as a reverse proxy and serves static files
+2. **Frontend Application (React)**: A modern user interface built with React
+3. **API Service (FastAPI)**: Provides endpoints for calculation and optimization of production schedules
+4. **Database (PostgreSQL)**: Stores application data
+5. **Nginx**: Serves as a reverse proxy and serves static files
 
 ## Prerequisites
 
@@ -68,6 +69,7 @@ This will:
 After deployment, you can access:
 
 - **Web Application**: http://localhost:8000
+- **Frontend Application**: http://localhost:3000 (in development mode) or http://localhost (in production mode)
 - **API Service**: http://localhost:8080
 - **Django Admin Panel**: http://localhost:8000/admin (login with the superuser credentials defined in `.env`)
 
@@ -127,5 +129,43 @@ For development purposes, the project is configured with volume mounts that refl
 
 - Web application code is mounted at `/code` in the web container
 - API code is mounted at `/app` in the api container
+- Frontend code is mounted at `/app` in the frontend container
 
 This allows for real-time code changes during development.
+
+### Running in Development Mode
+
+To run the application in development mode:
+
+```bash
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+This will start all services in development mode, with hot reloading enabled for the frontend application.
+
+## Production
+
+For production deployment, the project includes optimized configurations:
+
+### Running in Production Mode
+
+To run the application in production mode:
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+This will:
+- Build an optimized production version of the frontend application
+- Serve the frontend application using Nginx
+- Configure the API service for production use
+- Set up proper reverse proxying for all services
+
+### Production vs Development
+
+The main differences between production and development modes:
+
+1. **Frontend**: In production, the React app is built into static files and served by Nginx. In development, it runs with hot reloading enabled.
+2. **Performance**: Production mode is optimized for performance and security.
+3. **Ports**: Production mode exposes only port 80 for the frontend, while development mode exposes additional ports for direct access to services.
+4. **Debugging**: Development mode includes additional debugging information and tools.
