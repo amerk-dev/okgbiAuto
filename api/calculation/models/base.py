@@ -231,7 +231,7 @@ class Plate(AbstractPlate):
     def is_overdue(self):
         parameters = Parameters.get_solo()
         return (self.deadline.date
-                and self.deadline.date < (self.deadline.date + timedelta(days=parameters.production_lag)))
+                and self.deadline.date < (self.track.day + timedelta(days=parameters.production_lag)))
 
 
 class ReadyPlate(AbstractPlate):
