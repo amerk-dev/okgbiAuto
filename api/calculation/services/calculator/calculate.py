@@ -1,7 +1,5 @@
 import datetime
 import time
-from collections import defaultdict
-from itertools import combinations
 from typing import Any
 
 from calculation.models import Track, Order, ReadyPlate, Plate, Parameters
@@ -44,12 +42,20 @@ def get_parameters():
 @profile_time
 def calculate_plan():
     track_len, tail_len = get_parameters()
-    Track.recreate_tracks()
 
     tracks = Track.get_tracks()
     orders = Order.objects.all()
     ready_plates = ReadyPlate.objects.all()
-    # ToDo Распределить какие готовые плиты можно использовать
+    # ToDo Распределить какие готовые плиты можно
+    # Сравниваем нужные плиты и готовые, если в списке нужных плит есть плита равная готовой, то удаляем ее из бд
+    for plate in ready_plates:
+        need_plate = Plate.objects.filter(width=plate.width, height=plate.height,
+                                length=plate.length, concrete_class=plate.concrete_class,
+                                wire_bottom=plate.wire_bottom, wire_top=plate.wire_top).first()
+        if need_plate:
+            need_plate.delete()
+            print(plate)
+
     if ready_plates:
         pass
     else:
@@ -72,180 +78,74 @@ def create_plan(tracks, track_len):
         plates (Plate): Список плит, которые нужно разместить.
     """
 
-    plates = Plate.objects.filter(track__isnull=True).select_related('deadline')
-    ready_plates = ReadyPlate.objects.all()
-    if not plates and not ready_plates:
+    plates = Plate.objects.filter(track__isnull=True)
+    # sort by date and (w:h)
+    sorted_plates = sorted(
+        [item for item in plates],
+        key=lambda item: (
+            # Если дата есть, используем ее. Если нет (None), используем максимальную возможную дату.
+            item.deadline.date if item.deadline.date is not None else datetime.date.max,
+            item.width,
+            item.height
+        )
+    )
+    if not sorted_plates:
         print("Нет плит для размещения. План пуст.")
         return []
 
-    # Группировка плит по свойствам
-    def group_plates(plates, include_deadline=True):
-        groups = defaultdict(list)
-        for plate in plates:
-            key = (
-                plate.deadline.date if include_deadline and hasattr(plate,
-                                                                    'deadline') and plate.deadline.date else datetime.date.max,
-                plate.width, plate.height,
-                plate.concrete_class, plate.wire_bottom, plate.wire_top
-            )
-            groups[key].append(plate)
-        return groups
-
-    plate_groups = group_plates(plates)
-    ready_plate_groups = group_plates(ready_plates, include_deadline=False)
-
     placed_plate_ids = set()
-    plan = []
 
-    # Слой 1: Распределение по размерам
+    # for i in sorted_plates:
+    #     print(i.deadline.date, i)
     for track in tracks:
         if track.customer:
-            print(f"Дорожка {track} зарезервирована под заказчика")
+            print("Дорожка зарезервирована под заказчика")
             continue
+        # ToDo Распределить новые плиты по дорожкам
 
         remaining_length = track_len
         current_track_properties = None
 
-        # Проверяем готовые плиты
-        for group_key, group_plates in sorted(ready_plate_groups.items(), key=lambda x: x[0][0]):
-            group_plates = [p for p in group_plates if p.id not in placed_plate_ids]
-            if not group_plates:
-                continue
+        for plate in sorted_plates:
+            if plate.id in placed_plate_ids: continue
 
-            plate = group_plates[0]
-            plate_properties = (plate.width, plate.height)
-            if current_track_properties and plate_properties != current_track_properties:
-                continue
-            if not current_track_properties:
+            plate_properties = (
+                plate.width,
+                plate.height
+            )
+
+            # Если это первая плита для данной дорожки (дорожка еще не настроена)
+            if current_track_properties is None:
                 current_track_properties = plate_properties
 
-            group_plates.sort(key=lambda p: p.length, reverse=True)
-            for plate in group_plates:
+                # Размещаем плиту
+                remaining_length -= plate.length
+                add_plate_to_track(plate, track)
+                placed_plate_ids.add(plate.id)
+            elif plate_properties == current_track_properties:
                 if plate.length <= remaining_length:
+                    remaining_length -= plate.length
                     add_plate_to_track(plate, track)
                     placed_plate_ids.add(plate.id)
-                    remaining_length -= plate.length
-                    plan.append((track, plate, "ready"))
 
-        # Распределяем новые плиты
-        for group_key, group_plates in sorted(plate_groups.items(), key=lambda x: x[0][0]):
-            group_plates = [p for p in group_plates if p.id not in placed_plate_ids]
-            if not group_plates:
-                continue
-
-            plate = group_plates[0]
-            plate_properties = (plate.width, plate.height)
-            if current_track_properties and plate_properties != current_track_properties:
-                continue
-            if not current_track_properties:
-                current_track_properties = plate_properties
-
-            group_plates.sort(key=lambda p: p.length, reverse=True)
-            for plate in group_plates:
-                if plate.length <= remaining_length:
-                    add_plate_to_track(plate, track)
-                    placed_plate_ids.add(plate.id)
-                    remaining_length -= plate.length
-                    plan.append((track, plate, "new"))
-
-    # Слой 2: Оптимизация по классу бетона
-    for track in tracks:
-        track_plates = [p for t, p, _ in plan if t == track]
-        if not track_plates:
-            continue
-
-        # Группируем плиты на дорожке по concrete_class
-        concrete_groups = defaultdict(list)
-        for plate in track_plates:
-            concrete_groups[plate.concrete_class].append(plate)
-
-        if len(concrete_groups) > 1:
-            # Проверяем возможность обмена с другими дорожками
-            for other_track in tracks:
-                if other_track == track or other_track.customer:
-                    continue
-                other_plates = [p for t, p, _ in plan if t == other_track]
-                if not other_plates:
-                    continue
-
-                other_concrete_groups = defaultdict(list)
-                for plate in other_plates:
-                    other_concrete_groups[plate.concrete_class].append(plate)
-
-                # Проверяем, можно ли обменять плиты с одинаковыми размерами
-                for plate1, plate2 in combinations(track_plates + other_plates, 2):
-                    if (plate1.id not in placed_plate_ids or plate2.id not in placed_plate_ids or
-                            plate1.width != plate2.width or plate1.height != plate2.height):
-                        continue
-
-                    # Проверяем, уменьшит ли обмен количество уникальных concrete_class
-                    track_cost_before = track.cost
-                    other_track_cost_before = other_track.cost
-                    swap_plates(plate1, plate2, track, other_track)
-                    if track.cost + other_track.cost < track_cost_before + other_track_cost_before:
-                        plan = [(t, p, s) if (t, p, s) != (track, plate1, "new") and (t, p, s) != (other_track, plate2,
-                                                                                                   "new")
-                                else (other_track, plate1, "new") if p == plate2 else (track, plate2, "new")
-                                for t, p, s in plan]
-                    else:
-                        swap_plates(plate1, plate2, other_track, track)  # Откат
-
-    # Слой 3: Оптимизация по проволоке
-    for track in tracks:
-        track_plates = [p for t, p, _ in plan if t == track]
-        if not track_plates:
-            continue
-
-        wire_groups = defaultdict(list)
-        for plate in track_plates:
-            wire_groups[(plate.wire_bottom, plate.wire_top)].append(plate)
-
-        if len(wire_groups) > 1:
-            for other_track in tracks:
-                if other_track == track or other_track.customer:
-                    continue
-                other_plates = [p for t, p, _ in plan if t == other_track]
-                if not other_plates:
-                    continue
-
-                for plate1, plate2 in combinations(track_plates + other_plates, 2):
-                    if (plate1.id not in placed_plate_ids or plate2.id not in placed_plate_ids or
-                            plate1.width != plate2.width or plate1.height != plate2.height or
-                            plate1.concrete_class != plate2.concrete_class):
-                        continue
-
-                    track_cost_before = track.cost
-                    other_track_cost_before = other_track.cost
-                    swap_plates(plate1, plate2, track, other_track)
-                    if track.cost + other_track.cost < track_cost_before + other_track_cost_before:
-                        plan = [(t, p, s) if (t, p, s) != (track, plate1, "new") and (t, p, s) != (other_track, plate2,
-                                                                                                   "new")
-                                else (other_track, plate1, "new") if p == plate2 else (track, plate2, "new")
-                                for t, p, s in plan]
-                    else:
-                        swap_plates(plate1, plate2, other_track, track)
-
-    # Вывод результатов
-    unplaced_plates = [p for p in plates if p.id not in placed_plate_ids]
+    unplaced_plates = [plate for plate in sorted_plates if plate.id not in placed_plate_ids]
     if unplaced_plates:
-        print(f"{len(unplaced_plates)} плит не удалось разместить: {[str(p) for p in unplaced_plates]}")
+        print(f"{len(unplaced_plates)} плит не удалось разместить.")
 
-    # Формируем результат
-    result = {
-        "plan": [(str(t), str(p), s) for t, p, s in plan],
-        "Use_ready_plates": len([p for _, p, s in plan if s == "ready"]),
-        "is_real": reality_check(plates, tracks, track_len)
-    }
-    print(result)
-    return result
+        # if track.get_size is not None:
+        #     add_plate_to_track(sorted_plates[0], track)
+        #     sorted_plates.pop(0)
+        # else:
+        #     w, h = track.get_size
+        #     need_plate_for_track = Plate.objects.filter(track=track).filter(
+        #         deadline_date__isnull=True,
+        #         track__isnull=True,
+        #         width=w,
+        #         height=h
+        #     )
+        #     print(track, need_plate_for_track)
 
-
-def swap_plates(plate1, plate2, track1, track2):
-    """Меняет плиты между дорожками."""
-    plate1.track = track2
-    plate2.track = track1
-    plate1.save()
-    plate2.save()
+    return True
 
 
 
