@@ -146,6 +146,7 @@ def create_plan(tracks, track_len):
         #     )
         #     print(track, need_plate_for_track)
     post_calculating()
+    post_calculating()
     return True
 
 
@@ -177,26 +178,27 @@ def add_plate_to_track(plate, track):
 
 @profile_time
 def post_calculating():
-    # берем дорожку, смотрим на хвост, если есть, то сдвигаем дорожку так далеко как можем(по дате)
     tracks = Track.get_tracks()
     max_tail_len = Parameters.get_solo().tail_length
     ft = Parameters.force_tail
-    if ft == 0:  # Если нет плит с дедлайном, то дорожку в конец
-        i = 0
-        while i in range(len(tracks)-1):
+
+    updated_tracks = []
+
+    if ft == 0:
+        for i in range(len(tracks) - 1):
             track = tracks[i]
             if track.customer:
                 continue
-            next_track = tracks[i+1]
+            next_track = tracks[i + 1]
             if track.width != next_track.width or track.height != next_track.height:
                 earliest_date = Plate.objects.filter(track=track.id).aggregate(
                     min_date=Min('deadline__date')
                 )['min_date']
                 if earliest_date is not None and track.free_length > max_tail_len:
                     swap_track_to_end(tracks, track)
-                    continue
+                    updated_tracks.append(track)
 
-    if ft == 1:  #
+    elif ft == 1:
         for track in tracks:
             if track.customer:
                 continue
@@ -205,10 +207,9 @@ def post_calculating():
             )['min_date']
             if earliest_date is not None and track.free_length > max_tail_len:
                 swap_track_to_end(tracks, track)
-                continue
+                updated_tracks.append(track)
 
-
-    if ft == 2:  #
+    elif ft == 2:
         for track in tracks:
             # if had customers -> resume
             if track.customer:
@@ -221,6 +222,10 @@ def post_calculating():
                     swap_track_to_deadline(tracks, track, earliest_date)
                 else:
                     swap_track_to_end(tracks, track)
+                updated_tracks.append(track)
+
+    if updated_tracks:
+        Track.objects.bulk_update(updated_tracks, ['position', 'day'])
 
 
 @profile_time
