@@ -1,3 +1,5 @@
+import json
+import os
 from datetime import datetime, timedelta
 
 import requests
@@ -51,17 +53,18 @@ class Update1CDataCommand:
 
                 plates_to_create = []
                 for plate_data in plates:
-                    plate = Plate(
-                                    name=plate_data['name'],
-                                    length=plate_data['length'],
-                                    width=plate_data['width'],
-                                    height=plate_data['height'],
-                                    concrete_class=plate_data['class'] or 'В25',
-                                    wire_bottom=plate_data['wire_bottom'],
-                                    wire_top=plate_data['wire_top'],
-                                    deadline=deadline
-                                )
-                    plates_to_create.append(plate)
+                    for _ in range(plate_data['count']):
+                        plate = Plate(
+                                        name=plate_data['name'],
+                                        length=plate_data['length'],
+                                        width=plate_data['width'],
+                                        height=plate_data['height'],
+                                        concrete_class=plate_data['class'] or 'В25',
+                                        wire_bottom=plate_data['wire_bottom'],
+                                        wire_top=plate_data['wire_top'],
+                                        deadline=deadline
+                                    )
+                        plates_to_create.append(plate)
                 Plate.objects.bulk_create(plates_to_create)
 
     def execute(self):
