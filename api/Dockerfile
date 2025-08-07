@@ -38,4 +38,4 @@ RUN python manage.py collectstatic --noinput
 EXPOSE 8000
 
 # CMD is overridden by entrypoint in docker-compose.yml
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout 300", "okgbi.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--timeout 3000", "okgbi.wsgi:application"]
