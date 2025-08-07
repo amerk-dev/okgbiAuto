@@ -80,74 +80,63 @@ def create_plan(tracks, track_len):
     """
 
     plates = Plate.objects.filter(track__isnull=True)
-    # sort by date and (w:h)
-    sorted_plates = sorted(
-        [item for item in plates],
-        key=lambda item: (
-            # Если дата есть, используем ее. Если нет (None), используем максимальную возможную дату.
-            item.deadline.date if item.deadline.date is not None else datetime.date.max,
-            item.width,
-            item.height
-        )
-    )
-    if not sorted_plates:
+
+    # Разделяем плиты на две группы
+    plates_with_deadline = [p for p in plates if p.deadline.date is not None]
+    plates_without_deadline = [p for p in plates if p.deadline.date is None]
+
+    # Сортируем каждую группу
+    plates_with_deadline.sort(key=lambda p: (p.deadline.date, p.width, p.height))
+    plates_without_deadline.sort(key=lambda p: (p.width, p.height))
+
+    if not plates_with_deadline and not plates_without_deadline:
         print("Нет плит для размещения. План пуст.")
         return []
 
     placed_plate_ids = set()
 
-    # for i in sorted_plates:
-    #     print(i.deadline.date, i)
-    for track in tracks:
-        if track.customer:
-            print("Дорожка зарезервирована под заказчика")
-            continue
-        # ToDo Распределить новые плиты по дорожкам
+    # Функция для попытки размещения плит на дорожках
+    def place_plates(plates_list):
+        nonlocal placed_plate_ids
+        for track in tracks:
+            if track.customer:
+                print("Дорожка зарезервирована под заказчика")
+                continue
 
-        remaining_length = track_len
-        current_track_properties = None
+            remaining_length = track_len
+            current_track_properties = None
 
-        for plate in sorted_plates:
-            if plate.id in placed_plate_ids: continue
+            for plate in plates_list:
+                if plate.id in placed_plate_ids:
+                    continue
 
-            plate_properties = (
-                plate.width,
-                plate.height
-            )
+                plate_properties = (plate.width, plate.height)
 
-            # Если это первая плита для данной дорожки (дорожка еще не настроена)
-            if current_track_properties is None:
-                current_track_properties = plate_properties
-
-                # Размещаем плиту
-                remaining_length -= plate.length
-                add_plate_to_track(plate, track)
-                placed_plate_ids.add(plate.id)
-            elif plate_properties == current_track_properties:
-                if plate.length <= remaining_length:
+                if current_track_properties is None:
+                    current_track_properties = plate_properties
                     remaining_length -= plate.length
                     add_plate_to_track(plate, track)
                     placed_plate_ids.add(plate.id)
+                elif plate_properties == current_track_properties:
+                    if plate.length <= remaining_length:
+                        remaining_length -= plate.length
+                        add_plate_to_track(plate, track)
+                        placed_plate_ids.add(plate.id)
 
-    unplaced_plates = [plate for plate in sorted_plates if plate.id not in placed_plate_ids]
+    # 1. Сначала размещаем плиты с дедлайнами
+    place_plates(plates_with_deadline)
+    # 2. Затем — без дедлайнов
+    place_plates(plates_without_deadline)
+
+    # Плиты, которые не удалось разместить
+    unplaced_plates = [p for p in plates if p.id not in placed_plate_ids]
     if unplaced_plates:
         print(f"{len(unplaced_plates)} плит не удалось разместить.")
 
-        # if track.get_size is not None:
-        #     add_plate_to_track(sorted_plates[0], track)
-        #     sorted_plates.pop(0)
-        # else:
-        #     w, h = track.get_size
-        #     need_plate_for_track = Plate.objects.filter(track=track).filter(
-        #         deadline_date__isnull=True,
-        #         track__isnull=True,
-        #         width=w,
-        #         height=h
-        #     )
-        #     print(track, need_plate_for_track)
     post_calculating()
-    post_calculating()
+    # post_calculating()
     return True
+
 
 
 @profile_time
