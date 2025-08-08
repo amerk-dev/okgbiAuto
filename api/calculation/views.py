@@ -100,6 +100,7 @@ class TrackViewSet(viewsets.ModelViewSet):
                             'occupied': f'{day_track.useful_length}',
                             'free': f'{day_track.free_length}',
                             'price': f'{price_str} ₽',
+                            'deadline': day_track.deadline.strftime('%d-%m-%Y') if day_track.deadline else 'Нет',
                             'status': 'overdue' if day_track.has_overdue_deadline else 'booked'
                         }
                         day_data.update(info)

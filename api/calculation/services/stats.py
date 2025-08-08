@@ -13,7 +13,14 @@ class Stats:
 
         all_max_length = (all_tracks.count() * Parameters.get_solo().road_length)
 
-        retool_count = sum([len(track.retoolings) for track in all_tracks])
+        retool_count = 0
+        for day in set(Track.objects.all().values_list('day', flat=True)):
+            day_tracks = Track.objects.filter(day=day)
+            day_retool_count = len(set((t.width, t.height) for t in day_tracks if t.width and t.height))
+            if day_retool_count > 0:
+                day_retool_count -= 1
+            retool_count += day_retool_count
+
         retool_price = retool_count * UnitPrice.get_retooling_price()
         all_cost = sum([track.cost for track in all_tracks])
         useful = (sum([track.useful_length for track in all_tracks]) / all_max_length if all_max_length else 0)

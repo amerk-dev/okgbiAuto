@@ -741,6 +741,7 @@ const TrackAvailability = ({calculating}) => {
                                   <div className="font-semibold">Занято:</div><div>{Number.parseFloat(day.occupied)} мм</div>
                                   <div className="font-semibold">Свободно:</div><div>{Number.parseFloat(day.free)} мм</div>
                                   <div className="font-semibold">Стоимость:</div><div className="font-medium text-blue-600">{day.price}</div>
+                                  <div className="font-semibold">Дедлайн:</div><div>{day.deadline}</div>
                                 </div>
                               </div>
                           ) : (

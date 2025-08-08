@@ -111,6 +111,14 @@ class Track(models.Model):
         return cls.objects.all()
 
     @property
+    def deadline(self):
+        params = Parameters.get_solo()
+        deadline = min(self.plates.filter(deadline__date__isnull=False).values_list('deadline__date', flat=True), default=None)
+        if deadline:
+            deadline = deadline - timedelta(days=params.production_lag)
+        return deadline
+
+    @property
     def has_overdue_deadline(self):
         return any([plate.is_overdue for plate in self.plates.all()])
 
