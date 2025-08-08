@@ -104,7 +104,10 @@ def create_plan(tracks, track_len):
                 continue
 
             remaining_length = track.free_length
-            current_track_properties = None
+            if track.width is not None and track.height is not None:
+                current_track_properties = (track.width, track.height)
+            else:
+                current_track_properties = None
 
             for plate in plates_list:
                 if plate.id in placed_plate_ids:
@@ -117,11 +120,10 @@ def create_plan(tracks, track_len):
                     remaining_length -= plate.length
                     add_plate_to_track(plate, track)
                     placed_plate_ids.add(plate.id)
-                else:
-                    if plate.length <= remaining_length:
-                        remaining_length -= plate.length
-                        add_plate_to_track(plate, track)
-                        placed_plate_ids.add(plate.id)
+                elif plate_properties == current_track_properties and plate.length <= remaining_length:
+                    remaining_length -= plate.length
+                    add_plate_to_track(plate, track)
+                    placed_plate_ids.add(plate.id)
                 track.save()
 
     # 1. Сначала размещаем плиты с дедлайнами
@@ -134,7 +136,7 @@ def create_plan(tracks, track_len):
     if unplaced_plates:
         print(f"{len(unplaced_plates)} плит не удалось разместить.")
 
-    # post_calculating()
+    post_calculating()
     # # post_calculating()
     return True
 
