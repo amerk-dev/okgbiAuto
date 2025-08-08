@@ -44,10 +44,11 @@ def get_parameters():
 def calculate_plan():
     track_len, tail_len = get_parameters()
 
+    Track().recreate_tracks()
     tracks = Track.get_tracks()
-    orders = Order.objects.all()
+
     ready_plates = ReadyPlate.objects.all()
-    # ToDo Распределить какие готовые плиты можно
+    use_ready_plates = 0
     # Сравниваем нужные плиты и готовые, если в списке нужных плит есть плита равная готовой, то удаляем ее из бд
     for plate in ready_plates:
         need_plate = Plate.objects.filter(width=plate.width, height=plate.height,
@@ -55,31 +56,30 @@ def calculate_plan():
                                           wire_bottom=plate.wire_bottom, wire_top=plate.wire_top).first()
         if need_plate:
             need_plate.delete()
-            print(plate)
+            use_ready_plates+=1
 
-    if ready_plates:
-        pass
-    else:
+
+    if not ready_plates:
         print("Готовых плит нет.")
+
     plates = Plate.objects.filter(track__isnull=True)
     is_real = reality_check(plates, tracks, track_len)
-    plan = create_plan(tracks, track_len)
+    plan = create_plan(tracks)
     print({f"plan": plan,
-           "Use_ready_plates": 0,  # Плиты со склада, которые подходят под заказ
+           "Use_ready_plates": use_ready_plates,  # Плиты со склада, которые подходят под заказ
            "is_real": is_real}
           )
 
 
 @profile_time
-def create_plan(tracks, track_len):
+def create_plan(tracks):
     """Основная функция - алгоритм распределения плит по дорожкам
     Args:
         tracks (list[Track]): Список доступных дорожек.
-        track_len (int): Максимальная длина каждой дорожки.
-        plates (Plate): Список плит, которые нужно разместить.
     """
 
     plates = Plate.objects.filter(track__isnull=True)
+    track_len, tail_len = get_parameters()
 
     # Разделяем плиты на две группы
     plates_with_deadline = [p for p in plates if p.deadline.date is not None]
@@ -96,38 +96,35 @@ def create_plan(tracks, track_len):
     placed_plate_ids = set()
 
     # Функция для попытки размещения плит на дорожках
-    def place_plates(plates_list):
+    def place_plates(plates_list, is_dedline = False):
         nonlocal placed_plate_ids
+        prev_current_properties = None
+        last_track_day = None
         for track in tracks:
+            if last_track_day != track.day:
+                prev_current_properties = None
             if track.customer:
                 print("Дорожка зарезервирована под заказчика")
                 continue
 
             remaining_length = track.free_length
-            if track.width is not None and track.height is not None:
+            if prev_current_properties is not None and not is_dedline:
+                current_track_properties = prev_current_properties
+            elif track.width is not None and track.height is not None:
                 current_track_properties = (track.width, track.height)
             else:
                 current_track_properties = None
 
-            for plate in plates_list:
-                if plate.id in placed_plate_ids:
-                    continue
+            current_track_properties = fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties)
 
-                plate_properties = (plate.width, plate.height)
+            if track.free_length == track_len:
+                current_track_properties = None
+                current_track_properties = fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties)
 
-                if current_track_properties is None and plate.length <= remaining_length:
-                    current_track_properties = plate_properties
-                    remaining_length -= plate.length
-                    add_plate_to_track(plate, track)
-                    placed_plate_ids.add(plate.id)
-                elif plate_properties == current_track_properties and plate.length <= remaining_length:
-                    remaining_length -= plate.length
-                    add_plate_to_track(plate, track)
-                    placed_plate_ids.add(plate.id)
-                track.save()
-
+            last_track_day = track.day
+            prev_current_properties = current_track_properties
     # 1. Сначала размещаем плиты с дедлайнами
-    place_plates(plates_with_deadline)
+    place_plates(plates_with_deadline, True)
     # 2. Затем — без дедлайнов
     place_plates(plates_without_deadline)
 
@@ -140,7 +137,25 @@ def create_plan(tracks, track_len):
     # # post_calculating()
     return True
 
+@profile_time
+def fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties):
+    for plate in plates_list:
+        if plate.id in placed_plate_ids:
+            continue
 
+        plate_properties = (plate.width, plate.height)
+
+        if current_track_properties is None and plate.length <= remaining_length:
+            current_track_properties = plate_properties
+            remaining_length -= plate.length
+            add_plate_to_track(plate, track)
+            placed_plate_ids.add(plate.id)
+        elif plate_properties == current_track_properties and plate.length <= remaining_length:
+            remaining_length -= plate.length
+            add_plate_to_track(plate, track)
+            placed_plate_ids.add(plate.id)
+        track.save()
+    return current_track_properties
 
 @profile_time
 def reality_check(plates, tracks, track_len):
@@ -175,7 +190,7 @@ def post_calculating():
     ft = Parameters.force_tail
 
     updated_tracks = []
-
+    # ToDo каждую доррожку брать, смотреть на ее макс дедлайн и в диапазоне этого дедлайна искать замену
     if ft == 0:
         for i in range(len(tracks) - 1):
             track = tracks[i]
