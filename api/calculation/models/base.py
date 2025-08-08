@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, date
 from decimal import Decimal
 
 from django.db import models, transaction
-from django.utils.functional import cached_property
+# from django.utils.functional import property
 
 from .params import Parameters, UnitPrice
 
@@ -26,15 +26,15 @@ class Order(models.Model):
             s += f"- {self.customer.name}"
         return  s
 
-    @cached_property
+    @property
     def is_overdue(self):
         return any([plate.is_overdue for plate in self.deadlines.all()])
 
-    @cached_property
+    @property
     def complete_date(self):
         return max([deadline.complete_date for deadline in self.deadlines.all()])
 
-    @cached_property
+    @property
     def last_deadline(self):
         return self.deadlines.last()
 
@@ -49,11 +49,11 @@ class Deadline(models.Model):
     def __str__(self):
         return str(self.date)
 
-    @cached_property
+    @property
     def is_overdue(self):
         return any([plate.is_overdue for plate in self.plates.all()])
 
-    @cached_property
+    @property
     def complete_date(self):
         return max([plate.track.day for plate in self.plates.all() if plate.track], default=None)
 
@@ -66,6 +66,9 @@ class Track(models.Model):
 
     def __str__(self):
         return f"Track {self.position} - {self.day}"
+
+    class Meta:
+        ordering = ['day']
 
     @classmethod
     def recreate_tracks(cls):
@@ -107,11 +110,11 @@ class Track(models.Model):
     def get_tracks(cls):
         return cls.objects.all()
 
-    @cached_property
+    @property
     def has_overdue_deadline(self):
         return any([plate.is_overdue for plate in self.plates.all()])
 
-    @cached_property
+    @property
     def is_weekend_day(self):
         return Parameters.check_is_weekend_day(self.day)
 
@@ -119,15 +122,15 @@ class Track(models.Model):
     def get_today_tracks(cls):
         return cls.objects.filter(day=datetime.today().date())
 
-    @cached_property
+    @property
     def useful_length(self):
         return sum([plate.length for plate in self.plates.all()])
 
-    @cached_property
+    @property
     def free_length(self):
         return Parameters.get_solo().road_length - self.useful_length
 
-    @cached_property
+    @property
     def retoolings(self):
         retoolings = []
         for plate in self.plates.all():
@@ -135,11 +138,11 @@ class Track(models.Model):
                 retoolings.append((plate.width, plate.height))
         return retoolings
 
-    @cached_property
+    @property
     def retoolings_price(self):
         return len(self.retoolings) * UnitPrice.get_retooling_price()
 
-    @cached_property
+    @property
     def cost(self):
         wire_price = UnitPrice.get_wire_price()
         plate_class_prices = UnitPrice.get_plates_prices()
@@ -155,34 +158,34 @@ class Track(models.Model):
         wire_cost = Decimal(str(wire_top_max + wire_bottom_max)) * wire_price * Decimal(str(self.useful_length / 1000))
         return plate_cost + wire_cost + self.retoolings_price
 
-    @cached_property
+    @property
     def concrete_class(self):
         plate_class_prices = UnitPrice.get_plates_prices()
         using_plate_classes = set(plate.concrete_class for plate in self.plates.all())
         return max(using_plate_classes, key=lambda plate_class: plate_class_prices[plate_class])
 
 
-    @cached_property
+    @property
     def width(self):
         return self.plates.all()[0].width if self.plates.exists() else None
 
-    @cached_property
+    @property
     def height(self):
         return self.plates.all()[0].height if self.plates.exists() else None
 
-    @cached_property
+    @property
     def wire_top(self):
         plates = self.plates.all()
         wire_top_max = max([plate.wire_top for plate in plates], default=0)
         return wire_top_max
 
-    @cached_property
+    @property
     def wire_bottom(self):
         plates = self.plates.all()
         wire_bottom_max = max([plate.wire_bottom for plate in plates], default=0)
         return wire_bottom_max
 
-    @cached_property
+    @property
     def get_size(self):
         return self.width, self.height
 
@@ -227,7 +230,7 @@ class Plate(AbstractPlate):
     deadline = models.ForeignKey(Deadline, on_delete=models.CASCADE, related_name='plates')
 
 
-    @cached_property
+    @property
     def is_overdue(self):
         parameters = Parameters.get_solo()
         return (self.deadline.date

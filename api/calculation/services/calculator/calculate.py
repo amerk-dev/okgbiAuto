@@ -91,7 +91,7 @@ def create_plan(tracks, track_len):
 
     if not plates_with_deadline and not plates_without_deadline:
         print("Нет плит для размещения. План пуст.")
-        return []
+
 
     placed_plate_ids = set()
 
@@ -103,7 +103,7 @@ def create_plan(tracks, track_len):
                 print("Дорожка зарезервирована под заказчика")
                 continue
 
-            remaining_length = track_len
+            remaining_length = track.free_length
             current_track_properties = None
 
             for plate in plates_list:
@@ -112,16 +112,17 @@ def create_plan(tracks, track_len):
 
                 plate_properties = (plate.width, plate.height)
 
-                if current_track_properties is None:
+                if current_track_properties is None and plate.length <= remaining_length:
                     current_track_properties = plate_properties
                     remaining_length -= plate.length
                     add_plate_to_track(plate, track)
                     placed_plate_ids.add(plate.id)
-                elif plate_properties == current_track_properties:
+                else:
                     if plate.length <= remaining_length:
                         remaining_length -= plate.length
                         add_plate_to_track(plate, track)
                         placed_plate_ids.add(plate.id)
+                track.save()
 
     # 1. Сначала размещаем плиты с дедлайнами
     place_plates(plates_with_deadline)
@@ -133,8 +134,8 @@ def create_plan(tracks, track_len):
     if unplaced_plates:
         print(f"{len(unplaced_plates)} плит не удалось разместить.")
 
-    post_calculating()
     # post_calculating()
+    # # post_calculating()
     return True
 
 
@@ -221,7 +222,7 @@ def post_calculating():
 def swap_track_to_end(tracks, this_track):
     for track in tracks:
         if this_track.id != track.id:
-            track, this_track = this_track, track
+            track.id, this_track.id = this_track.id, track.id
     return True
 
 
@@ -232,5 +233,5 @@ def swap_track_to_deadline(tracks: List[Track], this_track, day):
         if track.day >= day:
             break
         if track.day < day and track.id != this_track.id:
-            track, this_track = this_track, track
+            track.id, this_track.id = this_track.id, track.id
     return True
