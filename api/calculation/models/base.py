@@ -130,6 +130,19 @@ class Track(models.Model):
     def get_today_tracks(cls):
         return cls.objects.filter(day=datetime.today().date())
 
+    @classmethod
+    def get_current_week_tracks(cls):
+        """
+        Returns tracks for the current week (Monday to Sunday).
+        """
+        today = datetime.today().date()
+        # Get the start of the week (Monday)
+        start_of_week = today - timedelta(days=today.weekday())
+        # Get the end of the week (Sunday)
+        end_of_week = start_of_week + timedelta(days=6)
+
+        return cls.objects.filter(day__gte=start_of_week, day__lte=end_of_week)
+
     @property
     def useful_length(self):
         return sum([plate.length for plate in self.plates.all()])
@@ -247,5 +260,3 @@ class Plate(AbstractPlate):
 
 class ReadyPlate(AbstractPlate):
     pass
-
-

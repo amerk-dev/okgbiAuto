@@ -9,11 +9,14 @@ const Header = ({ title, stats, actions, loading = false, onAction }) => {
     yellow: '#ca8a04',  // yellow-600
     purple: '#9333ea',  // purple-600
     indigo: '#4f46e5',  // indigo-600
+    orange: '#ea580c',  // orange-600
+    red: '#dc2626',     // red-600
   };
   // Initialize state to track which sections are expanded
   const [expandedSections, setExpandedSections] = useState({
     'Статистика на сегодня': true,
-    'Общая статистика': false
+    'Общая статистика': false,
+    'KPI расстановки плит': false
   });
 
   // Toggle section expansion
@@ -53,7 +56,7 @@ const Header = ({ title, stats, actions, loading = false, onAction }) => {
           </div>
         ) : (
           /* Group stats by section */
-          ['Статистика на сегодня', 'Общая статистика'].map(section => (
+          ['Статистика на сегодня', 'Общая статистика', 'KPI расстановки плит'].map(section => (
             <div key={section} className="mt-6">
               <div 
                 className="flex items-center justify-between cursor-pointer" 
@@ -78,8 +81,13 @@ const Header = ({ title, stats, actions, loading = false, onAction }) => {
                             </div>
                             <div className="ml-5 w-0 flex-1">
                               <dl>
-                                <dt className="text-sm font-medium text-gray-500 truncate">
+                                <dt className="text-sm font-medium text-gray-500 truncate group relative">
                                   {stat.title}
+                                  {stat.tooltip && (
+                                    <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 -mt-2 ml-2 z-10 max-w-xs">
+                                      {stat.tooltip}
+                                    </span>
+                                  )}
                                 </dt>
                                 <dd>
                                   <div className="text-lg font-medium text-gray-900">

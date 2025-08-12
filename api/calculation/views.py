@@ -466,6 +466,61 @@ class DashboardStatsView(APIView):
                 'value': overall_stats['last_track'].strftime('%d.%m.%Y'),
                 'icon': 'calendar-check',
                 'color': 'blue'
+            },
+            # KPI metrics
+            {
+                'id': 10,
+                'section': 'KPI расстановки плит',
+                'title': 'Общий показатель эффективности',
+                'value': f"{overall_stats['kpi_score']:.2f}",
+                'icon': 'chart-line',
+                'color': 'blue',
+                'tooltip': 'Чем ниже значение, тем лучше расстановка'
+            },
+            {
+                'id': 11,
+                'section': 'KPI расстановки плит',
+                'title': 'Экономия на типе бетона',
+                'value': f"{overall_stats['kpi_concrete_economy']:.2f}",
+                'icon': 'cubes',
+                'color': 'green',
+                'tooltip': 'Штраф за избыточное использование дорогих марок бетона'
+            },
+            {
+                'id': 12,
+                'section': 'KPI расстановки плит',
+                'title': 'Экономия проволоки',
+                'value': f"{overall_stats['kpi_wire_economy']:.2f}",
+                'icon': 'grip-lines',
+                'color': 'yellow',
+                'tooltip': 'Штраф за перерасход армирования'
+            },
+            {
+                'id': 13,
+                'section': 'KPI расстановки плит',
+                'title': 'Соблюдение дедлайнов',
+                'value': f"{overall_stats['kpi_deadline_compliance']:.2f}",
+                'icon': 'calendar-times',
+                'color': 'red',
+                'tooltip': 'Штраф за просрочку выполнения заказов'
+            },
+            {
+                'id': 14,
+                'section': 'KPI расстановки плит',
+                'title': 'Загрузка дорожек',
+                'value': f"{overall_stats['kpi_track_loading']:.2f} %",
+                'icon': 'percentage',
+                'color': 'purple',
+                'tooltip': 'Процент неиспользованной мощности дорожек'
+            },
+            {
+                'id': 15,
+                'section': 'KPI расстановки плит',
+                'title': 'Переналадки оборудования',
+                'value': f"{overall_stats['kpi_retooling_efficiency']:.2f}",
+                'icon': 'cogs',
+                'color': 'orange',
+                'tooltip': 'Среднее количество переналадок на одну дорожку'
             }
         ]
 
