@@ -662,7 +662,14 @@ const TrackAvailability = ({calculating}) => {
 								  <th key={`header-${day.date}`}
 									  scope="col"
 									  className="w-44 px-1 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                          <div>{dateText}</div>
+                          <div className="flex justify-between items-center">
+                            <span>{dateText}</span>
+                            {day.kpi !== undefined && (
+                              <span className="text-blue-600 font-medium" title="KPI показатель">
+                                KPI: {day.kpi}
+                              </span>
+                            )}
+                          </div>
                           <button
 							  onClick={() => {
 								  // Use the first track's ID for all days

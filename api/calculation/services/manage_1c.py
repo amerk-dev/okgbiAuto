@@ -68,8 +68,8 @@ class Update1CDataCommand:
                 Plate.objects.bulk_create(plates_to_create)
 
     def execute(self):
-        # data = self._fetch_data()
-        data = json.loads(s)
+        data = self._fetch_data()
+        # data = json.loads(s)
         ready_plates = data['ready_plates']
         orders = data['orders']
 
