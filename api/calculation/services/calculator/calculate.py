@@ -37,8 +37,107 @@ def get_parameters():
     return {
         params.road_length,
         params.tail_length,
-        # можно добавить и другие нужные параметры
+        params.production_lag,
     }
+
+@profile_time
+def claster_plan():
+    track_len, tail_len, production_lag = get_parameters()
+
+    Track.recreate_tracks()
+    tracks = list(Track.get_tracks())
+
+    ready_plates = ReadyPlate.objects.all()
+    use_ready_plates = 0
+    for plate in ready_plates:
+        need_plate = Plate.objects.filter(
+            width=plate.width, height=plate.height,
+            length=plate.length, concrete_class=plate.concrete_class,
+            wire_bottom=plate.wire_bottom, wire_top=plate.wire_top
+        ).first()
+        if need_plate:
+            need_plate.delete()
+            use_ready_plates += 1
+
+    if not ready_plates:
+        print("Готовых плит нет.")
+
+    plates_from_db = Plate.objects.filter(track__isnull=True)
+
+    tasks = []
+    for p in plates_from_db:
+        # дедлайн может быть None → заменяем на максимально возможную дату
+        deadline_date = p.deadline.date if (p.deadline and p.deadline.date) else datetime.date.max
+        tasks.append({
+            'length': p.length,
+            'width': p.width,
+            'height': p.height,
+            'deadline': deadline_date,
+            "p": p
+        })
+
+    if not tasks:
+        print("Нет плит для планирования.")
+        return
+
+    # базовая дата — на 2 дня раньше самого раннего дедлайна
+    min_deadline = min(t['deadline'] for t in tasks)
+    base_date = min_deadline
+
+    # вычисляем последний возможный день производства
+    for t in tasks:
+        d = t['deadline'] - datetime.timedelta(days=production_lag)
+        t['last_day'] = (d - base_date).days
+
+    # сортируем задачи по last_day, чтобы приоритет у горящих заказов
+    tasks.sort(key=lambda x: x['last_day'])
+
+    # кластеризация по (width, height)
+    clusters = defaultdict(list)
+    for t in tasks:
+        key = (t['width'], t['height'])
+        clusters[key].append(t)
+
+    # сортировка кластеров по самому раннему дедлайну
+    cluster_keys = sorted(clusters.keys(), key=lambda cl: min(p['last_day'] for p in clusters[cl]))
+
+    # планирование: идём по кластерам, начиная с самых срочных
+    for cl in cluster_keys:
+        plates = clusters[cl]
+        plates.sort(key=lambda x: x['last_day'])  # внутри кластера тоже срочные вперёд
+        for track in tracks:
+            if track.customer:
+                continue
+            if track.free_length < track_len:
+                continue
+            loaded = pack_track(plates, track)
+            if not plates:
+                break  # все плиты кластера распределили
+
+    post_calculating_deadlines()
+
+# упаковка плит на дорожку
+def pack_track(plist, track):
+    cap = 85 * 1000  # в мм
+    loaded = []
+    # сортировка: сначала самые срочные, потом по длине
+    plist.sort(key=lambda x: (x['last_day'], -x['length']))
+    for p in plist[:]:
+        if p['length'] <= cap:
+            loaded.append(p)
+            cap -= p['length']
+            add_plate_to_track(p['p'], track)
+            plist.remove(p)
+    return loaded
+
+def add_plate_to_track(plate, track):
+    plate.track = track
+    try:
+        plate.save()
+        return True
+    except Exception as e:
+        print(f"Ошибка при добавлении плиты {plate} на дорожку {track}: {e}")
+        return False
 
 
 @profile_time
@@ -190,14 +289,6 @@ def reality_check(plates, tracks, track_len):
         return True
 
 
-def add_plate_to_track(plate, track):
-    plate.track = track
-    try:
-        plate.save()
-        return True
-    except Exception as e:
-        print(f"Ошибка при добавлении плиты {plate} на дорожку {track}: {e}")
-        return False
 
 
 @profile_time
