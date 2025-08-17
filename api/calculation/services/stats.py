@@ -275,6 +275,18 @@ class Stats:
     @staticmethod
     def get_today_stats():
         today_tracks = Track.get_today_tracks()
+        if not today_tracks:
+            return {
+                'tracks': 0,
+                'plates': 0,
+                'useful': 0,
+                'kpi_score': 0,
+                'kpi_concrete_economy': 0,
+                'kpi_wire_economy': 0,
+                'kpi_deadline_compliance': 0,
+                'kpi_track_loading': 0,
+                'kpi_retooling_efficiency': 0
+            }
 
         today_max_length = (len(today_tracks) * Parameters.get_solo().road_length)
         today_useful = sum([track.useful_length for track in today_tracks]) / today_max_length if today_max_length else 0
