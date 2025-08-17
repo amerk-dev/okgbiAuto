@@ -5,6 +5,7 @@ from typing import Any, List
 from django.db.models import Min, Max
 
 from calculation.models import Track, Order, ReadyPlate, Plate, Parameters
+from django.db import transaction
 
 
 def profile_time(func):
@@ -72,6 +73,9 @@ def claster_plan():
             'length': p.length,
             'width': p.width,
             'height': p.height,
+            'concrete_class': p.concrete_class,
+            'wire_top': p.wire_top,
+            'wire_bottom': p.wire_bottom,
             'deadline': deadline_date,
             "p": p
         })
@@ -110,25 +114,39 @@ def claster_plan():
                 continue
             if track.free_length < track_len:
                 continue
-            loaded = pack_track(plates, track)
+            loaded = pack_track(plates, track, track_len)
             if not plates:
                 break  # все плиты кластера распределили
 
-    post_calculating_deadlines()
 
-# упаковка плит на дорожку
-def pack_track(plist, track):
-    cap = 85 * 1000  # в мм
+
+    post_calculating()
+    # for i in range(10):
+    #     post_calculating()
+
+    post_calculating_deadlines()
+    compact_days()
+
+
+def pack_track(plist, track, track_len):
+    cap = track_len  # мм
     loaded = []
-    # сортировка: сначала самые срочные, потом по длине
-    plist.sort(key=lambda x: (x['last_day'], -x['length']))
-    for p in plist[:]:
-        if p['length'] <= cap:
-            loaded.append(p)
-            cap -= p['length']
-            add_plate_to_track(p['p'], track)
-            plist.remove(p)
+
+    # сгруппируем по классу бетона
+    from itertools import groupby
+    plist.sort(key=lambda x: (x['concrete_class'], x['last_day'], -x['length']))
+
+    for concrete_class, group in groupby(plist, key=lambda x: x['concrete_class']):
+        group = list(group)
+        for p in group[:]:
+            if p['length'] <= cap:
+                loaded.append(p)
+                cap -= p['length']
+                add_plate_to_track(p['p'], track)
+                plist.remove(p)
+
     return loaded
+
 
 def add_plate_to_track(plate, track):
     plate.track = track
@@ -140,137 +158,6 @@ def add_plate_to_track(plate, track):
         return False
 
 
-@profile_time
-def calculate_plan():
-    track_len, tail_len = get_parameters()
-
-    Track.recreate_tracks()
-    tracks = Track.get_tracks()
-
-    ready_plates = ReadyPlate.objects.all()
-    use_ready_plates = 0
-    for plate in ready_plates:
-        need_plate = Plate.objects.filter(width=plate.width, height=plate.height,
-                                          length=plate.length, concrete_class=plate.concrete_class,
-                                          wire_bottom=plate.wire_bottom, wire_top=plate.wire_top).first()
-        if need_plate:
-            need_plate.delete()
-            use_ready_plates += 1
-
-    if not ready_plates:
-        print("Готовых плит нет.")
-
-    plates = Plate.objects.filter(track__isnull=True)
-    is_real = reality_check(plates, tracks, track_len)
-
-    create_plan(tracks)
-    post_calculating()
-    post_calculating_deadlines()
-    fill_remaining_plates()  # Новый шаг
-
-    print({
-        "plan": True,
-        "Use_ready_plates": use_ready_plates,
-        "is_real": is_real
-    })
-
-
-
-@profile_time
-def create_plan(tracks):
-    """Основная функция - алгоритм распределения плит по дорожкам
-    Args:
-        tracks (list[Track]): Список доступных дорожек.
-    """
-
-    plates = Plate.objects.filter(track__isnull=True)
-    track_len, tail_len = get_parameters()
-
-    # Разделяем плиты на две группы
-    plates_with_deadline = [p for p in plates if p.deadline.date is not None]
-    plates_without_deadline = [p for p in plates if p.deadline.date is None]
-
-    # Сортируем каждую группу
-    plates_with_deadline.sort(key=lambda p: (p.deadline.date, p.width, p.height))
-    plates_without_deadline.sort(key=lambda p: (p.width, p.height))
-
-    if not plates_with_deadline and not plates_without_deadline:
-        print("Нет плит для размещения. План пуст.")
-
-
-    placed_plate_ids = set()
-
-    # Функция для попытки размещения плит на дорожках
-    def place_plates(plates_list, is_dedline = False):
-        nonlocal placed_plate_ids
-        prev_current_properties = None
-        last_track_day = None
-        for track in tracks:
-            if last_track_day != track.day:
-                prev_current_properties = None
-            if track.customer:
-                print("Дорожка зарезервирована под заказчика")
-                continue
-
-            remaining_length = track.free_length
-            if prev_current_properties is not None and not is_dedline:
-                current_track_properties = prev_current_properties
-            elif track.width is not None and track.height is not None:
-                current_track_properties = (track.width, track.height)
-            else:
-                current_track_properties = None
-
-            current_track_properties = fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties)
-
-            if track.free_length == track_len:
-                current_track_properties = None
-                current_track_properties = fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties)
-
-            last_track_day = track.day
-            prev_current_properties = current_track_properties
-    # 1. Сначала размещаем плиты с дедлайнами
-    place_plates(plates_with_deadline, True)
-    # 2. Затем — без дедлайнов
-    place_plates(plates_without_deadline)
-
-    # Плиты, которые не удалось разместить
-    unplaced_plates = [p for p in plates if p.id not in placed_plate_ids]
-    if unplaced_plates:
-        print(f"{len(unplaced_plates)} плит не удалось разместить.")
-
-    post_calculating()
-    post_calculating_deadlines()
-    # # post_calculating()
-    return True
-
-
-@profile_time
-def fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties):
-    for plate in plates_list:
-        if plate.id in placed_plate_ids:
-            continue
-
-        # Жёсткая проверка на вместимость
-        if plate.length > track.free_length or plate.length > remaining_length:
-            continue
-
-        plate_properties = (plate.width, plate.height)
-
-        if current_track_properties is None:
-            current_track_properties = plate_properties
-        elif plate_properties != current_track_properties:
-            continue
-
-        add_plate_to_track(plate, track)
-        placed_plate_ids.add(plate.id)
-
-        # Пересчёт после добавления
-        remaining_length = track.free_length
-
-        if remaining_length <= 0:
-            break
-
-    return current_track_properties
 
 
 @profile_time
@@ -293,51 +180,49 @@ def reality_check(plates, tracks, track_len):
 
 @profile_time
 def post_calculating():
-    # Собрать все дорожки с плитами
-    tracks_with_plates = Track.objects.filter(plates__isnull=False).distinct()
-    tasks = []
-    for track in tracks_with_plates:
-        plates = list(track.plates.all())
-        if not plates:
-            continue
-        width = plates[0].width
-        height = plates[0].height
-        min_deadline = min(plate.deadline.date for plate in plates if plate.deadline.date is not None) if any(
-            plate.deadline.date is not None for plate in plates) else None
-        tasks.append({
-            'plates': plates,
-            'width': width,
-            'height': height,
-            'min_deadline': min_deadline
-        })
-
-    # Получить все дорожки как позиции, упорядоченные по дню и позиции
-    all_tracks = Track.objects.all().order_by('day', 'position')
-
-    # ❌ Убираем полное обнуление Plate.track
-    # Plate.objects.all().update(track=None)
-
-    available_tasks = tasks.copy()
-    previous_properties = None
-    for position_track in all_tracks:
-        day = position_track.day
-        candidates = [task for task in available_tasks if task['min_deadline'] is None or task['min_deadline'] >= day]
-        if not candidates:
-            continue
-        if previous_properties:
-            matching = [task for task in candidates if (task['width'], task['height']) == previous_properties]
-            chosen_task = matching[0] if matching else candidates[0]
-        else:
-            chosen_task = candidates[0]
-        for plate in chosen_task['plates']:
-            if plate.length > position_track.free_length:
+    # берем дорожку, смотрим на хвост, если есть, то сдвигаем дорожку так далеко как можем(по дате)
+    tracks = Track.get_tracks()
+    max_tail_len = Parameters.get_solo().tail_length
+    ft = Parameters.get_solo().force_tail
+    if ft == 0:  # Если нет плит с дедлайном, то дорожку в конец
+        i = 0
+        while i in range(len(tracks) - 1):
+            track = tracks[i]
+            if track.customer:
                 continue
-            add_plate_to_track(plate, position_track)
-        previous_properties = (chosen_task['width'], chosen_task['height'])
-        available_tasks.remove(chosen_task)
+            next_track = tracks[i + 1]
+            if track.width != next_track.width or track.height != next_track.height:
+                earliest_date = Plate.objects.filter(track=track.id).aggregate(
+                    min_date=Min('deadline__date')
+                )['min_date']
+                if earliest_date is not None and track.free_length > max_tail_len:
+                    swap_track_to_end(tracks, track)
+                    continue
 
-    if available_tasks:
-        print(f"Не удалось разместить {len(available_tasks)} заданий")
+    if ft == 1:  #
+        for track in tracks:
+            if track.customer:
+                continue
+            earliest_date = Plate.objects.filter(track=track.id).aggregate(
+                min_date=Min('deadline__date')
+            )['min_date']
+            if earliest_date is not None and track.free_length > max_tail_len:
+                swap_track_to_end(tracks, track)
+                continue
+
+    if ft == 2:  #
+        for track in tracks:
+            # if had customers -> resume
+            if track.customer:
+                continue
+            if track.free_length > max_tail_len:
+                earliest_date = Plate.objects.filter(track=track.id).aggregate(
+                    min_date=Min('deadline__date')
+                )['min_date']
+                if earliest_date is not None:
+                    swap_track_to_deadline(tracks, track, earliest_date)
+                else:
+                    swap_track_to_end(tracks, track)
 
 @profile_time
 def fill_remaining_plates():
@@ -361,6 +246,8 @@ def swap_track_to_end(tracks, this_track):
     for track in tracks:
         if this_track.id != track.id:
             track.id, this_track.id = this_track.id, track.id
+            track.save()
+            this_track.save()
     return True
 
 
@@ -372,6 +259,7 @@ def swap_track_to_deadline(tracks: List[Track], this_track, day):
             break
         if track.day < day and track.id != this_track.id:
             track.id, this_track.id = this_track.id, track.id
+            track.save()
     return True
 
 
@@ -531,3 +419,46 @@ def post_calculating_deadlines():
     if updated_tracks:
         unique_updates = {t.id: t for t in updated_tracks}.values()
         Track.objects.bulk_update(list(unique_updates), ['position', 'day'])
+
+@profile_time
+def compact_days():
+    """Уплотняет дни дорожек, устраняя разрывы, с учётом production_lag."""
+    params = Parameters.get_solo()
+    production_lag = params.production_lag
+
+    # Берём только те дорожки, где реально есть плиты
+    used_tracks = Track.objects.filter(plates__isnull=False).distinct().order_by("day", "position")
+    if not used_tracks.exists():
+        print("Нет занятых дорожек — уплотнять нечего.")
+        return
+
+    # первая дата производства
+    first_day = used_tracks.first().day
+    current_day = first_day
+
+    with transaction.atomic():
+        prev_day = None
+        for day in sorted(set(t.day for t in used_tracks)):
+            day_tracks = Track.objects.filter(day=day).order_by("position")
+
+            # если пропуск дней, переносим на ближайший current_day
+            if prev_day and (day - prev_day).days > 1:
+                day_tracks_to_move = list(day_tracks)
+                for track in day_tracks_to_move:
+                    # проверяем все плиты на дорожке
+                    valid = True
+                    for plate in track.plates.all():
+                        if plate.deadline and plate.deadline.date:
+                            latest_day = plate.deadline.date - datetime.timedelta(days=production_lag)
+                            if current_day > latest_day:
+                                valid = False
+                                break
+
+                    if valid:
+                        track.day = current_day
+                        track.save()
+
+                current_day = current_day + datetime.timedelta(days=1)
+            else:
+                current_day = day
+            prev_day = current_day

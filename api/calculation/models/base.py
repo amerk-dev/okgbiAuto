@@ -139,7 +139,7 @@ class Track(models.Model):
         # Get the start of the week (Monday)
         start_of_week = today - timedelta(days=today.weekday())
         # Get the end of the week (Sunday)
-        end_of_week = start_of_week + timedelta(days=6)
+        end_of_week = start_of_week + timedelta(days=13)
 
         return cls.objects.filter(day__gte=start_of_week, day__lte=end_of_week)
 
