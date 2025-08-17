@@ -209,6 +209,30 @@ class Stats:
         }
 
     @staticmethod
+    def calculate_day_kpi(day):
+        """
+        Calculates KPI for a specific day.
+
+        Args:
+            day (datetime.date): The day to calculate KPI for
+
+        Returns:
+            dict: KPI data for the day
+        """
+        day_tracks = Track.objects.filter(day=day)
+        if not day_tracks.exists():
+            return {
+                'score': 0,
+                'concrete_economy': 0,
+                'wire_economy': 0,
+                'deadline_compliance': 0,
+                'track_loading': 0,
+                'retooling_efficiency': 0
+            }
+
+        return Stats.calculate_efficiency_score(day_tracks)
+
+    @staticmethod
     def get_all_stats():
 
         all_tracks = Track.objects.all()

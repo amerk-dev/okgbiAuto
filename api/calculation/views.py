@@ -76,11 +76,16 @@ class TrackViewSet(viewsets.ModelViewSet):
                     else:
                         display_date = date.strftime('%Y-%m-%d')
 
+                    # Calculate KPI for this day
+                    day_kpi = Stats.calculate_day_kpi(date)
+                    kpi_score = round(day_kpi['score'], 2)
+
                     # Create day data
                     day_data = {
                         'date': display_date,
                         'slabs': [],
-                        'freeSpace': f"{day_track.free_length}мм"
+                        'freeSpace': f"{day_track.free_length}мм",
+                        'kpi': kpi_score
                     }
 
                     # Instead of individual slabs, add track info
