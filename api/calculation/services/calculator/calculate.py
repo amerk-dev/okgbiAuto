@@ -3,6 +3,7 @@ import time
 from collections import defaultdict
 from typing import Any, List
 from django.db.models import Min, Max
+from django.db.models import Subquery, OuterRef
 
 from calculation.models import Track, Order, ReadyPlate, Plate, Parameters
 from django.db import transaction
@@ -84,17 +85,13 @@ def claster_plan():
         print("Нет плит для планирования.")
         return
 
-    # базовая дата — на 2 дня раньше самого раннего дедлайна
-    min_deadline = min(t['deadline'] for t in tasks)
-    base_date = min_deadline
 
     # вычисляем последний возможный день производства
     for t in tasks:
-        d = t['deadline'] - datetime.timedelta(days=production_lag)
-        t['last_day'] = (d - base_date).days
+        t['deadline'] = t['deadline'] - datetime.timedelta(days=production_lag)
 
-    # сортируем задачи по last_day, чтобы приоритет у горящих заказов
-    tasks.sort(key=lambda x: x['last_day'])
+    # сортируем задачи по deadline, чтобы приоритет у горящих заказов
+    tasks.sort(key=lambda x: x['deadline'])
 
     # кластеризация по (width, height)
     clusters = defaultdict(list)
@@ -103,12 +100,12 @@ def claster_plan():
         clusters[key].append(t)
 
     # сортировка кластеров по самому раннему дедлайну
-    cluster_keys = sorted(clusters.keys(), key=lambda cl: min(p['last_day'] for p in clusters[cl]))
+    cluster_keys = sorted(clusters.keys(), key=lambda cl: min(p['deadline'] for p in clusters[cl]))
 
     # планирование: идём по кластерам, начиная с самых срочных
     for cl in cluster_keys:
         plates = clusters[cl]
-        plates.sort(key=lambda x: x['last_day'])  # внутри кластера тоже срочные вперёд
+        plates.sort(key=lambda x: x['deadline'])  # внутри кластера тоже срочные вперёд
         for track in tracks:
             if track.customer:
                 continue
@@ -120,12 +117,13 @@ def claster_plan():
 
 
 
-    post_calculating()
+    # post_calculating()
     # for i in range(10):
     #     post_calculating()
 
     post_calculating_deadlines()
-    compact_days()
+    post_calculating_deadlines()
+    # compact_days()
 
 
 def pack_track(plist, track, track_len):
@@ -134,7 +132,7 @@ def pack_track(plist, track, track_len):
 
     # сгруппируем по классу бетона
     from itertools import groupby
-    plist.sort(key=lambda x: (x['concrete_class'], x['last_day'], -x['length']))
+    plist.sort(key=lambda x: (x['concrete_class'], x['deadline'], -x['length']))
 
     for concrete_class, group in groupby(plist, key=lambda x: x['concrete_class']):
         group = list(group)
@@ -252,6 +250,42 @@ def swap_track_to_end(tracks, this_track):
 
 
 @profile_time
+def swap_track_to_start(this_track) -> bool:
+    # Получаем дорожки с меньшим днем, сортируем по убыванию day и position
+    tracks = Track.objects.filter(day__lt=this_track.day).order_by("-day", "-position")
+
+    if not tracks.exists():
+        return True  # Нет дорожек для обмена, завершаем
+
+    # Сохраняем исходные значения this_track
+    current_day = this_track.day
+    current_position = this_track.position
+
+    # Перемещаем this_track к началу, последовательно меняя day и position
+    for track in tracks:
+        if track.id != this_track.id:  # На случай, если this_track уже в списке
+            # Сохраняем значения текущей дорожки
+            next_day = track.day
+            next_position = track.position
+
+            # Обновляем значения текущей дорожки
+            track.day = current_day
+            track.position = current_position
+            track.save()
+
+            # Обновляем значения this_track
+            current_day = next_day
+            current_position = next_position
+
+    # Сохраняем финальные значения для this_track
+    this_track.day = current_day
+    this_track.position = current_position
+    this_track.save()
+
+    return True
+
+
+@profile_time
 def swap_track_to_deadline(tracks: List[Track], this_track, day):
     # Берем айдишники и меняем всю инфу местами, если у предыдущего нет ограничений
     for track in tracks:
@@ -264,161 +298,65 @@ def swap_track_to_deadline(tracks: List[Track], this_track, day):
 
 
 @profile_time
-def swap_to_one():
-    tracks = list(Track.get_tracks())  # Step 1: Convert to list
-    max_tail_len = Parameters.get_solo().tail_length
+def swap_track_to_start_to_deadline(tracks, this_track: Track, deadline: datetime.date) -> bool:
+    # Вычисляем целевую дату (за 2 дня до дедлайна)
+    target_date = deadline - datetime.timedelta(days=1)
 
-    updated_tracks = []
-    deadlines = {}
-    for track in tracks:
-        agg = Plate.objects.filter(track=track.id).aggregate(
-            min_date=Min('deadline__date'),
-            max_date=Max('deadline__date')
-        )
-        deadlines[track.id] = {
-            'min': agg['min_date'],
-            'max': agg['max_date']
-        }
+    # Получаем дорожки с днем меньше целевой даты, сортируем по убыванию day и возрастанию position
+    filtered_tracks = tracks.filter(day__lt=target_date).order_by("-day", "position")
 
-    # Iterate over tracks starting from index 1
-    for i in range(1, len(tracks)):
-        track = tracks[i]
-        if track.customer:
-            continue
-        if track.free_length > max_tail_len:
-            min_deadline_i = deadlines.get(track.id, {}).get('min')
-            max_deadline_i = deadlines.get(track.id, {}).get('max')
-            if min_deadline_i is None or max_deadline_i is None:
-                continue
-            # Check if sizes differ from the previous track
-            if tracks[i - 1].width != track.width or tracks[i - 1].height != track.height:
-                # Look for a suitable track to swap with
-                for j in range(i + 1, len(tracks)):
-                    if tracks[j].day > max_deadline_i:
-                        break
-                    if (tracks[j].width == tracks[i - 1].width and
-                            tracks[j].height == tracks[i - 1].height):
-                        min_deadline_j = deadlines.get(tracks[j].id, {}).get('min')
-                        if (min_deadline_j is not None and
-                                tracks[j].day <= min_deadline_i and
-                                tracks[i].day <= min_deadline_j):
-                            # Perform the swap (Step 2: Swap elements)
-                            tracks[i], tracks[j] = tracks[j], tracks[i]
-                            updated_tracks.append(tracks[i])
-                            updated_tracks.append(tracks[j])
-                            break
+    if not filtered_tracks.exists():
+        return False
 
-        # Шаг 3: Обновляем позиции внутри каждого дня на основе порядка в списке
-        day_track_indices = defaultdict(list)
-        for idx, track in enumerate(tracks):
-            day_track_indices[track.day].append((idx, track))
+    # Сохраняем исходные значения this_track
+    current_day = this_track.day
+    current_position = this_track.position
 
-        for day, idx_tracks in day_track_indices.items():
-            # Сортируем дорожки внутри дня по их порядку в списке
-            sorted_tracks = [track for _, track in sorted(idx_tracks, key=lambda x: x[0])]
-            for pos, track in enumerate(sorted_tracks):
-                track.position = pos
+    # Перемещаем this_track к позиции перед target_date, меняя day и position
+    for track in filtered_tracks:
+        if track.id != this_track.id:  # Пропускаем, если это та же дорожка
+            # Сохраняем значения текущей дорожки
+            next_day = track.day
+            next_position = track.position
 
-    # Update the database with the new positions
-    if updated_tracks or tracks:
-        Track.objects.bulk_update(tracks, ['position', 'day'])
+            # Обновляем значения текущей дорожки
+            track.day = current_day
+            track.position = current_position
+            track.save()
+
+            # Обновляем значения для следующей итерации
+            current_day = next_day
+            current_position = next_position
+
+    # Сохраняем финальные значения для this_track
+    this_track.day = current_day
+    this_track.position = current_position
+    this_track.save()
+
+    return True
 
 
 @profile_time
 def post_calculating_deadlines():
     """Переставляет дорожки (меняет дни) так, чтобы дедлайны не «горели» с учётом производственного лага."""
-    from django.utils.timezone import make_naive
-
-    tracks = list(Track.get_tracks())
-    updated_tracks = []
-
-    parameters = Parameters.get_solo()
-    production_lag = parameters.production_lag or 0
-
-    deadlines = {}
+    tracks = Track.objects.all().order_by('day', 'position')
     for track in tracks:
-        agg = Plate.objects.filter(track=track.id).aggregate(
-            min_date=Min('deadline__date'),
-            max_date=Max('deadline__date')
-        )
-        min_date = agg.get('min_date')
-        if min_date:
-            # Приводим к naive-дате для безопасного сравнения с day (если он date)
-            if hasattr(min_date, 'tzinfo'):
-                min_date = make_naive(min_date)
-            critical_date = min_date - datetime.timedelta(days=production_lag)
-        else:
-            critical_date = None
-        deadlines[track.id] = {
-            'min': min_date,
-            'critical': critical_date
-        }
-
-    for i, this_track in enumerate(tracks):
-        crit_deadline_i = deadlines.get(this_track.id, {}).get('critical')
-        if crit_deadline_i is None:
-            continue
-        try:
-            if this_track.day <= crit_deadline_i:
-                continue  # ещё не горит
-        except Exception:
+        if track.customer:
             continue
 
-        preferred_j = None
-        fallback_j = None
+        earliest_date = Plate.objects.filter(track=track.id).aggregate(
+            min_date=Min('deadline__date')
+        )['min_date']
+        if earliest_date is None:
+            continue
+        earliest_date = earliest_date - datetime.timedelta(days=Parameters.get_solo().production_lag)
 
-        for j, other in enumerate(tracks):
-            if i == j:
-                continue
-            crit_deadline_j = deadlines.get(other.id, {}).get('critical')
+        if earliest_date < datetime.date.today():
+            print(f"Дорожка {track.id} сгорела по дедлайну {earliest_date}.")
+            swap_track_to_start(track)
+        if earliest_date <= track.day:
+            swap_track_to_start_to_deadline(Track.objects.all(), track, earliest_date)
 
-            # other.day должен позволить this_track не сгореть
-            cond1 = True
-            try:
-                cond1 = (other.day <= crit_deadline_i)
-            except Exception:
-                cond1 = False
-            if not cond1:
-                continue
-
-            # this_track.day должен позволить other не сгореть
-            cond2 = True
-            if crit_deadline_j is not None:
-                try:
-                    cond2 = (this_track.day <= crit_deadline_j)
-                except Exception:
-                    cond2 = False
-            if not cond2:
-                continue
-
-            if getattr(other, 'width', None) == getattr(this_track, 'width', None) and \
-               getattr(other, 'height', None) == getattr(this_track, 'height', None):
-                preferred_j = j
-                break
-
-            if fallback_j is None:
-                fallback_j = j
-
-        chosen_j = preferred_j if preferred_j is not None else fallback_j
-        if chosen_j is not None:
-            other = tracks[chosen_j]
-            this_track.day, other.day = other.day, this_track.day
-            this_track.save()
-            other.save()
-            updated_tracks.extend((this_track, other))
-
-    # Пересчёт позиций
-    day_track_indices = defaultdict(list)
-    for idx, track in enumerate(tracks):
-        day_track_indices[track.day].append((idx, track))
-    for _, idx_tracks in day_track_indices.items():
-        sorted_tracks = [track for _, track in sorted(idx_tracks, key=lambda x: x[0])]
-        for pos, track in enumerate(sorted_tracks):
-            track.position = pos
-
-    if updated_tracks:
-        unique_updates = {t.id: t for t in updated_tracks}.values()
-        Track.objects.bulk_update(list(unique_updates), ['position', 'day'])
 
 @profile_time
 def compact_days():

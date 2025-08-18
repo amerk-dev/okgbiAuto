@@ -41,7 +41,8 @@ class Stats:
                 if max_price > plate_price:
                     # Penalty is proportional to the price difference and plate length
                     # Convert plate.length to Decimal to avoid type mismatch
-                    penalty = (max_price - plate_price) * (Decimal(str(plate.length)) / 1000)
+                    val = (Decimal(str(plate.length)) * Decimal(str(plate.height)) * Decimal(str(plate.width))) / 10**9
+                    penalty = (max_price - plate_price) * val * Decimal(str(0.65))
                     total_penalty += penalty
         total_penalty /= len(tracks)
         return total_penalty
