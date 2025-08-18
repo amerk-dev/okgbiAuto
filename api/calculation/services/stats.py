@@ -58,7 +58,7 @@ class Stats:
         Lower value is better.
         """
         total_penalty = 0
-
+        wire_price = UnitPrice.get_wire_price()
         for track in tracks:
             plates = list(track.plates.all())
             if not plates:
@@ -77,6 +77,7 @@ class Stats:
                 # Convert plate.length to Decimal to avoid type mismatch
                 penalty = (wire_top_diff + wire_bottom_diff) * (Decimal(str(plate.length)) / 1000)
                 total_penalty += penalty
+        total_penalty *= wire_price
         total_penalty /= len(tracks)
         return total_penalty
 
@@ -160,8 +161,7 @@ class Stats:
 
         # Average retoolings per track
         avg_retoolings = total_retoolings / len(tracks) if tracks else 0
-
-        return avg_retoolings
+        return Decimal(str(avg_retoolings)) * UnitPrice.get_retooling_price()
 
     @staticmethod
     def calculate_efficiency_score(tracks, weights=None):
