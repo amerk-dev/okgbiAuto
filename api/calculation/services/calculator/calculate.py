@@ -136,15 +136,13 @@ def pack_track(plist, track, track_len):
     # Берём первую плиту как "целевую"
     target = plist[0]
     target_wb = target['wire_bottom']
-    target_wt = target['wire_top']
     target_class = target['concrete_class']
 
     # Сортируем плиты по близости к целевым параметрам
     def sort_key(p):
         wb_diff = abs(int(p['wire_bottom']) - int(target_wb))
-        wt_diff = abs(int(p['wire_top']) - int(target_wt))
         class_penalty = 0 if p['concrete_class'] == target_class else 1
-        return (class_penalty, wb_diff + wt_diff, p['deadline'], -p['length'])
+        return (class_penalty, wb_diff, p['deadline'])
 
     plist.sort(key=sort_key)
 
