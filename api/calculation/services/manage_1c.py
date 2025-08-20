@@ -68,12 +68,13 @@ class Update1CDataCommand:
                 Plate.objects.bulk_create(plates_to_create)
 
     def execute(self):
-        data = self._fetch_data()
-        ready_plates = data['ready_plates']
-        orders = data['orders']
-        with transaction.atomic():
-            ReadyPlate.objects.all().delete()
-            Order.objects.all().delete()
-            self._process_ready_plates(ready_plates)
-            self._process_orders(orders)
+        with open("input_data.json", "r") as f:
+            data = json.load(f)
+            ready_plates = data['ready_plates']
+            orders = data['orders']
+            with transaction.atomic():
+                ReadyPlate.objects.all().delete()
+                Order.objects.all().delete()
+                self._process_ready_plates(ready_plates)
+                self._process_orders(orders)
 

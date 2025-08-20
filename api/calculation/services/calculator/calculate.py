@@ -6,9 +6,9 @@ from typing import Any, List
 from django.db.models import Min, Max
 from django.db.models import Subquery, OuterRef
 
-from calculation.models import Track, Order, ReadyPlate, Plate, Parameters
+from calculation.models import Track, Order, ReadyPlate, Plate, Parameters, UnitPrice
 from django.db import transaction
-
+from ortools.sat.python import cp_model
 
 def profile_time(func):
     def wrapper(*args, **kwargs):
@@ -43,6 +43,7 @@ def get_parameters():
         params.production_lag,
     }
 
+
 @profile_time
 def claster_plan():
     track_len, tail_len, production_lag = get_parameters()
@@ -72,7 +73,7 @@ def claster_plan():
         # дедлайн может быть None → заменяем на максимально возможную дату
         deadline_date = p.deadline.date if (p.deadline and p.deadline.date) else datetime.date.max
         tasks.append({
-            'length': p.length,
+            'length': int(p.length),
             'width': p.width,
             'height': p.height,
             'concrete_class': p.concrete_class,
@@ -85,7 +86,6 @@ def claster_plan():
     if not tasks:
         print("Нет плит для планирования.")
         return
-
 
     # вычисляем последний возможный день производства
     for t in tasks:
@@ -105,55 +105,125 @@ def claster_plan():
 
     # планирование: идём по кластерам, начиная с самых срочных
     for cl in cluster_keys:
-        plates = clusters[cl]
-        plates.sort(key=lambda x: x['deadline'])  # внутри кластера тоже срочные вперёд
-        for track in tracks:
-            if track.customer:
-                continue
-            if track.free_length < track_len:
-                continue
-            loaded = pack_track(plates, track, track_len)
-            if not plates:
-                break  # все плиты кластера распределили
+        print(f"Работаем с кластером {cl}")
+        plist = clusters[cl]
+        plist.sort(key=lambda x: x['deadline'])  # внутри кластера тоже срочные вперёд
+
+        available_tracks = [track for track in tracks if not track.customer and track.free_length >= track_len]
+        max_bins = len(available_tracks)
+        if max_bins == 0:
+            continue
+
+        n = len(plist)
+        if n == 0:
+            continue
+
+        # Настройка модели OR-Tools
+        model = cp_model.CpModel()
+
+        assign = [[model.NewBoolVar(f'assign_{i}_{b}') for b in range(max_bins)] for i in range(n)]
+        bin_used = [model.NewBoolVar(f'bin_used_{b}') for b in range(max_bins)]
+
+        for b in range(max_bins):
+            for i in range(n):
+                model.Add(bin_used[b] >= assign[i][b])
+
+        # Ограничение по вместимости
+        for b in range(max_bins):
+            model.Add(sum(assign[i][b] * plist[i]['length'] for i in range(n)) <= track_len * bin_used[b])
+
+        # Каждая плита упакована最多 в один bin
+        packed = [model.NewBoolVar(f'packed_{i}') for i in range(n)]
+        for i in range(n):
+            model.Add(packed[i] == sum(assign[i][b] for b in range(max_bins)))
+        print(f"Плит в кластере: {n}")
+        print(packed)
+        # Атрибуты для разнородности
+        attrs = ['concrete_class', 'wire_bottom']
+        possible = {attr: set(p[attr] for p in plist) for attr in attrs}
+
+        used = {}
+        for attr in attrs:
+            used[attr] = {}
+            for val in possible[attr]:
+                used[attr][val] = [model.NewBoolVar(f'used_{attr}_{val}_{b}') for b in range(max_bins)]
+
+        for attr in attrs:
+            for val in possible[attr]:
+                for b in range(max_bins):
+                    plates_with_val = [i for i in range(n) if plist[i][attr] == val]
+                    for i in plates_with_val:
+                        model.Add(used[attr][val][b] >= assign[i][b])
+
+        # Штраф за разнородность
+        print("Штрафуем за разнородность")
+        penalty = 0
+        for b in range(max_bins):
+            for attr in attrs:
+                weight = 100 if attr == 'wire_bottom' else 1  # Увеличенный вес для wire_bottom
+                penalty += weight * sum(used[attr][val][b] for val in possible[attr])
+
+        # Штраф за остаток свободной длины
+        remaining_length = []
+        for b in range(max_bins):
+            used_length = sum(assign[i][b] * plist[i]['length'] for i in range(n))
+            remaining = model.NewIntVar(0, track_len, f'remaining_{b}')
+            model.Add(remaining == track_len * bin_used[b] - used_length)
+            remaining_length.append(remaining)
 
 
+        # Веса для приоритета упаковки (более срочные - больший вес)
+        weights = [n - i for i in range(n)]  # наивысший для первого (самого срочного)
+        print("Веса для приоритета упаковки")
+        print(weights)
+
+        # Коэффициенты для иерархии
+        M4 = 10  # Вес для штрафа за остаток длины
+        M3 = 500 # штраф за разнородность
+        M2 = 100 # балансирует минимизацию числа
+        M1 = 1000 # приоритет упаковки срочных плит
+
+
+        # Objective
+        sum_weight_packed = sum(weights[i] * packed[i] for i in range(n))
+        sum_remaining = sum(remaining_length[b] for b in range(max_bins))
+        model.Minimize(M2 * sum(bin_used) + M3 * penalty - M1 * sum_weight_packed + M4 * sum_remaining)
+
+        # Решение
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 100 #ToDo Убери!!!
+        status = solver.Solve(model)
+
+        print(f"Status: {solver.StatusName(status)}")
+        print(f"Objective value: {solver.ObjectiveValue()}")
+        print(f"Penalty (heterogeneity): {solver.Value(penalty)}")
+        print(f"Remaining length: {solver.Value(sum_remaining)}")
+        print(f"Packed plates: {sum(solver.Value(packed[i]) for i in range(n))}")
+        print(f"Bins used: {sum(solver.Value(bin_used[b]) for b in range(max_bins))}")
+
+        if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+            print(f"Использовано {sum(solver.Value(bin_used[b]) for b in range(max_bins))} дорожек")
+            assignments = defaultdict(list)
+            for b in range(max_bins):
+                for i in range(n):
+                    if solver.Value(assign[i][b]):
+                        assignments[b].append(i)
+                        print(f"{i}/{n}. Плита {plist[i]['p']} упакована в дорожку {b}")
+
+            for b in assignments:
+                if assignments[b]:
+                    track = available_tracks.pop(0)
+                    for i in assignments[b]:
+                        add_plate_to_track(plist[i]['p'], track)
+                        print(f"{i}. Плита {plist[i]['p']} упакована на дорожку {track}")
+
+        # Если некоторые не упакованы, они остаются для следующих итераций или ручной обработки
 
     # post_calculating()
     # for i in range(10):
     #     post_calculating()
 
     post_calculating_deadlines()
-
-
-
-def pack_track(plist, track, track_len):
-    cap = track_len  # мм
-    loaded = []
-
-    if not plist:
-        return loaded
-
-    # Берём первую плиту как "целевую"
-    target = plist[0]
-    target_wb = target['wire_bottom']
-    target_class = target['concrete_class']
-
-    # Сортируем плиты по близости к целевым параметрам
-    def sort_key(p):
-        wb_diff = abs(int(p['wire_bottom']) - int(target_wb))
-        class_penalty = 0 if p['concrete_class'] == target_class else 1
-        return (class_penalty, wb_diff, p['deadline'])
-
-    plist.sort(key=sort_key)
-
-    for p in plist[:]:
-        if p['length'] <= cap:
-            loaded.append(p)
-            cap -= p['length']
-            add_plate_to_track(p['p'], track)
-            plist.remove(p)
-
-    return loaded
 
 
 

@@ -251,12 +251,13 @@ class Stats:
         retool_price = retool_count * UnitPrice.get_retooling_price()
         all_cost = sum([track.cost for track in all_tracks])
         useful = (sum([track.useful_length for track in all_tracks]) / all_max_length if all_max_length else 0)
-        track_id_subquery = Subquery(Plate.objects.filter(track_id=OuterRef('id')).values('track_id').distinct().values('track_id'))
-        last_track = Track.objects.filter(id__in=track_id_subquery).order_by('-day').first()
+        track_id_subquery = Subquery(
+            Plate.objects.filter(track_id=OuterRef('id')).values('track_id').distinct().values('track_id'))
+        tracks_with_plates = Track.objects.filter(id__in=track_id_subquery).order_by('-day')
+        last_track = tracks_with_plates.first()
 
         # Calculate KPI efficiency score
-        kpi_data = Stats.calculate_efficiency_score(Track.get_current_week_tracks())
-
+        kpi_data = Stats.calculate_efficiency_score(tracks_with_plates.exclude(day=last_track.day))
         return {
             'tracks': sum([int(track.plates.exists()) for track in all_tracks]),
             'plates': sum([track.plates.count() for track in all_tracks]),
