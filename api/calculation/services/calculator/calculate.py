@@ -1,4 +1,5 @@
 import datetime
+import math
 import time
 from collections import defaultdict
 from itertools import groupby
@@ -33,6 +34,28 @@ class CustomTrack:
 class Retooler:
     w: int
     h: int
+
+
+class GapPrinter(cp_model.CpSolverSolutionCallback):
+    def __init__(self):
+        super().__init__()
+        self.start_time = time.time()
+        self.iteration = 0
+
+    def on_solution_callback(self):
+        self.iteration += 1
+        elapsed = time.time() - self.start_time
+        current_obj = self.ObjectiveValue()
+        best_bound = self.BestObjectiveBound()
+
+        # Вычисляем gap
+        if current_obj != 0:
+            gap = abs(current_obj - best_bound) / abs(current_obj) * 100
+        else:
+            gap = 0.0
+
+        print(f"#{self.iteration:3d} {elapsed:6.2f}s  Current obj: {current_obj:.2f}  Best bound: {best_bound:.2f}  Gap: {gap:.2f}%")
+
 
 
 def get_parameters():
@@ -119,6 +142,7 @@ def claster_plan():
         if n == 0:
             continue
         total_length = sum(p['length'] for p in plist)
+        max_bins = min(len(available_tracks), math.ceil(total_length / track_len) + 1)
         max_capacity = track_len * max_bins
         if total_length > max_capacity:
             print(
@@ -198,9 +222,10 @@ def claster_plan():
         # Решение
         solver = cp_model.CpSolver()
         solver.parameters.random_seed = 42
-        solver.parameters.relative_gap_limit = 0.05
-        solver.parameters.max_time_in_seconds = 1800  # ToDo Убери!!!
-        status = solver.Solve(model)
+        solver.parameters.relative_gap_limit = 0.1
+        solver.parameters.max_time_in_seconds = 300  # ToDo Убери!!!
+        callback = GapPrinter()
+        status = solver.Solve(model, callback)
 
         print(f"Status: {solver.StatusName(status)}")
         print(f"Objective value: {solver.ObjectiveValue()}")
