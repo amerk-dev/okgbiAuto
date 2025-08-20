@@ -10,6 +10,7 @@ from calculation.models import Track, Order, ReadyPlate, Plate, Parameters, Unit
 from django.db import transaction
 from ortools.sat.python import cp_model
 
+
 def profile_time(func):
     def wrapper(*args, **kwargs):
         start = time.time()
@@ -117,7 +118,13 @@ def claster_plan():
         n = len(plist)
         if n == 0:
             continue
-
+        total_length = sum(p['length'] for p in plist)
+        max_capacity = track_len * max_bins
+        if total_length > max_capacity:
+            print(
+                f"Невозможно упаковать все {n} плиты в кластере {cl}: общая длина {total_length} мм превышает ёмкость {max_capacity} мм.")
+            # Здесь можно добавить логику: отложить плиты или увеличить max_bins, если возможно
+            continue  # Или обработать частично
         # Настройка модели OR-Tools
         model = cp_model.CpModel()
 
@@ -132,12 +139,10 @@ def claster_plan():
         for b in range(max_bins):
             model.Add(sum(assign[i][b] * plist[i]['length'] for i in range(n)) <= track_len * bin_used[b])
 
-        # Каждая плита упакована最多 в один bin
-        packed = [model.NewBoolVar(f'packed_{i}') for i in range(n)]
+        # Обязательная упаковка ВСЕХ плит: каждая плита должна быть назначена ровно на одну дорожку
         for i in range(n):
-            model.Add(packed[i] == sum(assign[i][b] for b in range(max_bins)))
+            model.Add(sum(assign[i][b] for b in range(max_bins)) == 1)
         print(f"Плит в кластере: {n}")
-        print(packed)
         # Атрибуты для разнородности
         attrs = ['concrete_class', 'wire_bottom']
         possible = {attr: set(p[attr] for p in plist) for attr in attrs}
@@ -171,34 +176,36 @@ def claster_plan():
             model.Add(remaining == track_len * bin_used[b] - used_length)
             remaining_length.append(remaining)
 
-
         # Веса для приоритета упаковки (более срочные - больший вес)
         weights = [n - i for i in range(n)]  # наивысший для первого (самого срочного)
         print("Веса для приоритета упаковки")
         print(weights)
 
         # Коэффициенты для иерархии
-        M4 = 10  # Вес для штрафа за остаток длины
-        M3 = 500 # штраф за разнородность
-        M2 = 100 # балансирует минимизацию числа
-        M1 = 1000 # приоритет упаковки срочных плит
+        M4 = 20  # Вес для штрафа за остаток длины
+        M3 = 400 # штраф за разнородность
+        M2 = 50 # балансирует минимизацию числа дорожек
 
 
         # Objective
-        sum_weight_packed = sum(weights[i] * packed[i] for i in range(n))
         sum_remaining = sum(remaining_length[b] for b in range(max_bins))
-        model.Minimize(M2 * sum(bin_used) + M3 * penalty - M1 * sum_weight_packed + M4 * sum_remaining)
+        model.Minimize(
+            + M2 * sum(bin_used)  # минимизация числа дорожек
+            + M3 * penalty  # минимизация разнородности
+            + M4 * sum_remaining  # минимизация остатка
+        )
 
         # Решение
         solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = 100 #ToDo Убери!!!
+        solver.parameters.random_seed = 42
+        solver.parameters.relative_gap_limit = 0.05
+        solver.parameters.max_time_in_seconds = 1800  # ToDo Убери!!!
         status = solver.Solve(model)
 
         print(f"Status: {solver.StatusName(status)}")
         print(f"Objective value: {solver.ObjectiveValue()}")
         print(f"Penalty (heterogeneity): {solver.Value(penalty)}")
         print(f"Remaining length: {solver.Value(sum_remaining)}")
-        print(f"Packed plates: {sum(solver.Value(packed[i]) for i in range(n))}")
         print(f"Bins used: {sum(solver.Value(bin_used[b]) for b in range(max_bins))}")
 
         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
@@ -208,7 +215,6 @@ def claster_plan():
                 for i in range(n):
                     if solver.Value(assign[i][b]):
                         assignments[b].append(i)
-                        print(f"{i}/{n}. Плита {plist[i]['p']} упакована в дорожку {b}")
 
             for b in assignments:
                 if assignments[b]:
@@ -226,7 +232,6 @@ def claster_plan():
     post_calculating_deadlines()
 
 
-
 def add_plate_to_track(plate, track):
     plate.track = track
     try:
@@ -235,8 +240,6 @@ def add_plate_to_track(plate, track):
     except Exception as e:
         print(f"Ошибка при добавлении плиты {plate} на дорожку {track}: {e}")
         return False
-
-
 
 
 @profile_time
@@ -253,8 +256,6 @@ def reality_check(plates, tracks, track_len):
     else:
         print("Длинны дорожек хватает для выполнения заказов")
         return True
-
-
 
 
 @profile_time
@@ -303,6 +304,7 @@ def post_calculating():
                 else:
                     swap_track_to_end(track)
 
+
 @profile_time
 def fill_remaining_plates():
     """Добивает оставшиеся плиты на свободные дорожки, если они есть."""
@@ -319,11 +321,9 @@ def fill_remaining_plates():
             break
 
 
-
 @profile_time
 def swap_track_to_end(this_track):
     tracks = Track.objects.filter(day__gt=this_track.day).order_by("day", "position")
-
 
     if not tracks.exists():
         return True  # Нет дорожек для обмена, завершаем
