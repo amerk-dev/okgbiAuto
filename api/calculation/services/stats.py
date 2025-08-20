@@ -41,7 +41,8 @@ class Stats:
                 if max_price > plate_price:
                     # Penalty is proportional to the price difference and plate length
                     # Convert plate.length to Decimal to avoid type mismatch
-                    val = (Decimal(str(plate.length)) * Decimal(str(plate.height)) * Decimal(str(plate.width))) / 10**9
+                    val = (Decimal(str(plate.length)) * Decimal(str(plate.height)) * Decimal(
+                        str(plate.width))) / 10 ** 9
                     penalty = (max_price - plate_price) * val * Decimal(str(0.65))
                     total_penalty += penalty
         total_penalty /= len(tracks)
@@ -60,6 +61,7 @@ class Stats:
         total_penalty = 0
         wire_price = UnitPrice.get_wire_price()
         for track in tracks:
+            useful_track_len = Decimal(str(0))
             plates = list(track.plates.all())
             if not plates:
                 continue
@@ -75,9 +77,14 @@ class Stats:
 
                 # Penalty is proportional to the wire difference and plate length
                 # Convert plate.length to Decimal to avoid type mismatch
-                penalty = (wire_top_diff + wire_bottom_diff) * (Decimal(str(plate.length)) / 1000)
+                penalty = ((wire_top_diff * wire_price + wire_bottom_diff * wire_price) / 1000) * Decimal(
+                    str(plate.length))
+                useful_track_len += Decimal(str(plate.length))
                 total_penalty += penalty
-        total_penalty *= wire_price
+            if useful_track_len == 0: useful_track_len = Decimal(str(1))
+            total_penalty += (((85000 - useful_track_len) / 1000) * (
+                        max_wire_bottom * wire_price + max_wire_top * wire_price))
+
         total_penalty /= len(tracks)
         return total_penalty
 
@@ -192,11 +199,11 @@ class Stats:
         # Calculate weighted sum
         # Convert all KPI values to Decimal to avoid type mismatch
         efficiency_score = (
-            Decimal(str(weights['concrete'])) * Decimal(str(concrete_kpi)) +
-            Decimal(str(weights['wire'])) * Decimal(str(wire_kpi)) +
-            Decimal(str(weights['deadline'])) * Decimal(str(deadline_kpi)) +
-            Decimal(str(weights['loading'])) * Decimal(str(loading_kpi)) +
-            Decimal(str(weights['retooling'])) * Decimal(str(retooling_kpi))
+                Decimal(str(weights['concrete'])) * Decimal(str(concrete_kpi)) +
+                Decimal(str(weights['wire'])) * Decimal(str(wire_kpi)) +
+                Decimal(str(weights['deadline'])) * Decimal(str(deadline_kpi)) +
+                Decimal(str(weights['loading'])) * Decimal(str(loading_kpi)) +
+                Decimal(str(weights['retooling'])) * Decimal(str(retooling_kpi))
         )
 
         # Return both the overall score and individual components
@@ -290,7 +297,8 @@ class Stats:
                 'kpi_retooling_efficiency': 0
             }
         today_max_length = (len(today_tracks) * Parameters.get_solo().road_length)
-        today_useful = sum([track.useful_length for track in today_tracks]) / today_max_length if today_max_length else 0
+        today_useful = sum(
+            [track.useful_length for track in today_tracks]) / today_max_length if today_max_length else 0
 
         # Calculate KPI efficiency score for today
         kpi_data = Stats.calculate_efficiency_score(today_tracks)
