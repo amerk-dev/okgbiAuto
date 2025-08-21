@@ -2,10 +2,10 @@ import datetime
 import math
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from itertools import groupby
 from typing import Any, List
-from django.db.models import Min, Max
-from django.db.models import Subquery, OuterRef
+from django.db.models import Min, Max, Sum, Count, Subquery, OuterRef
 
 from calculation.models import Track, Order, ReadyPlate, Plate, Parameters, UnitPrice
 from django.db import transaction
@@ -22,10 +22,16 @@ def profile_time(func):
 
 
 # Классы для валидации и удобства разработки
+@dataclass
 class CustomTrack:
     id: int
     position: int
-    len: int
+    width: int
+    height: int
+    concrete_class: str
+    wire_bottom: int
+    wire_top: int
+    free_length: int
     customer: int
     day: datetime.date
 
@@ -121,12 +127,81 @@ def calculate_plan():
                     print(f"Не удалось добавить плиту {pl_to_set} на дорожку {t}")
                     break
 
+    # post_process_swap()
+
     post_calculating_deadlines()
     post_calculating_deadlines()
     post_calculating_deadlines()
 
     return 0
 
+@profile_time
+def post_process_swap():
+    tracks = list(Track.objects.prefetch_related('plates').filter(plates__isnull=False).distinct())
+    # Берем плиты из этой дорожки
+
+    for i in range(len(tracks)):
+        t1 = tracks[i]
+        for j in range(i + 1, len(tracks)):
+            t2 = tracks[j]
+            config_a = get_dominant_config(t1)
+            config_b = get_dominant_config(t2)
+            if not config_a or not config_b:
+                continue
+
+            outliers_a = [
+                    p for p in t1.plates.all()
+                    if (p.concrete_class == config_b['concrete_class'] and
+                        p.wire_bottom == config_b['wire_bottom'] and
+                        p.wire_top == config_b['wire_top'])
+                ]
+
+            outliers_b = [
+                    p for p in t2.plates.all()
+                    if (p.concrete_class == config_a['concrete_class'] and
+                        p.wire_bottom == config_a['wire_bottom'] and
+                        p.wire_top == config_a['wire_top'])
+                ]
+            for plate_a in list(outliers_a):
+                for plate_b in list(outliers_b):
+                    # Условие для простого обмена
+                    if plate_a.length == plate_b.length:
+                        print(
+                            f"Найден кандидат на обмен: {plate_a} (с дор. {t1.id}) <-> {plate_b} (с дор. {t2.id})")
+
+                        # Выполняем обмен
+                        plate_a.track = t2
+                        plate_b.track = t1
+                        plate_a.save()
+                        plate_b.save()
+
+                        print(f"Обмен выполнен: {plate_b} -> дор. {t1.id}, {plate_a} -> дор. {t2.id}")
+                        outliers_a.remove(plate_a)
+                        outliers_b.remove(plate_b)
+
+def get_dominant_config(track):
+    """
+    Определяет доминирующую конфигурацию (бетон, арматура) для дорожки.
+    Доминирующей считается та, у которой суммарная длина плит на дорожке максимальна.
+    """
+    if not track.plates.exists():
+        return None
+
+    # Агрегируем данные по плитам на дорожке
+    configs = track.plates.values(
+        'concrete_class', 'wire_bottom', 'wire_top'
+    ).annotate(
+        total_length=Sum('length'),
+        plate_count=Count('id')
+    ).order_by('-total_length', '-plate_count')
+
+    dominant = configs.first()
+
+    return {
+        "concrete_class": dominant['concrete_class'],
+        "wire_bottom": dominant['wire_bottom'],
+        "wire_top": dominant['wire_top'],
+    }
 
 def add_plate_to_track(plate, track):
     plate.track = track
@@ -161,9 +236,9 @@ def search_need_plate(track_setting, plates, track_len):
         distance = 0
 
         # Вес для класса бетона (менее важный)
-        distance += (1 if plate.concrete_class != track_setting['concrete_class'] else 0) * 3
+        distance += (1 if plate.concrete_class != track_setting['concrete_class'] else 0) * 2
         # Вес для арматуры
-        distance += (1 if plate.wire_bottom != track_setting['wire_bottom'] else 0) * 20
+        distance += (1 if plate.wire_bottom != track_setting['wire_bottom'] else 0) * 6
         distance += (1 if plate.wire_top != track_setting['wire_top'] else 0) * 1
 
         # Обновляем лучшую плиту, если текущее расстояние меньше
