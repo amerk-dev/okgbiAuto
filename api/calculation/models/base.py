@@ -63,6 +63,7 @@ class Track(models.Model):
     position = models.PositiveSmallIntegerField()
     day = models.DateField()
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL)
+    is_manual = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Track {self.position} - {self.day}"
@@ -169,8 +170,8 @@ class Track(models.Model):
         plate_class_prices = UnitPrice.get_plates_prices()
 
         plates = self.plates.all()
-        wire_top_max = max([plate.wire_top for plate in plates], default=0)
-        wire_bottom_max = max([plate.wire_bottom for plate in plates], default=0)
+        wire_top_max = self.wire_top
+        wire_bottom_max = self.wire_bottom
         using_plate_classes = set(plate.concrete_class for plate in plates)
         plate_price = max([plate_class_prices[plate_class] for plate_class in using_plate_classes], default=0)
 
@@ -197,18 +198,32 @@ class Track(models.Model):
     @property
     def wire_top(self):
         plates = self.plates.all()
-        wire_top_max = max([plate.wire_top for plate in plates], default=0)
+        wire_top_max = max([int(plate.wire_top) for plate in plates], default=0)
         return wire_top_max
 
     @property
     def wire_bottom(self):
         plates = self.plates.all()
-        wire_bottom_max = max([plate.wire_bottom for plate in plates], default=0)
+        wire_bottom_max = max([int(plate.wire_bottom) for plate in plates], default=0)
         return wire_bottom_max
 
     @property
     def get_size(self):
         return self.width, self.height
+
+    @property
+    def overendering_wire_kg(self):
+        params = Parameters.get_solo()
+        wire_top_max = self.wire_top
+        wire_bottom_max = self.wire_bottom
+        length = Decimal(str(params.road_length)) / 1000
+
+        corrent_useful_kg = length * (wire_top_max + wire_bottom_max) * Decimal("0.156")
+
+        needed_wire_kg = 0
+        for plate in self.plates.all():
+            needed_wire_kg += Decimal(str(plate.length)) / 1000 * (wire_top_max + wire_bottom_max)
+        return corrent_useful_kg - needed_wire_kg * Decimal("0.156")
 
 class AbstractPlate(models.Model):
     name = models.CharField(max_length=255)

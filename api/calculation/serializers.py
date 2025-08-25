@@ -14,7 +14,7 @@ class TrackSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Track
-        fields = ['id', 'position', 'day', 'customer', 'useful_length', 'free_length']
+        fields = ['id', 'position', 'day', 'customer', 'useful_length', 'free_length', 'is_manual']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -43,19 +43,10 @@ class PlateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plate
         fields = ['id', 'name', 'width', 'height', 'wire_top', 'wire_bottom', 
-                 'concrete_class', 'cost', 'deadline', 'track', 'order']
+                 'concrete_class', 'deadline', 'track']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Add formatted fields
-        data['size'] = f"{instance.width}x{instance.height}"
-        data['width_mm'] = f"{instance.width}мм"
-        data['height_mm'] = f"{instance.height}мм"
-        data['wire_top_mm'] = f"{instance.wire_top}мм"
-        data['wire_bottom_mm'] = f"{instance.wire_bottom}мм"
-        data['price'] = f"{instance.cost} ₽"
-        data['status'] = 'overdue' if instance.is_overdue() else 'booked'
-
         # Add track-related fields if track is assigned
         if instance.track:
             data['occupied'] = f"{instance.width}мм"

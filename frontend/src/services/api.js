@@ -87,6 +87,85 @@ export const swapTracks = async (track1Id, track2Id) => {
   }
 };
 
+export const getTrackSlabs = async (trackId) => {
+  try {
+    const response = await fetch(`${API_URL}/api/tracks/${trackId}/slabs/`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching track slabs:', error);
+    throw error;
+  }
+};
+
+export const updateSlab = async (slabId, slabData) => {
+  try {
+    const response = await fetch(`${API_URL}/api/plates/${slabId}/`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(slabData),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating slab:', error);
+    throw error;
+  }
+};
+
+export const deleteSlab = async (slabId) => {
+  try {
+    const response = await fetch(`${API_URL}/api/plates/${slabId}/`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting slab:', error);
+    throw error;
+  }
+};
+
+export const transferSlabs = async (slabIds, targetTrackPosition, targetDate) => {
+  try {
+    const response = await fetch(`${API_URL}/api/tracks/transfer-slabs/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ slabIds, targetTrackPosition, targetDate }),
+    });
+
+    if (!response.ok) {
+      // Special handling for 400 Bad Request responses
+      if (response.status === 400) {
+        // Parse the response body to get the detailed error message
+        const errorData = await response.json();
+        // The Django REST framework typically returns error details in the 'detail' field
+        const errorMessage = errorData.detail || JSON.stringify(errorData);
+        throw new Error(errorMessage);
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error transferring slabs:', error);
+    throw error;
+  }
+};
+
 // Orders API
 export const getOrders = async () => {
   try {

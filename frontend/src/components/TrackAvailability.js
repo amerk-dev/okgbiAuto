@@ -1,15 +1,39 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useRef} from 'react';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
-import { getTracks, getContractors, updateTrackContractor, moveSlab, swapTracks, startCalculation } from '../services/api';
+import { 
+  getTracks, getContractors, updateTrackContractor, moveSlab, swapTracks, 
+  startCalculation, getTrackSlabs, updateSlab, deleteSlab, transferSlabs 
+} from '../services/api';
 
 const TrackAvailability = ({calculating}) => {
  const [showModal, setShowModal] = useState(false);
 	const [showRecalculateModal, setShowRecalculateModal] = useState(false);
+	const [showCellModal, setShowCellModal] = useState(false);
 	const [selectedReconfiguration, setSelectedReconfiguration] = useState(null);
+	const [selectedCell, setSelectedCell] = useState(null);
 	const [pendingContractorChange, setPendingContractorChange] = useState(null);
 	const [contractors, setContractors] = useState([]);
 	const [tracks, setTracks] = useState([]);
 	const [loading, setLoading] = useState(true);
+	const [selectedSlabs, setSelectedSlabs] = useState([]);
+	const [showEditModal, setShowEditModal] = useState(false);
+	const [showDeleteModal, setShowDeleteModal] = useState(false);
+	const [showTransferModal, setShowTransferModal] = useState(false);
+	const [editingSlab, setEditingSlab] = useState(null);
+	const [transferDate, setTransferDate] = useState('');
+	const [transferTrackId, setTransferTrackId] = useState('');
+ const [isSubmitting, setIsSubmitting] = useState(false);
+ const [dayOffset, setDayOffset] = useState(0);
+	const [searchTerm, setSearchTerm] = useState('');
+	const [searchResults, setSearchResults] = useState([]);
+	const [showSearchResults, setShowSearchResults] = useState(false);
+
+	// Refs for edit form
+	const nameRef = useRef(null);
+	const lengthRef = useRef(null);
+	const concreteClassRef = useRef(null);
+	const wireTopRef = useRef(null);
+	const wireBottomRef = useRef(null);
 
 	// Fetch tracks and contractors data from API
 	useEffect(() => {
@@ -360,6 +384,17 @@ const TrackAvailability = ({calculating}) => {
 				// Call API to move slab
 				await moveSlab(draggedItem.id, targetTrackId, targetDay.date);
 
+				// Refresh the tracks data from the backend
+				try {
+					const tracksData = await getTracks();
+					setTracks(tracksData);
+					console.log(`Moved slab ${draggedItem.id} to track ${targetTrackId}`);
+					return; // Exit early as we've updated the tracks data
+				} catch (error) {
+					console.error('Error refreshing tracks after move:', error);
+					// Fall back to manual state update if the API call fails
+				}
+
 				// Create a deep copy of the tracks state
 				const newTracks = JSON.parse(JSON.stringify(tracks));
 
@@ -467,11 +502,112 @@ const TrackAvailability = ({calculating}) => {
 		}
 	};
 
-	// Handle search
+ // Handle search
 	const handleSearch = (e) => {
-		const searchTerm = e.target.value.toLowerCase();
-		console.log(`Searching for: ${searchTerm}`);
-		// In a real app, you would filter the tracks/slabs based on the search term
+		const term = e.target.value.toLowerCase();
+		setSearchTerm(term);
+
+		if (!term.trim()) {
+			setSearchResults([]);
+			setShowSearchResults(false);
+			return;
+		}
+
+		// Collect all searchable items from tracks
+		const results = [];
+
+		tracks.forEach(track => {
+			track.days.forEach(day => {
+				// Skip empty days
+				if (!day.orders && !day.plates && !day.size) return;
+
+				// Check if any order number matches
+				const orderMatch = day.orders && day.orders.some(order => 
+					order.toString().toLowerCase().includes(term)
+				);
+
+				// Check if any plate name matches
+				const plateMatch = day.plates && day.plates.some(plate => 
+					plate.toString().toLowerCase().includes(term)
+				);
+
+				// Check if size matches
+				const sizeMatch = day.size && day.size.toString().toLowerCase().includes(term);
+
+				if (orderMatch || plateMatch || sizeMatch) {
+					// Add this day to results if not already added
+					const existingResult = results.find(r => 
+						r.trackId === track.id && r.dayId === day.id
+					);
+
+					if (!existingResult) {
+						results.push({
+							trackId: track.id,
+							trackName: track.name,
+							dayId: day.id,
+							date: day.date === 'today' ? 'Сегодня' : 
+								day.date === 'tomorrow' ? 'Завтра' : day.date,
+							matchType: orderMatch ? 'order' : (plateMatch ? 'plate' : 'size'),
+							matchValue: orderMatch ? day.orders.find(order => 
+									order.toString().toLowerCase().includes(term)
+								) : (plateMatch ? day.plates.find(plate => 
+									plate.toString().toLowerCase().includes(term)
+								) : day.size)
+						});
+					}
+				}
+			});
+		});
+
+		setSearchResults(results);
+		setShowSearchResults(results.length > 0);
+	};
+
+	// Check if a cell matches the search criteria
+	const cellMatchesSearch = (track, day) => {
+		if (!searchTerm.trim()) return true;
+
+		// Skip empty days
+		if (!day.orders && !day.plates && !day.size) return false;
+
+		// Check if any order number matches
+		const orderMatch = day.orders && day.orders.some(order => 
+			order.toString().toLowerCase().includes(searchTerm.toLowerCase())
+		);
+
+		// Check if any plate name matches
+		const plateMatch = day.plates && day.plates.some(plate => 
+			plate.toString().toLowerCase().includes(searchTerm.toLowerCase())
+		);
+
+		// Check if size matches
+		const sizeMatch = day.size && day.size.toString().toLowerCase().includes(searchTerm.toLowerCase());
+
+		return orderMatch || plateMatch || sizeMatch;
+	};
+
+	// Handle search result click
+	const handleSearchResultClick = (result) => {
+		// Find the track and day indices
+		const trackIndex = tracks.findIndex(t => t.id === result.trackId);
+		if (trackIndex === -1) return;
+
+		const track = tracks[trackIndex];
+		const dayIndex = track.days.findIndex(d => d.id === result.dayId);
+		if (dayIndex === -1) return;
+
+		// Calculate the new dayOffset to show this day
+		const newOffset = Math.max(0, dayIndex - 2); // Center the day if possible
+		setDayOffset(newOffset);
+
+		// Clear search
+		setSearchTerm('');
+		setSearchResults([]);
+		setShowSearchResults(false);
+
+		// Optionally, highlight the cell or open the cell modal
+		const day = track.days[dayIndex];
+		handleCellClick(track, day);
 	};
 
 	// Handle opening the reconfiguration modal
@@ -496,6 +632,202 @@ const TrackAvailability = ({calculating}) => {
 	const handleCloseModal = () => {
 		setShowModal(false);
 		setSelectedReconfiguration(null);
+	};
+
+	// Handle cell click to open cell details modal
+	const handleCellClick = async (track, day) => {
+		// Only open modal for cells with content
+		if (day.width || day.number) {
+			// Set initial cell data
+			setSelectedCell({
+				trackId: day.id,
+				trackName: track.name,
+				date: day.date === 'today' ? 'Сегодня' : 
+					day.date === 'tomorrow' ? 'Завтра' : day.date,
+				status: day.status,
+				width: day.width,
+				height: day.height,
+				concrete: day.concrete,
+				wireTop: day.wireTop,
+				wireBottom: day.wireBottom,
+				deadline: day.deadline,
+				price: day.price,
+				occupied: day.occupied,
+				free: day.free,
+				slabs: [],
+				loading: true
+			});
+
+			// Show modal immediately with loading state
+			setShowCellModal(true);
+
+			// Fetch slabs data for this track
+			try {
+				const slabsData = await getTrackSlabs(day.id);
+				// Update selectedCell with slabs data
+				setSelectedCell(prevState => ({
+					...prevState,
+					slabs: slabsData,
+					loading: false
+				}));
+			} catch (error) {
+				console.error('Error fetching slabs data:', error);
+				// Update selectedCell to show error state
+				setSelectedCell(prevState => ({
+					...prevState,
+					slabs: [],
+					loading: false,
+					error: 'Ошибка при загрузке данных о плитах'
+				}));
+			}
+		}
+	};
+
+	// Handle closing the cell details modal
+	const handleCloseCellModal = () => {
+		setShowCellModal(false);
+		setSelectedCell(null);
+		setSelectedSlabs([]);
+	};
+
+	// Handle edit form submission
+	const handleEditSubmit = async () => {
+		if (!editingSlab || !editingSlab.id) {
+			alert('Ошибка: Не удалось определить ID плиты');
+			return;
+		}
+
+		setIsSubmitting(true);
+
+		try {
+			const updatedData = {
+				name: nameRef.current.value,
+				length: parseFloat(lengthRef.current.value),
+				concrete_class: concreteClassRef.current.value,
+				wire_top: wireTopRef.current.value,
+				wire_bottom: wireBottomRef.current.value
+			};
+
+			await updateSlab(editingSlab.id, updatedData);
+
+			// Refresh the slabs data
+			if (selectedCell && selectedCell.trackId) {
+				const slabsData = await getTrackSlabs(selectedCell.trackId);
+				setSelectedCell(prevState => ({
+					...prevState,
+					slabs: slabsData
+				}));
+			}
+
+			// Close the modal
+			setShowEditModal(false);
+			setEditingSlab(null);
+
+			// Show success message
+			alert('Плита успешно обновлена');
+
+			// Refresh the tracks data
+			const tracksData = await getTracks();
+			setTracks(tracksData);
+		} catch (error) {
+			console.error('Error updating slab:', error);
+			alert(`Ошибка при обновлении плиты: ${error.message}`);
+		} finally {
+			setIsSubmitting(false);
+		}
+	};
+
+	// Handle delete confirmation
+	const handleDeleteConfirm = async () => {
+		if (selectedSlabs.length === 0) {
+			alert('Пожалуйста, выберите плиты для удаления');
+			return;
+		}
+
+		setIsSubmitting(true);
+
+		try {
+			// Delete each selected slab
+			for (const slabId of selectedSlabs) {
+				await deleteSlab(slabId);
+			}
+
+			// Refresh the slabs data
+			if (selectedCell && selectedCell.trackId) {
+				const slabsData = await getTrackSlabs(selectedCell.trackId);
+				setSelectedCell(prevState => ({
+					...prevState,
+					slabs: slabsData
+				}));
+			}
+
+			// Close the modal
+			setShowDeleteModal(false);
+			setSelectedSlabs([]);
+
+			// Show success message
+			alert('Плиты успешно удалены');
+
+			// Refresh the tracks data
+			const tracksData = await getTracks();
+			setTracks(tracksData);
+		} catch (error) {
+			console.error('Error deleting slabs:', error);
+			alert(`Ошибка при удалении плит: ${error.message}`);
+		} finally {
+			setIsSubmitting(false);
+		}
+	};
+
+	// Handle transfer form submission
+	const handleTransferSubmit = async () => {
+		if (selectedSlabs.length === 0) {
+			alert('Пожалуйста, выберите плиты для переноса');
+			return;
+		}
+
+		if (!transferTrackId) {
+			alert('Пожалуйста, выберите дорожку для переноса');
+			return;
+		}
+
+		if (!transferDate) {
+			alert('Пожалуйста, выберите дату для переноса');
+			return;
+		}
+
+		setIsSubmitting(true);
+
+		try {
+			await transferSlabs(selectedSlabs, transferTrackId, transferDate);
+
+			// Refresh the slabs data
+			if (selectedCell && selectedCell.trackId) {
+				const slabsData = await getTrackSlabs(selectedCell.trackId);
+				setSelectedCell(prevState => ({
+					...prevState,
+					slabs: slabsData
+				}));
+			}
+
+			// Close the modal
+			setShowTransferModal(false);
+			setSelectedSlabs([]);
+			setTransferDate('');
+			setTransferTrackId('');
+
+			// Show success message
+			alert('Плиты успешно перенесены');
+
+			// Refresh the tracks data
+			const tracksData = await getTracks();
+			setTracks(tracksData);
+		} catch (error) {
+			console.error('Error transferring slabs:', error);
+			alert(`Ошибка при переносе плит: ${error.message}`);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	// Handle contractor assignment
@@ -532,6 +864,10 @@ const TrackAvailability = ({calculating}) => {
 	// Handle recalculation confirmation with calculation
 	const handleRecalculateWithCalc = async () => {
 		// Apply the pending change with calculation
+
+		// Close the modal and reset the pending change
+		setShowRecalculateModal(false);
+		setPendingContractorChange(null);
 		if (pendingContractorChange) {
 			applyContractorChange(
 				pendingContractorChange.trackId, 
@@ -554,10 +890,6 @@ const TrackAvailability = ({calculating}) => {
 				setLoading(false);
 			}
 		}
-
-		// Close the modal and reset the pending change
-		setShowRecalculateModal(false);
-		setPendingContractorChange(null);
 	};
 
 	// Handle recalculation confirmation without calculation
@@ -600,8 +932,91 @@ const TrackAvailability = ({calculating}) => {
 		};
 	}, []);
 
-	return (
-		<div id="track-availability">
+ // Function to handle scrolling left (previous day)
+  const handleScrollLeft = () => {
+    if (dayOffset > 0) {
+      setDayOffset(dayOffset - 1);
+    }
+  };
+
+  // Function to handle scrolling right (next day)
+  const handleScrollRight = () => {
+    // Check if there are more days to show
+    if (tracks.length > 0 && tracks[0].days.length > dayOffset + 5) {
+      setDayOffset(dayOffset + 1);
+    }
+  };
+
+ return (
+    <div id="track-availability">
+      {!(loading || calculating) && (
+        <div className="flex justify-between mb-2 gap-2">
+          {/* Search component */}
+          <div className="relative">
+            <div className="flex items-center">
+              <input
+                type="text"
+                placeholder="Поиск по заказам, плитам, размерам..."
+                className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
+                value={searchTerm}
+                onChange={handleSearch}
+                onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
+              />
+            </div>
+
+            {/* Search results dropdown */}
+            {showSearchResults && (
+              <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-300 max-h-60 overflow-y-auto">
+                {searchResults.map((result, index) => (
+                  <div 
+                    key={`${result.trackId}-${result.dayId}-${index}`}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-200 last:border-b-0"
+                    onMouseDown={() => handleSearchResultClick(result)}
+                  >
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-800">{result.trackName}</span>
+                      <span className="mx-2 text-gray-400">|</span>
+                      <span className="text-gray-600">{result.date}</span>
+                    </div>
+                    <div className="mt-1 text-sm">
+                      {result.matchType === 'order' && (
+                        <span className="text-blue-600">Заказ: {result.matchValue}</span>
+                      )}
+                      {result.matchType === 'plate' && (
+                        <span className="text-green-600">Плита: {result.matchValue}</span>
+                      )}
+                      {result.matchType === 'size' && (
+                        <span className="text-purple-600">Размер: {result.matchValue}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Navigation buttons */}
+          <div className="flex gap-2">
+            <button 
+              className="px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 flex items-center justify-center"
+              onClick={handleScrollLeft}
+            >
+              <svg width="26" height="27" viewBox="0 0 26 27" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 13.5L14.5 2M3 13.5L14.5 25M3 13.5H26" stroke="#727579" stroke-width="3"/>
+              </svg>
+            </button>
+            <button 
+              className="px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 flex items-center justify-center"
+              onClick={handleScrollRight}
+            >
+              <svg width="26" height="27" viewBox="0 0 26 27" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M23 13.5L11.5 2M23 13.5L11.5 25M23 13.5H0" stroke="#727579" stroke-width="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
       {(loading || calculating) ? (
         <div className="bg-white shadow rounded-lg overflow-hidden mb-4">
           <div className="p-10 text-center">
@@ -609,162 +1024,143 @@ const TrackAvailability = ({calculating}) => {
             <p className="text-gray-600">Загрузка данных о дорожках и плитах...</p>
           </div>
         </div>
-      )
-		  :
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="text-lg leading-6 font-medium text-gray-900">
-                Планирование по дорожкам
-              </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Перетаскивайте плиты между ячейками для изменения расписания
-              </p>
-            </div>
-            <div className="mt-4 md:mt-0 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FontAwesomeIcon icon="search" className="text-gray-400" />
+      ) : (
+        <div className="grid grid-cols-[150px_repeat(5,1fr)] gap-1 bg-gray-200 border border-gray-200 rounded-lg overflow-hidden text-xs font-medium responsive-table">
+          {/* Header */}
+          <div className="p-2 bg-gray-50 text-gray-800 font-semibold flex items-center justify-center">Дорожки</div>
+
+          {/* Column Headers */}
+          {tracks.length > 0 && tracks[0].days.slice(dayOffset, dayOffset + 5).map((day, dayIndex) => {
+            let dateText = '';
+            if (day.date === 'today') dateText = 'Сегодня';
+            else if (day.date === 'tomorrow') dateText = 'Завтра';
+            else dateText = day.date;
+
+            // Check if any track has overrun on this day
+            const hasOverrun = tracks.some(track => {
+              const trackDay = track.days[dayIndex];
+              return trackDay && trackDay.status === 'overdue';
+            });
+
+            return (
+              <div key={`header-${day.date}`} className="p-2 text-center bg-white">
+                <p>{dateText}</p>
+                {hasOverrun && (
+                  <span className="flex items-center justify-center gap-1 text-red-600">
+                    <FontAwesomeIcon icon="exclamation-triangle" className="text-red-600" />
+                    {day.total_overendering_wire_kg ? `${day.total_overendering_wire_kg.toFixed(2)}КГ` : '0КГ'}
+                  </span>
+                )}
               </div>
-              <input
-				  id="search"
-				  type="text"
-				  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-				  placeholder="Поиск заказа..."
-				  onChange={handleSearch}
-			  />
-            </div>
-          </div>
-        </div>
+            );
+          })}
 
-        <div className="overflow-x-auto responsive-table" style={{maxWidth: '100%', overflowX: 'auto'}}>
-          <table className="divide-y divide-gray-200 border-collapse border border-gray-200 text-2xs"
-				 style={{tableLayout: 'fixed', width: '1400px'}}>
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col"
-					className="w-48 px-2 py-4 text-center text-2xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200 sticky left-0 bg-gray-50 z-10">
-                  <div>Дорожка</div>
-                </th>
-				  {tracks.map((track, trackIndex) => (
-					  track.days.map((day, dayIndex) => {
-						  // Only render the header once for each date (for the first track)
-						  if (trackIndex === 0) {
-							  let dateText = '';
-							  if (day.date === 'today') dateText = 'Сегодня';
-							  else if (day.date === 'tomorrow') dateText = 'Завтра';
-							  else dateText = day.date;
+          {/* Track Rows */}
+          {tracks.map(track => (
+            <React.Fragment key={track.id}>
+              {/* Track Name and Contractor Dropdown */}
+              <div className={`p-2 bg-white font-semibold text-gray-600 flex flex-col items-center justify-center ${track.contractor ? 'border-2 border-blue-300 border-r-0' : ''}`}>
+                <div>{track.name}</div>
+                <select 
+                  className="mt-1 p-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                  value={track.contractor || ''}
+                  onChange={(e) => handleContractorChange(track.id, e.target.value)}
+                >
+                  <option value="">Выберите контрагента</option>
+                  {contractors.map((contractor, index) => (
+                    <option key={index} value={contractor}>
+                      {contractor}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-							  // Find if any track has reconfiguration on this day
-							  const hasReconfiguration = tracks.some(t => t.days[dayIndex]?.reconfiguration);
+              {/* Track Days */}
+              {track.days.slice(dayOffset, dayOffset + 5).map((day, dayIndex) => {
+                // Determine cell styling based on status
+                let cellClass = "p-2 text-gray-400 bg-white flex items-center justify-center";
+                let cellContent = "ПУСТО";
 
-							  return (
-								  <th key={`header-${day.date}`}
-									  scope="col"
-									  className="w-44 px-1 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                          <div className="flex justify-between items-center">
-                            <span>{dateText}</span>
-                            {day.kpi !== undefined && (
-                              <span className="text-blue-600 font-medium" title="KPI показатель">
-                                KPI: {day.kpi}
-                              </span>
-                            )}
-                          </div>
-                          <button
-							  onClick={() => {
-								  // Use the first track's ID for all days
-								  handleOpenReconfigurationModal(tracks[0].id, dayIndex);
-							  }}
-							  className="text-2xs text-yellow-600 font-medium mt-0.5 hover:text-yellow-800 focus:outline-none block"
-							  style={{fontSize: '0.55rem'}}
-						  >
-                            <FontAwesomeIcon icon="info-circle" className="mr-0.5" /> Переналадка
-                          </button>
-                        </th>
-							  );
-						  }
-						  return null;
-					  })
-				  ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {tracks.map(track => (
-				  <tr key={track.id}>
-                  <td className={`w-48 px-2 py-4 text-center text-2xs font-medium text-gray-900 border border-gray-200 sticky left-0 z-10 ${track.contractor ? 'bg-blue-50' : 'bg-white'}`}>
-                    <div>{track.name}</div>
-                    <div className="mt-2">
-                      <select
-                        className="w-full text-2xs p-1 border border-gray-300 rounded"
-                        value={track.contractor}
-                        onChange={(e) => handleContractorChange(track.id, e.target.value)}
-                      >
-                        <option value="">Выберите контрагента</option>
-                        {contractors.map((contractor, index) => (
-                          <option key={index} value={contractor}>{contractor}</option>
-                        ))}
-                      </select>
-                      {track.contractor && (
-                        <div className="mt-1 text-2xs text-blue-600 font-semibold p-1 bg-blue-100 rounded border border-blue-200">
-                          Выделено для:<br/>{track.contractor}
+                if (day.reconfiguration) {
+                  // Reconfiguration day
+                  cellClass = "p-2 text-center text-gray-600 flex items-center justify-center font-semibold bg-[#EFF6FF]";
+                  cellContent = "ВЫХОДНОЙ";
+                } else if (day.width || day.number) {
+                  // Day with content
+                  if (day.status === 'booked') {
+                    // In progress
+                    cellClass = "p-2 relative bg-[#E9FFF9]";
+                    cellContent = (
+                      <>
+                        <p className="flex items-center gap-1 text-green-600 font-semibold">
+                          <span className="w-2 h-2 bg-green-600 rounded-full"></span>В работе
+                          {day.is_manual && <FontAwesomeIcon icon="hand-paper" className="ml-1 text-green-600" />}
+                        </p>
+                        <div className="mt-1 space-y-0.5 text-gray-700">
+                          {day.deadline ? <p style={{color: "#1420A0"}}>До {day.deadline}</p> : <p style={{color: "#1420A0"}}>Без дедлайна</p>}
+                          <p>{Number.parseFloat(day.width)}×{Number.parseFloat(day.height)}</p>
+                          <p>{day.concrete}</p>
+                          <p>↑{day.wireTop} ↓{day.wireBottom}</p>
+                          <p>Занято: {day.occupied || "0"}мм</p>
                         </div>
-                      )}
-                    </div>
-                  </td>
-					  {track.days.map((day, dayIndex) => (
-						  <td
-							  key={`${track.id}-${day.date}`}
-							  className={`w-44 px-1 py-1 dropzone border ${track.contractor ? 'border-blue-300' : 'border-gray-200'} ${track.contractor ? 'bg-blue-50' : ''}`}
-							  data-date={day.date}
-							  data-track={track.id}
-							  onDragOver={handleDragOver}
-							  onDragLeave={handleDragLeave}
-							  onDrop={(e) => handleDrop(e, track.id, dayIndex)}
-						  >
-                      {day.reconfiguration ? (
-						  <>
-                          <div className="text-2xs text-gray-500">Переналадка</div>
-                        </>
-					  ) : (
-						  <>
-                          {day.width || day.number ? (
-                              <div
-                                className={`drag-item p-0.5 mb-0.5 rounded border ${
-                                  day.status === 'booked'
-                                    ? 'border-green-200 bg-green-50'
-                                    : 'border-red-200 bg-red-50'
-                                }`}
-                                draggable={true}
-                                onDragStart={(e) => handleDragStart(track.id, dayIndex, 0, day)}
-                              >
-                                <div className="flex items-center">
-                                  <span className={`status-indicator status-${day.status}`}></span>
-                                  <span className="text-2xs font-medium">{day.status === 'overdue' ? 'Просрочено' : ''}</span>
-                                </div>
-                                <div className="text-2xs mt-0.5 grid grid-cols-2 gap-0.5">
-                                  <div className="font-semibold">Размер:</div><div>{Number.parseFloat(day.width)}×{Number.parseFloat(day.height)}</div>
-                                  <div className="font-semibold">Проволока:</div><div><span>↑ {day.wireTop}</span> <span>↓ {day.wireBottom}</span></div>
-                                  <div className="font-semibold">Бетон:</div><div>{day.concrete}</div>
-                                  <div className="font-semibold">Занято:</div><div>{Number.parseFloat(day.occupied)} мм</div>
-                                  <div className="font-semibold">Свободно:</div><div>{Number.parseFloat(day.free)} мм</div>
-                                  <div className="font-semibold">Стоимость:</div><div className="font-medium text-blue-600">{day.price}</div>
-                                  <div className="font-semibold">Дедлайн:</div><div>{day.deadline}</div>
-                                </div>
-                              </div>
-                          ) : (
-                              <div className="text-center py-1 text-gray-500 text-2xs">Пусто</div>
-                          )}
-                        </>
-					  )}
-                    </td>
-					  ))}
-                </tr>
-			  ))}
-            </tbody>
-          </table>
+                        <p className="text-blue-600 font-bold mt-2 pt-2 border-t border-green-200">{day.price}</p>
+                      </>
+                    );
+                  } else if (day.status === 'overdue') {
+                    // Delayed
+                    cellClass = "p-2 relative bg-[#FFE4E4]";
+                    cellContent = (
+                      <>
+                        <p className="flex items-center gap-1 text-red-600 font-semibold">
+                          <FontAwesomeIcon icon="exclamation-triangle" className="text-red-600" />
+                          Задержка
+                          {day.is_manual && <FontAwesomeIcon icon="hand-paper" className="ml-1 text-red-600" />}
+                        </p>
+                        <div className="mt-1 space-y-0.5 text-gray-700">
+						  {day.deadline ? <p style={{color: "#1420A0"}}>До {day.deadline}</p> : <p style={{color: "#1420A0"}}>Без дедлайна</p>}
+							<p>{Number.parseFloat(day.width)}×{Number.parseFloat(day.height)}</p>
+							<p>{day.concrete}</p>
+							<p>↑{day.wireTop } ↓{day.wireBottom}</p>
+							<p>Занято: {day.occupied || "0"}мм</p>
+                        </div>
+                        <p className="text-blue-600 font-bold mt-2 pt-2 border-t border-red-200">{day.price || "32,22 КГ"}</p>
+                      </>
+                    );
+                  }
+                }
+
+                // Determine if cell should be faded based on search term
+                const shouldFade = searchTerm.trim() !== '' && !cellMatchesSearch(track, day);
+                const opacityStyle = shouldFade ? { opacity: 0.3 } : {};
+
+                return (
+                  <div 
+                    key={`${track.id}-${day.date}`}
+                    className={`${cellClass} ${track.contractor ? 'border-2 border-blue-300 border-l-0' + (dayIndex === 4 ? '' : ' border-r-0') : ''}`}
+                    style={opacityStyle}
+                    data-date={day.date}
+                    data-track={track.id}
+                    onClick={() => handleCellClick(track, day)}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, track.id, dayIndex)}
+                  >
+                    {typeof cellContent === 'string' ? cellContent : (
+                      <div 
+                        className="w-full cursor-grab"
+                        draggable={day.width || day.number ? true : false}
+                        onDragStart={(e) => handleDragStart(track.id, dayIndex, 0, day)}
+                      >
+                        {cellContent}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
         </div>
-      </div>
-	  }
+      )}
 
 			{/* Reconfiguration Modal */}
 			{showModal && selectedReconfiguration && (
@@ -853,6 +1249,396 @@ const TrackAvailability = ({calculating}) => {
           </div>
         </div>
 			)}
+
+			{/* Cell Details Modal */}
+			{showCellModal && selectedCell && (
+				<div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative mx-auto p-5 border max-w-12xl shadow-lg rounded-xl bg-white" style={{maxHeight: "95vh"}}>
+            {/* Close button (X) in the top-right corner */}
+            <button
+              onClick={handleCloseCellModal}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="mt-5">
+              {/* Modal header with required information */}
+              <div className="border-b pb-3 mb-4">
+                <div className="flex justify-between items-center">
+					<div className="flex gap-4" style={{alignItems: "center"}}>
+						<h3 className="text-lg leading-6 font-medium text-gray-900">
+							{selectedCell.trackName && selectedCell.trackName.includes('Дорожка')
+							  ? selectedCell.trackName
+							  : `Дорожка ${selectedCell.trackId || ''}`}
+					  	</h3>
+						<span className="text-sm text-gray-500">{selectedCell.width}x{selectedCell.height}</span>
+						<span className={`px-2 py-1 rounded-md text-xs font-medium ${
+						  selectedCell.status === 'overdue' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+						}`}>
+						  {selectedCell.status === 'overdue' ? 'Просрочено' : 'В работе'}
+						</span>
+						<span className="text-sm text-gray-500">{selectedCell.date}</span>
+					</div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-blue-600">Стоимость {selectedCell.price}</span>
+                    <button className="flex items-center gap-1 px-3 py-1 text-sm border border-gray-500 rounded-md text-white bg-gray-600 hover:bg-gray-700">
+					  <FontAwesomeIcon icon="print" className="w-4 h-4" />
+					  <span>Печать</span>
+					</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Slabs Table */}
+              <div className="px-4">
+                {selectedCell.loading ? (
+                  <div className="text-center py-4">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-600 mb-2"></div>
+                    <p className="text-sm text-gray-600">Загрузка данных о плитах...</p>
+                  </div>
+                ) : selectedCell.error ? (
+                  <div className="text-center py-4 text-red-600">
+                    <p>{selectedCell.error}</p>
+                  </div>
+                ) : selectedCell.slabs && selectedCell.slabs.length > 0 ? (
+                  <div className="overflow-x-auto overflow-y-scroll" style={{maxHeight: "55vh"}}>
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <input 
+                              type="checkbox" 
+                              className="form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out"
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  // Select all slabs
+                                  setSelectedSlabs(selectedCell.slabs.map(slab => slab.id));
+                                } else {
+                                  // Deselect all slabs
+                                  setSelectedSlabs([]);
+                                }
+                              }}
+                              checked={selectedSlabs.length > 0 && selectedSlabs.length === selectedCell.slabs.length}
+                            />
+                          </th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Заказчик</th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата дедлайна</th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Номер заказа</th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Длина</th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Нагрузка</th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Класс бетона</th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Проволока верх</th>
+                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Проволока низ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {selectedCell.slabs.map((slab, index) => {
+                          const slabId = slab.id;
+                          const isSelected = selectedSlabs.includes(slabId);
+
+                          return (
+                            <tr key={index} className={isSelected ? "bg-blue-50" : ""}>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                                <input 
+                                  type="checkbox" 
+                                  className="form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedSlabs([...selectedSlabs, slabId]);
+                                    } else {
+                                      setSelectedSlabs(selectedSlabs.filter(id => id !== slabId));
+                                    }
+                                  }}
+                                />
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.customer}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.deadline_date}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.order_number}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.name}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.length}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.load}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.concrete_class}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.wire_top}</td>
+                              <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{slab.wire_bottom}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    <p>Нет данных о плитах на этой дорожке</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end mt-4 px-4 gap-2 border-t pt-4">
+                <button 
+                  className="flex items-center gap-1 px-3 py-1 text-sm border border-blue-500 rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                  onClick={() => {
+                    // Check if exactly one slab is selected
+                    if (selectedSlabs.length === 1) {
+                      // Find the selected slab
+                      const selectedSlab = selectedCell.slabs.find(slab => {
+                        const slabId = slab.id;
+                        return slabId === selectedSlabs[0];
+                      });
+
+                      if (selectedSlab) {
+                        setEditingSlab(selectedSlab);
+                        setShowEditModal(true);
+                      }
+                    } else {
+                      alert('Пожалуйста, выберите одну плиту для редактирования');
+                    }
+                  }}
+                >
+                  <FontAwesomeIcon icon="edit" className="w-4 h-4" />
+                  <span>Изменить</span>
+                </button>
+                <button 
+                  className="flex items-center gap-1 px-3 py-1 text-sm border border-red-500 rounded-md text-white bg-red-600 hover:bg-red-700"
+                  onClick={() => {
+                    // Check if at least one slab is selected
+                    if (selectedSlabs.length > 0) {
+                      setShowDeleteModal(true);
+                    } else {
+                      alert('Пожалуйста, выберите плиты для удаления');
+                    }
+                  }}
+                >
+                  <FontAwesomeIcon icon="trash-alt" className="w-4 h-4" />
+                  <span>Удалить</span>
+                </button>
+                <button 
+                  className="flex items-center gap-1 px-3 py-1 text-sm border border-green-500 rounded-md text-white bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    // Check if at least one slab is selected
+                    if (selectedSlabs.length > 0) {
+                      setShowTransferModal(true);
+                    } else {
+                      alert('Пожалуйста, выберите плиты для переноса');
+                    }
+                  }}
+                >
+                  <FontAwesomeIcon icon="exchange-alt" className="w-4 h-4" />
+                  <span>Перенос</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+			)}
+
+      {/* Transfer Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Перенос плит на другую дорожку
+              </h3>
+              <div className="mt-2 px-4 py-3">
+                <p className="text-sm text-gray-500 mb-4">
+                  Выбрано плит: <span className="font-semibold">{selectedSlabs.length}</span>
+                </p>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Выберите дату
+                  </label>
+                  <input 
+                    type="date" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={transferDate}
+                    onChange={(e) => setTransferDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Выберите дорожку
+                  </label>
+                  <select 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={transferTrackId}
+                    onChange={(e) => setTransferTrackId(e.target.value)}
+                    required
+                  >
+                    <option value="">Выберите дорожку</option>
+                    {tracks.map(track => (
+                      <option key={track.id} value={track.position}>
+                        {track.name} {track.contractor ? `(${track.contractor})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={() => setShowTransferModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  disabled={isSubmitting}
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleTransferSubmit}
+                  className="px-4 py-2 bg-green-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Перенос...' : 'Перенести'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3 text-center">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Подтверждение удаления
+              </h3>
+              <div className="mt-2 px-4 py-3">
+                <p className="text-sm text-gray-500 mb-4">
+                  Вы уверены, что хотите удалить выбранные плиты ({selectedSlabs.length} шт.)?
+                </p>
+                <p className="text-sm text-red-500 mb-4">
+                  Это действие нельзя отменить.
+                </p>
+              </div>
+              <div className="flex justify-center gap-3 mt-4">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  disabled={isSubmitting}
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  className="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Удаление...' : 'Удалить'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Slab Modal */}
+      {showEditModal && editingSlab && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
+          <div className="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Редактирование плиты
+              </h3>
+              <div className="mt-2 px-4 py-3">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Название
+                  </label>
+                  <input 
+                    type="text" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    defaultValue={editingSlab.name}
+                    ref={nameRef}
+                    required
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Длина
+                  </label>
+                  <input 
+                    type="number" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    defaultValue={editingSlab.length}
+                    ref={lengthRef}
+                    required
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Класс бетона
+                  </label>
+                  <input 
+                    type="text" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    defaultValue={editingSlab.concrete_class}
+                    ref={concreteClassRef}
+                    required
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Проволока верх
+                  </label>
+                  <input 
+                    type="text" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    defaultValue={editingSlab.wire_top}
+                    ref={wireTopRef}
+                    required
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Проволока низ
+                  </label>
+                  <input 
+                    type="text" 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    defaultValue={editingSlab.wire_bottom}
+                    ref={wireBottomRef}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingSlab(null);
+                  }}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  disabled={isSubmitting}
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleEditSubmit}
+                  className="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Сохранение...' : 'Сохранить'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
 	);
 };

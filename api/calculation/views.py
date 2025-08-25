@@ -1,9 +1,9 @@
 import datetime
 
-from django.core.exceptions import ValidationError
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 
 from django.db import transaction
@@ -42,6 +42,40 @@ class TrackViewSet(viewsets.ModelViewSet):
     serializer_class = TrackSerializer
     permission_classes = [permissions.AllowAny]
 
+    @action(detail=True, methods=['get'])
+    def slabs(self, request, pk=None):
+        """Get slabs for a specific track"""
+        track = self.get_object()
+        plates = track.plates.all()
+
+        slabs_data = []
+        for plate in plates:
+            # Get customer name from the track
+            customer_name = track.customer.name if track.customer else "Не указан"
+
+            # Get deadline date
+            deadline_date = plate.deadline.date.strftime('%d.%m.%Y') if plate.deadline and plate.deadline.date else "Не указан"
+
+            # Get order number
+            order_number = plate.deadline.order.order_number if plate.deadline and plate.deadline.order else "Не указан"
+
+            slabs_data.append({
+                'customer': customer_name,
+                'deadline_date': deadline_date,
+                'order_number': order_number,
+                'id': plate.id,
+                'name': plate.name,
+                'length': plate.length,
+                'width': plate.width,
+                'height': plate.height,
+                'load': plate.capacity,
+                'concrete_class': plate.concrete_class,
+                'wire_top': plate.wire_top,
+                'wire_bottom': plate.wire_bottom
+            })
+
+        return Response(slabs_data)
+
     def list(self, request):
         """Override list method to return tracks with slabs"""
         # Get all unique positions
@@ -65,7 +99,7 @@ class TrackViewSet(viewsets.ModelViewSet):
 
             # Add data for each date
             for date in dates:
-                day_track = Track.objects.filter(position=track.position, day=date).first()
+                day_track = Track.objects.filter(position=track.position, day=date).prefetch_related('plates', 'plates__deadline__order').first()
 
                 if day_track:
                     # Format date for display
@@ -80,33 +114,43 @@ class TrackViewSet(viewsets.ModelViewSet):
                     day_kpi = Stats.calculate_day_kpi(date)
                     kpi_score = round(day_kpi['score'], 2)
 
+                    # Calculate sum of overendering_wire_kg for this day
+                    day_tracks = Track.objects.filter(day=date).prefetch_related('plates')
+                    total_overendering_wire_kg = sum(track.overendering_wire_kg for track in day_tracks if track.plates.exists())
+
                     # Create day data
                     day_data = {
                         'date': display_date,
                         'slabs': [],
                         'freeSpace': f"{day_track.free_length}мм",
-                        'kpi': kpi_score
+                        'kpi': kpi_score,
+                        'total_overendering_wire_kg': total_overendering_wire_kg
                     }
 
                     # Instead of individual slabs, add track info
                     if day_track.plates.exists():
                         # Format price with comma as decimal separator
                         price_str = f"{day_track.cost:.2f}".replace('.', ',')
-
+                        track_orders = [plate.deadline.order.order_number for plate in day_track.plates.all() if plate.deadline and plate.deadline.order]
+                        track_plates_names = [plate.name for plate in day_track.plates.all()]
                         info = {
                             'id': f'{day_track.id}',
                             'number': f'#{day_track.id}',
-                            'size': f'{day_track.width}x{day_track.height}',
-                            'width': day_track.width,
-                            'height': day_track.height,
+                            'orders': track_orders,
+                            'plates': track_plates_names,
+                            'size': f'{int(day_track.width)}x{int(day_track.height)}',
+                            'width': int(day_track.width),
+                            'height': int(day_track.height),
                             'wireTop': f'{day_track.wire_top}',
                             'wireBottom': f'{day_track.wire_bottom}',
                             'concrete': day_track.concrete_class,
                             'occupied': f'{day_track.useful_length}',
                             'free': f'{day_track.free_length}',
                             'price': f'{price_str} ₽',
-                            'deadline': day_track.deadline.strftime('%d-%m-%Y') if day_track.deadline else 'Нет',
-                            'status': 'overdue' if day_track.has_overdue_deadline else 'booked'
+                            'deadline': day_track.deadline.strftime('%d-%m-%Y') if day_track.deadline else None,
+                            'status': 'overdue' if day_track.has_overdue_deadline else 'booked',
+                            'is_manual': day_track.is_manual,
+                            'overendering_wire_kg': day_track.overendering_wire_kg,
                         }
                         day_data.update(info)
                     else:
@@ -124,18 +168,22 @@ class TrackViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def update_contractor(self, request, pk=None):
-        """Update track contractor"""
+        """Update track contractor for all tracks with the same position"""
         track = self.get_object()
         contractor_name = request.data.get('contractor')
+
+        # Get all tracks with the same position
+        tracks_with_same_position = Track.objects.filter(position=track.position)
 
         if contractor_name:
             # Get or create contractor
             contractor, created = Customer.objects.get_or_create(name=contractor_name)
-            track.customer = contractor
+            # Update all tracks with the same position
+            tracks_with_same_position.update(customer=contractor)
         else:
-            track.customer = None
+            # Set customer to None for all tracks with the same position
+            tracks_with_same_position.update(customer=None)
 
-        track.save()
         return Response({'status': 'success'})
 
     @action(detail=False, methods=['post'])
@@ -154,15 +202,98 @@ class TrackViewSet(viewsets.ModelViewSet):
 
             track1.position = track2.position
             track1.day = track2.day
+            track1.is_manual = True
 
             track2.position = track1_position
             track2.day = track1_day
+            track2.is_manual = True
 
             track1.save()
             track2.save()
 
             return Response({'status': 'success'})
          raise ValidationError('Invalid request')
+
+    @action(detail=False, methods=['post'], url_path='transfer-slabs')
+    def transfer_slabs(self, request):
+        """Transfer multiple slabs to another track on a specific date"""
+        if 'slabIds' in request.data and 'targetTrackPosition' in request.data and 'targetDate' in request.data:
+            slab_ids = request.data.get('slabIds')
+            target_track_position = int(request.data.get('targetTrackPosition').split(' ')[1]) - 1
+            target_date = request.data.get('targetDate')
+
+            # Convert target_date to datetime.date if it's a string
+            if isinstance(target_date, str):
+                try:
+                    target_date = datetime.datetime.strptime(target_date, '%Y-%m-%d').date()
+                except ValueError:
+                    raise ValidationError('Invalid date format. Expected YYYY-MM-DD')
+
+            # Get the target track
+            try:
+                target_track = Track.objects.get(position=target_track_position, day=target_date)
+            except Track.DoesNotExist:
+                # Create a new track if it doesn't exist
+                params = Parameters.get_solo()
+                # Use the provided position
+                position = int(target_track_position)
+                if position >= params.default_available_tracks:
+                    raise ValidationError(f'Максимальное количество треков ({params.default_available_tracks}) для этой даты уже достигнутo')
+
+                target_track = Track.objects.create(
+                    position=position,
+                    day=target_date
+                )
+
+            # Get the slabs to transfer
+            slabs = Plate.objects.filter(id__in=slab_ids)
+            if not slabs:
+                raise ValidationError('No slabs found with the provided IDs')
+
+            # Check if the target track already has slabs
+            if target_track.plates.exists():
+                # Check if the width and height of the target track match the slabs
+                target_width = target_track.width
+                target_height = target_track.height
+
+                for slab in slabs:
+                    if slab.width != target_width or slab.height != target_height:
+                        raise ValidationError(
+                            f'Размеры плиты (ширина: {slab.width}, высота: {slab.height}) не совпадает. '
+                            f'Размеры целевого трека (ширина: {target_width}, высота: {target_height})'
+                        )
+
+            # Check if the track's length won't be exceeded
+            params = Parameters.get_solo()
+            current_length = target_track.useful_length
+            additional_length = sum(slab.length for slab in slabs)
+
+            if current_length + additional_length > params.road_length:
+                raise ValidationError(
+                    f'Track length would be exceeded. Current: {current_length}, '
+                    f'Additional: {additional_length}, Maximum: {params.road_length}'
+                )
+
+            # Store the source tracks before transferring
+            source_tracks = set()
+            for slab in slabs:
+                if slab.track:
+                    source_tracks.add(slab.track)
+
+                # Transfer the slab
+                slab.track = target_track
+                slab.save()
+
+            # Refresh the source tracks' data
+            for source_track in source_tracks:
+                source_track.refresh_from_db()
+
+            # Refresh the target track's data
+            target_track.refresh_from_db()
+
+            return Response({'status': 'success'})
+
+        raise ValidationError('Invalid request. Required parameters: slabIds, targetTrackPosition, targetDate')
 
 class OrderViewSet(viewsets.ModelViewSet):
     """
@@ -203,6 +334,58 @@ class PlateViewSet(viewsets.ModelViewSet):
     queryset = Plate.objects.all()
     serializer_class = PlateSerializer
     permission_classes = [permissions.AllowAny]
+
+    def update(self, request, *args, **kwargs):
+        """Update a plate"""
+        plate = self.get_object()
+
+        # Store the original track for later reference
+        original_track = plate.track
+
+        # Get the data from the request
+        name = request.data.get('name', plate.name)
+        length = request.data.get('length', plate.length)
+        concrete_class = request.data.get('concrete_class', plate.concrete_class)
+        wire_top = request.data.get('wire_top', plate.wire_top)
+        wire_bottom = request.data.get('wire_bottom', plate.wire_bottom)
+
+        # Update the plate
+        plate.name = name
+        plate.length = length
+        plate.concrete_class = concrete_class
+        plate.wire_top = wire_top
+        plate.wire_bottom = wire_bottom
+
+        # Save the plate
+        plate.save()
+
+        # Refresh the track data if the plate is assigned to a track
+        if original_track:
+            # The track properties are calculated dynamically based on its plates,
+            # so we just need to ensure the track object is refreshed from the database
+            original_track.refresh_from_db()
+
+        # Return the updated plate
+        serializer = self.get_serializer(plate)
+        return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete a plate"""
+        plate = self.get_object()
+
+        # Store the track reference before deleting the plate
+        track = plate.track
+
+        # Delete the plate
+        plate.delete()
+
+        # Refresh the track data if the plate was assigned to a track
+        if track:
+            # The track properties are calculated dynamically based on its plates,
+            # so we just need to ensure the track object is refreshed from the database
+            track.refresh_from_db()
+
+        return Response({'status': 'success'})
 
 class ReadyPlateViewSet(viewsets.ModelViewSet):
     """

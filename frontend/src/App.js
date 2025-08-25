@@ -4,7 +4,8 @@ import {
   faRoad, faCubes, faPercentage, faCog, faPrint, faCalculator, 
   faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, 
   faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
-  faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp
+  faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
+  faHandPaper
 } from '@fortawesome/free-solid-svg-icons';
 import { getDashboardStats, startCalculation } from './services/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -20,7 +21,8 @@ library.add(
   faRoad, faCubes, faPercentage, faCog, faPrint, faCalculator, 
   faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, 
   faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
-  faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp
+  faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
+  faHandPaper
 );
 
 function App() {
@@ -83,27 +85,27 @@ function App() {
   ];
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="px-10 pb-4" style={{backgroundColor: "#F8FAFD"}}>
       <Header 
-        title="Панель управления"
+        title="ПАНЕЛЬ УПРАВЛЕНИЯ"
         stats={stats}
         actions={actions}
         loading={loading || calculating}
         onAction={handleAction}
       />
 
-      <main className="mx-auto px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto rounded-xl shadow-sm p-6 space-y-6 mt-4">
         <TabNavigation 
           activeTab={activeTab}
           setActiveTab={setActiveTab}
         />
 
-        <div className="mt-6">
+        <div>
           {activeTab === 'track-availability' && <TrackAvailability calculating={calculating} />}
           {activeTab === 'orders' && <Orders />}
           {activeTab === 'cost-params' && <CostParams />}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

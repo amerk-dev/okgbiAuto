@@ -30,6 +30,8 @@ urlpatterns = [
 
     # Maintain compatibility with old API endpoints
     path('tracks/<int:pk>/contractor/', TrackViewSet.as_view({'post': 'update_contractor'}), name='update_track_contractor'),
+    # Explicitly register the transfer_slabs action with the POST method
+    path('tracks/transfer-slabs/', TrackViewSet.as_view({'post': 'transfer_slabs'}), name='transfer_slabs'),
     path('materials/', UnitPriceViewSet.as_view({'get': 'materials'}), name='materials'),
     path('materials/update/', UnitPriceViewSet.as_view({'post': 'update_materials'}), name='update_materials'),
     path('track-settings/', ParametersViewSet.as_view({'get': 'track_settings'}), name='track_settings'),

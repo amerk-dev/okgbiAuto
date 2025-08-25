@@ -1,142 +1,110 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 
 const Header = ({ title, stats, actions, loading = false, onAction }) => {
-  // Color mapping from color names to hex codes (Tailwind CSS -600 shades)
+  // Color mapping for action buttons
   const colorMap = {
-    blue: '#2563eb',    // blue-600
-    green: '#16a34a',   // green-600
-    yellow: '#ca8a04',  // yellow-600
-    purple: '#9333ea',  // purple-600
-    indigo: '#4f46e5',  // indigo-600
-    orange: '#ea580c',  // orange-600
-    red: '#dc2626',     // red-600
+    blue: 'bg-blue-700 hover:bg-blue-800',
+    green: 'bg-green-600 hover:bg-green-700',
+    yellow: 'bg-yellow-600 hover:bg-yellow-700',
+    purple: 'bg-purple-600 hover:bg-purple-700',
+    indigo: 'bg-indigo-700 hover:bg-indigo-800',
+    orange: 'bg-orange-600 hover:bg-orange-700',
+    red: 'bg-red-600 hover:bg-red-700',
   };
-  // Initialize state to track which sections are expanded
-  const [expandedSections, setExpandedSections] = useState({
-    'Статистика на сегодня': true,
-    'Общая статистика': false,
-    'KPI расстановки плит': false
-  });
 
-  // Toggle section expansion
-  const toggleSection = (section) => {
-    setExpandedSections({
-      ...expandedSections,
-      [section]: !expandedSections[section]
-    });
-  };
+  // Filter stats by section
+  const todayStats = stats.filter(stat => stat.section === 'Статистика на сегодня');
+  const generalStats = stats.filter(stat => stat.section === 'Общая статистика');
 
   return (
-    <header className="bg-white shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold leading-tight text-gray-900">
-              {title}
-            </h1>
+    <div className="mx-auto space-y-4 px-10">
+      {/* Header with title and date/print - Block 1 */}
+      <div className="bg-white rounded-b-xl shadow-sm p-6">
+        <header className="flex justify-between items-center">
+          <h1 className="text-xl font-bold text-gray-700 tracking-wider">{title}</h1>
+          <div className="flex items-center gap-4">
+            <input type="date" className="border border-gray-300 rounded-md px-3 py-1.5 text-sm text-gray-500" />
+            <button className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50">
+              <FontAwesomeIcon icon="print" className="w-5 h-5" />
+              <span>Печать</span>
+            </button>
           </div>
+        </header>
+      </div>
 
-          <div className="mt-4 flex md:mt-0 md:ml-4 space-x-3">
-            {/* Print Block */}
-            <div className="relative">
-              <input type="date" className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" />
-              <button className="ml-2 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                <FontAwesomeIcon icon="print" className="mr-2" /> Печать
-              </button>
+      <div style={{display: 'flex', justifyContent: 'space-between', width: '100%'}}>
+      {/* Stats - Block 2 */}
+      {loading ? (
+        <div className="bg-white rounded-xl shadow-sm p-6 text-center py-10">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+          <p className="mt-2 text-gray-600">Загрузка статистики...</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm p-6" style={{width: '80%'}}>
+          <div className="flex text-sm" style={{gap: '190px'}}>
+            {/* Today's Stats */}
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Статистика на сегодня</h3>
+              <div className="space-y-2.5 text-gray-600">
+                {todayStats.map(stat => (
+                  <p key={stat.id} className="flex items-center">
+                    <FontAwesomeIcon icon={stat.icon} className="text-blue-600 mr-2 w-6 h-6" />
+                    {stat.title}: 
+                    <span className={stat.highlight ? "text-red-600 font-semibold ml-1" : "ml-1"}>
+                      {stat.value}
+                    </span>
+                  </p>
+                ))}
+              </div>
+            </div>
+
+            {/* General Stats */}
+            <div>
+              <h3 className="font-semibold text-gray-800 mb-3">Общая статистика</h3>
+              <div className="space-y-2.5 text-gray-600">
+                {generalStats.slice(0, 3).map(stat => (
+                  <p key={stat.id} className="flex items-center">
+                    <FontAwesomeIcon icon={stat.icon} className="text-blue-600 mr-2 w-6 h-6" />
+                    {stat.title}: 
+                    <span className="font-semibold ml-1">{stat.value}</span>
+                  </p>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="font-semibold text-white mb-3">Общая статистика</h3>
+              <div className="space-y-2.5 text-gray-600">
+                {generalStats.slice(3,).map(stat => (
+                  <p key={stat.id} className="flex items-center">
+                    <FontAwesomeIcon icon={stat.icon} className="text-blue-600 mr-2 w-6 h-6" />
+                    {stat.title}:
+                    <span className="font-semibold ml-1">{stat.value}</span>
+                  </p>
+                ))}
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Stats */}
-        {loading ? (
-          <div className="mt-6 text-center py-10">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Загрузка статистики...</p>
-          </div>
-        ) : (
-          /* Group stats by section */
-          ['Статистика на сегодня', 'Общая статистика', 'KPI расстановки плит'].map(section => (
-            <div key={section} className="mt-6">
-              <div 
-                className="flex items-center justify-between cursor-pointer" 
-                onClick={() => toggleSection(section)}
-              >
-                <h2 className="text-lg font-medium text-gray-900 mb-3">{section}</h2>
-                <FontAwesomeIcon 
-                  icon={expandedSections[section] ? 'chevron-up' : 'chevron-down'} 
-                  className="text-gray-500"
-                />
-              </div>
-              {expandedSections[section] && (
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-                  {stats
-                    .filter(stat => stat.section === section)
-                    .map(stat => (
-                      <div key={stat.id} className="bg-white overflow-hidden shadow rounded-lg">
-                        <div className="px-4 py-5 sm:p-6">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 rounded-md p-4" style={{ backgroundColor: colorMap[stat.color] }}>
-                              <FontAwesomeIcon icon={stat.icon} className="text-white" size="2x" />
-                            </div>
-                            <div className="ml-5 w-0 flex-1">
-                              <dl>
-                                <dt className="text-sm font-medium text-gray-500 truncate group relative">
-                                  {stat.title}
-                                  {stat.tooltip && (
-                                    <span className="absolute hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 -mt-2 ml-2 z-10 max-w-xs">
-                                      {stat.tooltip}
-                                    </span>
-                                  )}
-                                </dt>
-                                <dd>
-                                  <div className="text-lg font-medium text-gray-900">
-                                    {stat.value}
-                                  </div>
-                                </dd>
-                              </dl>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          ))
-        )}
-
-        {/* Action Buttons */}
-        <div className="mt-6 flex justify-end space-x-3">
+      {/* Action Buttons - Block 3 */}
+      <div className="bg-white rounded-xl shadow-sm p-10 flex justify-end">
+        <div className="flex gap-3" style={{flexDirection: 'column'}}>
           {actions.map(action => (
-            <button 
+            <button
+                style={{height: '45px'}}
               key={action.id}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              style={{ 
-                backgroundColor: colorMap[action.color],
-                // We can't use hover with inline styles, so we'll keep the focus ring styling with classes
-              }}
+              className={`${colorMap[action.color]} text-white px-5 py-2.5 rounded-lg text-sm font-semibold`}
               onClick={() => onAction && onAction(action.id)}
-              onMouseOver={(e) => {
-                // Darken the color by 10% for hover effect
-                const color = colorMap[action.color];
-                if (color) {
-                  // Convert hex to RGB, darken, then convert back to hex
-                  const r = parseInt(color.slice(1, 3), 16);
-                  const g = parseInt(color.slice(3, 5), 16);
-                  const b = parseInt(color.slice(5, 7), 16);
-                  const darkerColor = `#${Math.max(0, Math.floor(r * 0.9)).toString(16).padStart(2, '0')}${Math.max(0, Math.floor(g * 0.9)).toString(16).padStart(2, '0')}${Math.max(0, Math.floor(b * 0.9)).toString(16).padStart(2, '0')}`;
-                  e.currentTarget.style.backgroundColor = darkerColor;
-                }
-              }}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = colorMap[action.color]}
             >
-              <FontAwesomeIcon icon={action.icon} className="mr-2" /> {action.label}
+              {action.label}
             </button>
           ))}
         </div>
       </div>
-    </header>
+        </div>
+    </div>
   );
 };
 
