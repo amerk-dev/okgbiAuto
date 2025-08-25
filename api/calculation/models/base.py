@@ -230,7 +230,7 @@ class Track(models.Model):
 
         needed_wire_kg = 0
         for plate in self.plates.all():
-            needed_wire_kg += Decimal(str(plate.length)) / 1000 * (wire_top_max + wire_bottom_max)
+            needed_wire_kg += Decimal(str(plate.length)) / 1000 * (int(plate.wire_top) + int(plate.wire_bottom))
         return corrent_useful_kg - needed_wire_kg * Decimal("0.156")
 
 class AbstractPlate(models.Model):

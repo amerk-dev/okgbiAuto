@@ -372,7 +372,7 @@ def post_calculating_deadlines():
 
     deadlines = {}
     for track in tracks:
-        if track.customer:
+        if track.customer or track.is_manual:
             continue
         agg = Plate.objects.filter(track=track.id).aggregate(
             min_date=Min('deadline__date'),
