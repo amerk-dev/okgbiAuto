@@ -86,6 +86,11 @@ class Track(models.Model):
 
         with transaction.atomic():
             days = 100
+            track_with_customers = Track.objects.filter(customer__isnull=False).values_list(
+                "day", "position", "customer_id"
+            )
+            customer_map = {(day, position): customer_id for day, position, customer_id in track_with_customers}
+
             cls.objects.all().delete()
 
             new_tracks = []
@@ -101,11 +106,14 @@ class Track(models.Model):
                 if is_weekend:
                     continue
                 for position in range(params.default_available_tracks):
+                    customer_id = customer_map.get((day, position))
                     new_tracks.append(Track(
                         day=day,
-                        position=position
+                        position=position,
+                        customer_id=customer_id
                     ))
             cls.objects.bulk_create(new_tracks)
+
 
     @classmethod
     def get_tracks(cls):

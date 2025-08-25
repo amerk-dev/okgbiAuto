@@ -1,15 +1,10 @@
 import datetime
-import math
 import time
 from collections import defaultdict
-from itertools import groupby
 from typing import Any, List
 from django.db.models import Min, Max
-from django.db.models import Subquery, OuterRef
 
-from calculation.models import Track, Order, ReadyPlate, Plate, Parameters, UnitPrice
-from django.db import transaction
-from ortools.sat.python import cp_model
+from calculation.models import Track, Order, ReadyPlate, Plate, Parameters
 
 
 def profile_time(func):
@@ -36,53 +31,29 @@ class Retooler:
     h: int
 
 
-class GapPrinter(cp_model.CpSolverSolutionCallback):
-    def __init__(self):
-        super().__init__()
-        self.start_time = time.time()
-        self.iteration = 0
-
-    def on_solution_callback(self):
-        self.iteration += 1
-        elapsed = time.time() - self.start_time
-        current_obj = self.ObjectiveValue()
-        best_bound = self.BestObjectiveBound()
-
-        # Вычисляем gap
-        if current_obj != 0:
-            gap = abs(current_obj - best_bound) / abs(current_obj) * 100
-        else:
-            gap = 0.0
-
-        print(f"#{self.iteration:3d} {elapsed:6.2f}s  Current obj: {current_obj:.2f}  Best bound: {best_bound:.2f}  Gap: {gap:.2f}%")
-
-
-
 def get_parameters():
     """Получает и возвращает ключевые параметры для расчета плана."""
     params = Parameters.get_solo()
     return {
         params.road_length,
         params.tail_length,
-        params.production_lag,
+        # можно добавить и другие нужные параметры
     }
 
 
 @profile_time
-def claster_plan():
-    track_len, tail_len, production_lag = get_parameters()
+def calculate_plan():
+    track_len, tail_len = get_parameters()
 
     Track.recreate_tracks()
-    tracks = list(Track.get_tracks())
+    tracks = Track.get_tracks()
 
     ready_plates = ReadyPlate.objects.all()
     use_ready_plates = 0
     for plate in ready_plates:
-        need_plate = Plate.objects.filter(
-            width=plate.width, height=plate.height,
-            length=plate.length, concrete_class=plate.concrete_class,
-            wire_bottom=plate.wire_bottom, wire_top=plate.wire_top
-        ).first()
+        need_plate = Plate.objects.filter(width=plate.width, height=plate.height,
+                                          length=plate.length, concrete_class=plate.concrete_class,
+                                          wire_bottom=int(plate.wire_bottom), wire_top=int(plate.wire_top)).first()
         if need_plate:
             need_plate.delete()
             use_ready_plates += 1
@@ -90,181 +61,131 @@ def claster_plan():
     if not ready_plates:
         print("Готовых плит нет.")
 
-    plates_from_db = Plate.objects.filter(track__isnull=True)
+    tracks_with_customers = Track.objects.filter(customer__isnull=False)
 
-    tasks = []
-    for p in plates_from_db:
-        # дедлайн может быть None → заменяем на максимально возможную дату
-        deadline_date = p.deadline.date if (p.deadline and p.deadline.date) else datetime.date.max
-        tasks.append({
-            'length': int(p.length),
-            'width': p.width,
-            'height': p.height,
-            'concrete_class': p.concrete_class,
-            'wire_top': p.wire_top,
-            'wire_bottom': p.wire_bottom,
-            'deadline': deadline_date,
-            "p": p
-        })
+    for track in tracks_with_customers:
+        order = Order.objects.filter(customer=track.customer)
+        plates = Plate.objects.filter(deadline__order__in=order)
+        if not plates: break
+        if track.free_length == track_len:
+            plate = plates[0]
+            plate.track = track
+            plate.save()
+        else:
+            for plate in plates:
+                if plate.length <= track.free_length and plate.width == track.width and plate.height == track.height:
+                    plate.track = track
+                    plate.save()
 
-    if not tasks:
-        print("Нет плит для планирования.")
-        return
+    plates = Plate.objects.filter(track__isnull=True)
+    is_real = reality_check(plates, tracks, track_len)
 
-    # вычисляем последний возможный день производства
-    for t in tasks:
-        t['deadline'] = t['deadline'] - datetime.timedelta(days=production_lag)
+    create_plan(tracks)
+    # post_calculating()
 
-    # сортируем задачи по deadline, чтобы приоритет у горящих заказов
-    tasks.sort(key=lambda x: x['deadline'])
+    # fill_remaining_plates()  # Новый шаг
 
-    # кластеризация по (width, height)
-    clusters = defaultdict(list)
-    for t in tasks:
-        key = (t['width'], t['height'])
-        clusters[key].append(t)
-
-    # сортировка кластеров по самому раннему дедлайну
-    cluster_keys = sorted(clusters.keys(), key=lambda cl: min(p['deadline'] for p in clusters[cl]))
-
-    # планирование: идём по кластерам, начиная с самых срочных
-    for cl in cluster_keys:
-        print(f"Работаем с кластером {cl}")
-        plist = clusters[cl]
-        plist.sort(key=lambda x: x['deadline'])  # внутри кластера тоже срочные вперёд
-
-        available_tracks = [track for track in tracks if not track.customer and track.free_length >= track_len]
-        max_bins = len(available_tracks)
-        if max_bins == 0:
-            continue
-
-        n = len(plist)
-        if n == 0:
-            continue
-        total_length = sum(p['length'] for p in plist)
-        max_bins = min(len(available_tracks), math.ceil(total_length / track_len) + 1)
-        max_capacity = track_len * max_bins
-        if total_length > max_capacity:
-            print(
-                f"Невозможно упаковать все {n} плиты в кластере {cl}: общая длина {total_length} мм превышает ёмкость {max_capacity} мм.")
-            # Здесь можно добавить логику: отложить плиты или увеличить max_bins, если возможно
-            continue  # Или обработать частично
-        # Настройка модели OR-Tools
-        model = cp_model.CpModel()
-
-        assign = [[model.NewBoolVar(f'assign_{i}_{b}') for b in range(max_bins)] for i in range(n)]
-        bin_used = [model.NewBoolVar(f'bin_used_{b}') for b in range(max_bins)]
-
-        for b in range(max_bins):
-            for i in range(n):
-                model.Add(bin_used[b] >= assign[i][b])
-
-        # Ограничение по вместимости
-        for b in range(max_bins):
-            model.Add(sum(assign[i][b] * plist[i]['length'] for i in range(n)) <= track_len * bin_used[b])
-
-        # Обязательная упаковка ВСЕХ плит: каждая плита должна быть назначена ровно на одну дорожку
-        for i in range(n):
-            model.Add(sum(assign[i][b] for b in range(max_bins)) == 1)
-        print(f"Плит в кластере: {n}")
-        # Атрибуты для разнородности
-        attrs = ['concrete_class', 'wire_bottom']
-        possible = {attr: set(p[attr] for p in plist) for attr in attrs}
-
-        used = {}
-        for attr in attrs:
-            used[attr] = {}
-            for val in possible[attr]:
-                used[attr][val] = [model.NewBoolVar(f'used_{attr}_{val}_{b}') for b in range(max_bins)]
-
-        for attr in attrs:
-            for val in possible[attr]:
-                for b in range(max_bins):
-                    plates_with_val = [i for i in range(n) if plist[i][attr] == val]
-                    for i in plates_with_val:
-                        model.Add(used[attr][val][b] >= assign[i][b])
-
-        # Штраф за разнородность
-        print("Штрафуем за разнородность")
-        penalty = 0
-        for b in range(max_bins):
-            for attr in attrs:
-                weight = 100 if attr == 'wire_bottom' else 1  # Увеличенный вес для wire_bottom
-                penalty += weight * sum(used[attr][val][b] for val in possible[attr])
-
-        # Штраф за остаток свободной длины
-        remaining_length = []
-        for b in range(max_bins):
-            used_length = sum(assign[i][b] * plist[i]['length'] for i in range(n))
-            remaining = model.NewIntVar(0, track_len, f'remaining_{b}')
-            model.Add(remaining == track_len * bin_used[b] - used_length)
-            remaining_length.append(remaining)
-
-        # Веса для приоритета упаковки (более срочные - больший вес)
-        weights = [n - i for i in range(n)]  # наивысший для первого (самого срочного)
-        print("Веса для приоритета упаковки")
-        print(weights)
-
-        # Коэффициенты для иерархии
-        M4 = 20  # Вес для штрафа за остаток длины
-        M3 = 400 # штраф за разнородность
-        M2 = 50 # балансирует минимизацию числа дорожек
+    print({
+        "plan": True,
+        "Use_ready_plates": use_ready_plates,
+        "is_real": is_real
+    })
 
 
-        # Objective
-        sum_remaining = sum(remaining_length[b] for b in range(max_bins))
-        model.Minimize(
-            + M2 * sum(bin_used)  # минимизация числа дорожек
-            + M3 * penalty  # минимизация разнородности
-            + M4 * sum_remaining  # минимизация остатка
-        )
+@profile_time
+def create_plan(tracks):
+    """Основная функция - алгоритм распределения плит по дорожкам
+    Args:
+        tracks (list[Track]): Список доступных дорожек.
+    """
 
-        # Решение
-        solver = cp_model.CpSolver()
-        solver.parameters.random_seed = 42
-        solver.parameters.relative_gap_limit = 0.1
-        solver.parameters.max_time_in_seconds = 300  # ToDo Убери!!!
-        callback = GapPrinter()
-        status = solver.Solve(model, callback)
+    plates = Plate.objects.filter(track__isnull=True)
+    track_len, tail_len = get_parameters()
 
-        print(f"Status: {solver.StatusName(status)}")
-        print(f"Objective value: {solver.ObjectiveValue()}")
-        print(f"Penalty (heterogeneity): {solver.Value(penalty)}")
-        print(f"Remaining length: {solver.Value(sum_remaining)}")
-        print(f"Bins used: {sum(solver.Value(bin_used[b]) for b in range(max_bins))}")
 
-        if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-            print(f"Использовано {sum(solver.Value(bin_used[b]) for b in range(max_bins))} дорожек")
-            assignments = defaultdict(list)
-            for b in range(max_bins):
-                for i in range(n):
-                    if solver.Value(assign[i][b]):
-                        assignments[b].append(i)
+    # Разделяем плиты на две группы
+    plates_with_deadline = [p for p in plates if p.deadline.date is not None]
+    plates_without_deadline = [p for p in plates if p.deadline.date is None]
 
-            for b in assignments:
-                if assignments[b]:
-                    track = available_tracks.pop(0)
-                    for i in assignments[b]:
-                        add_plate_to_track(plist[i]['p'], track)
-                        print(f"{i}. Плита {plist[i]['p']} упакована на дорожку {track}")
+    # Сортируем каждую группу
+    plates_with_deadline.sort(key=lambda p: (p.deadline.date, p.width, p.height))
+    plates_without_deadline.sort(key=lambda p: (p.width, p.height))
 
-        # Если некоторые не упакованы, они остаются для следующих итераций или ручной обработки
+    if not plates_with_deadline and not plates_without_deadline:
+        print("Нет плит для размещения. План пуст.")
+
+
+    placed_plate_ids = set()
+
+    # Функция для попытки размещения плит на дорожках
+    def place_plates(plates_list, is_dedline = False):
+        nonlocal placed_plate_ids
+        prev_current_properties = None
+        last_track_day = None
+        for track in tracks:
+            if last_track_day != track.day:
+                prev_current_properties = None
+
+            remaining_length = track.free_length
+            if prev_current_properties is not None and not is_dedline:
+                current_track_properties = prev_current_properties
+            elif track.width is not None and track.height is not None:
+                current_track_properties = (track.width, track.height)
+            else:
+                current_track_properties = None
+
+            current_track_properties = fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties)
+
+            if track.free_length == track_len:
+                current_track_properties = None
+                current_track_properties = fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties)
+
+            last_track_day = track.day
+            prev_current_properties = current_track_properties
+    # 1. Сначала размещаем плиты с дедлайнами
+    place_plates(plates_with_deadline, True)
+    # 2. Затем — без дедлайнов
+    place_plates(plates_without_deadline)
+
+    # Плиты, которые не удалось разместить
+    unplaced_plates = [p for p in plates if p.id not in placed_plate_ids]
+    if unplaced_plates:
+        print(f"{len(unplaced_plates)} плит не удалось разместить.")
 
     # post_calculating()
-    # for i in range(10):
-    #     post_calculating()
-
+    post_calculating_deadlines()
     post_calculating_deadlines()
 
+    return True
 
-def add_plate_to_track(plate, track):
-    plate.track = track
-    try:
-        plate.save()
-        return True
-    except Exception as e:
-        print(f"Ошибка при добавлении плиты {plate} на дорожку {track}: {e}")
-        return False
+
+
+def fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties):
+    for plate in plates_list:
+        if plate.id in placed_plate_ids:
+            continue
+
+        # Жёсткая проверка на вместимость
+        if plate.length > track.free_length or plate.length > remaining_length:
+            continue
+
+        plate_properties = (plate.width, plate.height)
+
+        if current_track_properties is None:
+            current_track_properties = plate_properties
+        elif plate_properties != current_track_properties:
+            continue
+
+        add_plate_to_track(plate, track)
+        placed_plate_ids.add(plate.id)
+
+        # Пересчёт после добавления
+        remaining_length = track.free_length
+
+        if remaining_length <= 0:
+            break
+
+    return current_track_properties
 
 
 @profile_time
@@ -283,52 +204,63 @@ def reality_check(plates, tracks, track_len):
         return True
 
 
+def add_plate_to_track(plate, track):
+    plate.track = track
+    try:
+        plate.save()
+        return True
+    except Exception as e:
+        print(f"Ошибка при добавлении плиты {plate} на дорожку {track}: {e}")
+        return False
+
+
 @profile_time
 def post_calculating():
-    # берем дорожку, смотрим на хвост, если есть, то сдвигаем дорожку так далеко как можем(по дате)
-    tracks = Track.get_tracks()
-    max_tail_len = Parameters.get_solo().tail_length
-    ft = Parameters.get_solo().force_tail
-    if ft == 0:  # Если нет плит с дедлайном, то дорожку в конец
-        i = 0
-        while i in range(len(tracks) - 1):
-            track = tracks[i]
-            if track.customer:
-                continue
-            next_track = tracks[i + 1]
-            if track.width != next_track.width or track.height != next_track.height:
-                earliest_date = Plate.objects.filter(track=track.id).aggregate(
-                    min_date=Min('deadline__date')
-                )['min_date']
-                if earliest_date is not None and track.free_length > max_tail_len:
-                    swap_track_to_end(track)
-                    continue
+    # Собрать все дорожки с плитами
+    tracks_with_plates = Track.objects.filter(plates__isnull=False).distinct()
+    tasks = []
+    for track in tracks_with_plates:
+        plates = list(track.plates.all())
+        if not plates:
+            continue
+        width = plates[0].width
+        height = plates[0].height
+        min_deadline = min(plate.deadline.date for plate in plates if plate.deadline.date is not None) if any(
+            plate.deadline.date is not None for plate in plates) else None
+        tasks.append({
+            'plates': plates,
+            'width': width,
+            'height': height,
+            'min_deadline': min_deadline
+        })
 
-    if ft == 1:  #
-        for track in tracks:
-            if track.customer:
-                continue
-            earliest_date = Plate.objects.filter(track=track.id).aggregate(
-                min_date=Min('deadline__date')
-            )['min_date']
-            if earliest_date is not None and track.free_length > max_tail_len:
-                swap_track_to_end(track)
-                continue
+    # Получить все дорожки как позиции, упорядоченные по дню и позиции
+    all_tracks = Track.objects.all().order_by('day', 'position')
 
-    if ft == 2:  #
-        for track in tracks:
-            # if had customers -> resume
-            if track.customer:
-                continue
-            if track.free_length > max_tail_len:
-                earliest_date = Plate.objects.filter(track=track.id).aggregate(
-                    min_date=Min('deadline__date')
-                )['min_date']
-                if earliest_date is not None:
-                    swap_track_to_deadline(track, earliest_date)
-                else:
-                    swap_track_to_end(track)
+    # ❌ Убираем полное обнуление Plate.track
+    # Plate.objects.all().update(track=None)
 
+    available_tasks = tasks.copy()
+    previous_properties = None
+    for position_track in all_tracks:
+        day = position_track.day
+        candidates = [task for task in available_tasks if task['min_deadline'] is None or task['min_deadline'] >= day]
+        if not candidates:
+            continue
+        if previous_properties:
+            matching = [task for task in candidates if (task['width'], task['height']) == previous_properties]
+            chosen_task = matching[0] if matching else candidates[0]
+        else:
+            chosen_task = candidates[0]
+        for plate in chosen_task['plates']:
+            if plate.length > position_track.free_length:
+                continue
+            add_plate_to_track(plate, position_track)
+        previous_properties = (chosen_task['width'], chosen_task['height'])
+        available_tasks.remove(chosen_task)
+
+    if available_tasks:
+        print(f"Не удалось разместить {len(available_tasks)} заданий")
 
 @profile_time
 def fill_remaining_plates():
@@ -346,228 +278,181 @@ def fill_remaining_plates():
             break
 
 
+
 @profile_time
-def swap_track_to_end(this_track):
-    tracks = Track.objects.filter(day__gt=this_track.day).order_by("day", "position")
-
-    if not tracks.exists():
-        return True  # Нет дорожек для обмена, завершаем
-
-    # Сохраняем исходные значения this_track
-    current_day = this_track.day
-    current_position = this_track.position
-
-    # Перемещаем this_track к началу, последовательно меняя day и position
+def swap_track_to_end(tracks, this_track):
     for track in tracks:
-        if track.id != this_track.id:  # На случай, если this_track уже в списке
-            # Сохраняем значения текущей дорожки
-            next_day = track.day
-            next_position = track.position
-
-            # Обновляем значения текущей дорожки
-            track.day = current_day
-            track.position = current_position
-            track.save()
-
-            # Обновляем значения this_track
-            current_day = next_day
-            current_position = next_position
-
-    # Сохраняем финальные значения для this_track
-    this_track.day = current_day
-    this_track.position = current_position
-    this_track.save()
-
+        if this_track.id != track.id:
+            track.id, this_track.id = this_track.id, track.id
     return True
 
 
 @profile_time
-def swap_track_to_start(this_track) -> bool:
-    # Получаем дорожки с меньшим днем, сортируем по убыванию day и position
-    tracks = Track.objects.filter(day__lt=this_track.day).order_by("-day", "-position")
-
-    if not tracks.exists():
-        return True  # Нет дорожек для обмена, завершаем
-
-    # Сохраняем исходные значения this_track
-    current_day = this_track.day
-    current_position = this_track.position
-
-    # Перемещаем this_track к началу, последовательно меняя day и position
-    for track in tracks:
-        if track.id != this_track.id:  # На случай, если this_track уже в списке
-            # Сохраняем значения текущей дорожки
-            next_day = track.day
-            next_position = track.position
-
-            # Обновляем значения текущей дорожки
-            track.day = current_day
-            track.position = current_position
-            track.save()
-
-            # Обновляем значения this_track
-            current_day = next_day
-            current_position = next_position
-
-    # Сохраняем финальные значения для this_track
-    this_track.day = current_day
-    this_track.position = current_position
-    this_track.save()
-
-    return True
-
-
-@profile_time
-def swap_track_to_deadline(this_track, deadline):
+def swap_track_to_deadline(tracks: List[Track], this_track, day):
     # Берем айдишники и меняем всю инфу местами, если у предыдущего нет ограничений
-
-    # Получаем дорожки с днем меньше целевой даты, сортируем по убыванию day и возрастанию position
-    filtered_tracks = Track.objects.filter(day__gt=this_track.day).order_by("day", "position")
-
-    if not filtered_tracks.exists():
-        return False
-
-    # Сохраняем исходные значения this_track
-    current_day = this_track.day
-    current_position = this_track.position
-
-    # Перемещаем this_track к позиции перед target_date, меняя day и position
-    for track in filtered_tracks:
-        if track.id != this_track.id:  # Пропускаем, если это та же дорожка
-            # Сохраняем значения текущей дорожки
-            next_day = track.day
-            next_position = track.position
-
-            # Обновляем значения текущей дорожки
-            track.day = current_day
-            track.position = current_position
-            track.save()
-
-            # Обновляем значения для следующей итерации
-            current_day = next_day
-            current_position = next_position
-
-    # Сохраняем финальные значения для this_track
-    this_track.day = current_day
-    this_track.position = current_position
-    this_track.save()
-
+    for track in tracks:
+        if track.day >= day:
+            break
+        if track.day < day and track.id != this_track.id:
+            track.id, this_track.id = this_track.id, track.id
     return True
 
 
 @profile_time
-def swap_track_to_start_to_deadline(tracks, this_track: Track, deadline: datetime.date) -> bool:
-    # Вычисляем целевую дату (за 2 дня до дедлайна)
-    target_date = deadline - datetime.timedelta(days=1)
+def swap_to_one():
+    tracks = list(Track.get_tracks())  # Step 1: Convert to list
+    max_tail_len = Parameters.get_solo().tail_length
 
-    # Получаем дорожки с днем меньше целевой даты, сортируем по убыванию day и возрастанию position
-    filtered_tracks = tracks.filter(day__lt=target_date).order_by("-day", "position")
+    updated_tracks = []
+    deadlines = {}
+    for track in tracks:
+        agg = Plate.objects.filter(track=track.id).aggregate(
+            min_date=Min('deadline__date'),
+            max_date=Max('deadline__date')
+        )
+        deadlines[track.id] = {
+            'min': agg['min_date'],
+            'max': agg['max_date']
+        }
 
-    if not filtered_tracks.exists():
-        return False
+    # Iterate over tracks starting from index 1
+    for i in range(1, len(tracks)):
+        track = tracks[i]
+        if track.customer or track.is_manual:
+            continue
+        if track.free_length > max_tail_len:
+            min_deadline_i = deadlines.get(track.id, {}).get('min')
+            max_deadline_i = deadlines.get(track.id, {}).get('max')
+            if min_deadline_i is None or max_deadline_i is None:
+                continue
+            # Check if sizes differ from the previous track
+            if tracks[i - 1].width != track.width or tracks[i - 1].height != track.height:
+                # Look for a suitable track to swap with
+                for j in range(i + 1, len(tracks)):
+                    if tracks[j].day > max_deadline_i:
+                        break
+                    if (tracks[j].width == tracks[i - 1].width and
+                            tracks[j].height == tracks[i - 1].height):
+                        min_deadline_j = deadlines.get(tracks[j].id, {}).get('min')
+                        if (min_deadline_j is not None and
+                                tracks[j].day <= min_deadline_i and
+                                tracks[i].day <= min_deadline_j):
+                            # Perform the swap (Step 2: Swap elements)
+                            tracks[i], tracks[j] = tracks[j], tracks[i]
+                            updated_tracks.append(tracks[i])
+                            updated_tracks.append(tracks[j])
+                            break
 
-    # Сохраняем исходные значения this_track
-    current_day = this_track.day
-    current_position = this_track.position
+        # Шаг 3: Обновляем позиции внутри каждого дня на основе порядка в списке
+        day_track_indices = defaultdict(list)
+        for idx, track in enumerate(tracks):
+            day_track_indices[track.day].append((idx, track))
 
-    # Перемещаем this_track к позиции перед target_date, меняя day и position
-    for track in filtered_tracks:
-        if track.id != this_track.id:  # Пропускаем, если это та же дорожка
-            # Сохраняем значения текущей дорожки
-            next_day = track.day
-            next_position = track.position
+        for day, idx_tracks in day_track_indices.items():
+            # Сортируем дорожки внутри дня по их порядку в списке
+            sorted_tracks = [track for _, track in sorted(idx_tracks, key=lambda x: x[0])]
+            for pos, track in enumerate(sorted_tracks):
+                track.position = pos
 
-            # Обновляем значения текущей дорожки
-            track.day = current_day
-            track.position = current_position
-            track.save()
-
-            # Обновляем значения для следующей итерации
-            current_day = next_day
-            current_position = next_position
-
-    # Сохраняем финальные значения для this_track
-    this_track.day = current_day
-    this_track.position = current_position
-    this_track.save()
-
-    return True
+    # Update the database with the new positions
+    if updated_tracks or tracks:
+        Track.objects.bulk_update(tracks, ['position', 'day'])
 
 
 @profile_time
 def post_calculating_deadlines():
     """Переставляет дорожки (меняет дни) так, чтобы дедлайны не «горели» с учётом производственного лага."""
-    tracks = Track.objects.all().order_by('day', 'position')
+    from django.utils.timezone import make_naive
+
+    tracks = list(Track.get_tracks())
+    updated_tracks = []
+
+    parameters = Parameters.get_solo()
+    production_lag = parameters.production_lag or 0
+
+    deadlines = {}
     for track in tracks:
         if track.customer:
             continue
+        agg = Plate.objects.filter(track=track.id).aggregate(
+            min_date=Min('deadline__date'),
+            max_date=Max('deadline__date')
+        )
+        min_date = agg.get('min_date')
+        if min_date:
+            # Приводим к naive-дате для безопасного сравнения с day (если он date)
+            if hasattr(min_date, 'tzinfo'):
+                min_date = make_naive(min_date)
+            critical_date = min_date - datetime.timedelta(days=production_lag)
+        else:
+            critical_date = None
+        deadlines[track.id] = {
+            'min': min_date,
+            'critical': critical_date
+        }
 
-        earliest_date = Plate.objects.filter(track=track.id).aggregate(
-            min_date=Min('deadline__date')
-        )['min_date']
-        if earliest_date is None:
+    for i, this_track in enumerate(tracks):
+        crit_deadline_i = deadlines.get(this_track.id, {}).get('critical')
+        if crit_deadline_i is None:
             continue
-        earliest_date = earliest_date - datetime.timedelta(days=Parameters.get_solo().production_lag)
-
-        if earliest_date <= track.day:
-            swap_track_to_start_to_deadline(Track.objects.all(), track, earliest_date)
-
-    tracks = Track.objects.all().order_by('day', 'position')
-    for track in tracks:
-        if track.customer:
+        try:
+            if this_track.day <= crit_deadline_i:
+                continue  # ещё не горит
+        except Exception:
             continue
 
-        earliest_date = Plate.objects.filter(track=track.id).aggregate(
-            min_date=Min('deadline__date')
-        )['min_date']
-        if earliest_date is None:
-            continue
-        earliest_date = earliest_date - datetime.timedelta(days=Parameters.get_solo().production_lag)
+        preferred_j = None
+        fallback_j = None
 
-        if earliest_date < datetime.date.today():
-            print(f"Дорожка {track.id} сгорела по дедлайну {earliest_date}.")
-            swap_track_to_start(track)
+        for j, other in enumerate(tracks):
+            if i == j:
+                continue
+            crit_deadline_j = deadlines.get(other.id, {}).get('critical')
 
+            # other.day должен позволить this_track не сгореть
+            cond1 = True
+            try:
+                cond1 = (other.day <= crit_deadline_i)
+            except Exception:
+                cond1 = False
+            if not cond1:
+                continue
 
-@profile_time
-def compact_days():
-    """Уплотняет дни дорожек, устраняя разрывы, с учётом production_lag."""
-    params = Parameters.get_solo()
-    production_lag = params.production_lag
+            # this_track.day должен позволить other не сгореть
+            cond2 = True
+            if crit_deadline_j is not None:
+                try:
+                    cond2 = (this_track.day <= crit_deadline_j)
+                except Exception:
+                    cond2 = False
+            if not cond2:
+                continue
 
-    # Берём только те дорожки, где реально есть плиты
-    used_tracks = Track.objects.filter(plates__isnull=False).distinct().order_by("day", "position")
-    if not used_tracks.exists():
-        print("Нет занятых дорожек — уплотнять нечего.")
-        return
+            if getattr(other, 'width', None) == getattr(this_track, 'width', None) and \
+               getattr(other, 'height', None) == getattr(this_track, 'height', None):
+                preferred_j = j
+                break
 
-    # первая дата производства
-    first_day = used_tracks.first().day
-    current_day = first_day
+            if fallback_j is None:
+                fallback_j = j
 
-    with transaction.atomic():
-        prev_day = None
-        for day in sorted(set(t.day for t in used_tracks)):
-            day_tracks = Track.objects.filter(day=day).order_by("position")
+        chosen_j = preferred_j if preferred_j is not None else fallback_j
+        if chosen_j is not None:
+            other = tracks[chosen_j]
+            this_track.day, other.day = other.day, this_track.day
+            this_track.save()
+            other.save()
+            updated_tracks.extend((this_track, other))
 
-            # если пропуск дней, переносим на ближайший current_day
-            if prev_day and (day - prev_day).days > 1:
-                day_tracks_to_move = list(day_tracks)
-                for track in day_tracks_to_move:
-                    # проверяем все плиты на дорожке
-                    valid = True
-                    for plate in track.plates.all():
-                        if plate.deadline and plate.deadline.date:
-                            latest_day = plate.deadline.date - datetime.timedelta(days=production_lag)
-                            if current_day > latest_day:
-                                valid = False
-                                break
+    # Пересчёт позиций
+    day_track_indices = defaultdict(list)
+    for idx, track in enumerate(tracks):
+        day_track_indices[track.day].append((idx, track))
+    for _, idx_tracks in day_track_indices.items():
+        sorted_tracks = [track for _, track in sorted(idx_tracks, key=lambda x: x[0])]
+        for pos, track in enumerate(sorted_tracks):
+            track.position = pos
 
-                    if valid:
-                        track.day = current_day
-                        track.save()
-
-                current_day = current_day + datetime.timedelta(days=1)
-            else:
-                current_day = day
-            prev_day = current_day
+    if updated_tracks:
+        unique_updates = {t.id: t for t in updated_tracks}.values()
+        Track.objects.bulk_update(list(unique_updates), ['position', 'day'])

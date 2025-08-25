@@ -7,7 +7,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 
 from django.db import transaction
-from .services.calculator.calculate import claster_plan
+from .services.calculator.calculate import calculate_plan
 from .services.manage_1c import Update1CDataCommand
 
 from .models import (
@@ -725,7 +725,6 @@ class CalculationView(APIView):
         """Start a calculation"""
         with transaction.atomic():
             Update1CDataCommand().execute()
-            print("claster_plan =", claster_plan, type(claster_plan))
 
-            claster_plan()
+            calculate_plan()
         return Response({'status': 'success', 'message': 'Calculation successfully'})
