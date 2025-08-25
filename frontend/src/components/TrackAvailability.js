@@ -1045,7 +1045,7 @@ const TrackAvailability = ({calculating}) => {
             return (
               <div key={`header-${day.date}`} className="p-2 text-center bg-white">
                 <p>{dateText}</p>
-                {hasOverrun && (
+                {day.total_overendering_wire_kg && (
                   <span className="flex items-center justify-center gap-1 text-red-600">
                     <FontAwesomeIcon icon="exclamation-triangle" className="text-red-600" />
                     {day.total_overendering_wire_kg ? `${day.total_overendering_wire_kg.toFixed(2)}КГ` : '0КГ'}
