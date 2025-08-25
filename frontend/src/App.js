@@ -5,7 +5,7 @@ import {
   faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, 
   faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
   faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
-  faHandPaper
+  faHandPaper, faWrench, faLineChart
 } from '@fortawesome/free-solid-svg-icons';
 import { getDashboardStats, startCalculation } from './services/api';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -18,7 +18,7 @@ import CostParams from './components/CostParams';
 
 // Add all icons to the library
 library.add(
-  faRoad, faCubes, faPercentage, faCog, faPrint, faCalculator, 
+  faRoad, faCubes, faWrench, faLineChart, faPercentage, faCog, faPrint, faCalculator,
   faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, 
   faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
   faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,

@@ -636,7 +636,7 @@ class DashboardStatsView(APIView):
                 'section': 'Общая статистика',
                 'title': 'Количество переналадок',
                 'value': f"{overall_stats['retool_count']} шт",
-                'icon': 'cog',
+                'icon': 'wrench',
                 'color': 'purple'
             },
             {
@@ -659,17 +659,17 @@ class DashboardStatsView(APIView):
             {
                 'id': 10,
                 'section': 'KPI расстановки плит',
-                'title': 'Общий показатель эффективности',
+                'title': 'Общий KPI',
                 'value': f"{overall_stats['kpi_score']:.2f}",
-                'icon': 'chart-line',
+                'icon': 'line-chart',
                 'color': 'blue',
                 'tooltip': 'Чем ниже значение, тем лучше расстановка'
             },
             {
                 'id': 11,
                 'section': 'KPI расстановки плит',
-                'title': 'Экономия на типе бетона',
-                'value': f"{overall_stats['kpi_concrete_economy']:.2f}",
+                'title': 'Перерасход на типе бетона',
+                'value': f"{overall_stats['kpi_concrete_economy']:.2f} ₽",
                 'icon': 'cubes',
                 'color': 'green',
                 'tooltip': 'Штраф за избыточное использование дорогих марок бетона'
@@ -677,9 +677,9 @@ class DashboardStatsView(APIView):
             {
                 'id': 12,
                 'section': 'KPI расстановки плит',
-                'title': 'Экономия проволоки',
-                'value': f"{overall_stats['kpi_wire_economy']:.2f}",
-                'icon': 'grip-lines',
+                'title': 'Перерасход проволоки',
+                'value': f"{overall_stats['kpi_wire_economy']:.2f} ₽ ",
+                'icon': 'cog',
                 'color': 'yellow',
                 'tooltip': 'Штраф за перерасход армирования'
             },

@@ -61,29 +61,7 @@ class Stats:
         total_penalty = 0
         wire_price = UnitPrice.get_wire_price()
         for track in tracks:
-            useful_track_len = Decimal(str(0))
-            plates = list(track.plates.all())
-            if not plates:
-                continue
-
-            # Get maximum wire counts on this track
-            max_wire_top = max([int(plate.wire_top) for plate in plates], default=0)
-            max_wire_bottom = max([int(plate.wire_bottom) for plate in plates], default=0)
-
-            # Calculate penalty for each plate
-            for plate in plates:
-                wire_top_diff = max_wire_top - int(plate.wire_top)
-                wire_bottom_diff = max_wire_bottom - int(plate.wire_bottom)
-
-                # Penalty is proportional to the wire difference and plate length
-                # Convert plate.length to Decimal to avoid type mismatch
-                penalty = ((wire_top_diff * wire_price + wire_bottom_diff * wire_price) / 1000) * Decimal(
-                    str(plate.length))
-                useful_track_len += Decimal(str(plate.length))
-                total_penalty += penalty
-            if useful_track_len == 0: useful_track_len = Decimal(str(1))
-            total_penalty += (((85000 - useful_track_len) / 1000) * (
-                        max_wire_bottom * wire_price + max_wire_top * wire_price))
+            total_penalty += track.overendering_wire * wire_price
 
         total_penalty /= len(tracks)
         return total_penalty
@@ -245,7 +223,6 @@ class Stats:
 
         all_tracks = Track.objects.all()
 
-        all_max_length = (all_tracks.count() * Parameters.get_solo().road_length)
 
         retool_count = 0
         for day in set(Track.objects.all().values_list('day', flat=True)):
@@ -256,15 +233,16 @@ class Stats:
             retool_count += day_retool_count
 
         retool_price = retool_count * UnitPrice.get_retooling_price()
-        all_cost = sum([track.cost for track in all_tracks])
-        useful = (sum([track.useful_length for track in all_tracks]) / all_max_length if all_max_length else 0)
         track_id_subquery = Subquery(
             Plate.objects.filter(track_id=OuterRef('id')).values('track_id').distinct().values('track_id'))
         tracks_with_plates = Track.objects.filter(id__in=track_id_subquery).order_by('-day')
         last_track = tracks_with_plates.first()
+        all_max_length = (tracks_with_plates.count() * Parameters.get_solo().road_length)
+        all_cost = sum([track.cost for track in tracks_with_plates])
+        useful = (sum([track.useful_length for track in tracks_with_plates]) / all_max_length if all_max_length else 0)
 
         # Calculate KPI efficiency score
-        kpi_data = Stats.calculate_efficiency_score(tracks_with_plates.exclude(day=last_track.day))
+        kpi_data = Stats.calculate_efficiency_score(tracks_with_plates)
         return {
             'tracks': sum([int(track.plates.exists()) for track in all_tracks]),
             'plates': sum([track.plates.count() for track in all_tracks]),

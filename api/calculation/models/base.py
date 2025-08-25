@@ -105,7 +105,7 @@ class Track(models.Model):
 
                 if is_weekend:
                     continue
-                for position in range(params.default_available_tracks):
+                for position in range(params.tracks_count):
                     customer_id = customer_map.get((day, position))
                     new_tracks.append(Track(
                         day=day,
@@ -117,7 +117,7 @@ class Track(models.Model):
 
     @classmethod
     def get_tracks(cls):
-        return cls.objects.all()
+        return cls.objects.filter(position__lt=Parameters.get_solo().default_available_tracks)
 
     @property
     def deadline(self):
@@ -174,6 +174,7 @@ class Track(models.Model):
 
     @property
     def cost(self):
+        params = Parameters.get_solo()
         wire_price = UnitPrice.get_wire_price()
         plate_class_prices = UnitPrice.get_plates_prices()
 
@@ -185,7 +186,7 @@ class Track(models.Model):
 
         plate_volume = (self.useful_length * plates[0].height * plates[0].width) / 10**9 if plates else 0
         plate_cost = Decimal(str(plate_volume)) * Decimal('0.65') * plate_price
-        wire_cost = Decimal(str(wire_top_max + wire_bottom_max)) * wire_price * Decimal(str(self.useful_length / 1000))
+        wire_cost = Decimal(str(wire_top_max + wire_bottom_max)) * wire_price * Decimal(str(params.road_length)) / 1000
         return plate_cost + wire_cost + self.retoolings_price
 
     @property
@@ -232,6 +233,24 @@ class Track(models.Model):
         for plate in self.plates.all():
             needed_wire_kg += Decimal(str(plate.length)) / 1000 * (int(plate.wire_top) + int(plate.wire_bottom))
         return corrent_useful_kg - needed_wire_kg * Decimal("0.156")
+
+    @property
+    def overendering_wire(self):
+        params = Parameters.get_solo()
+        wire_top_max = self.wire_top
+        wire_bottom_max = self.wire_bottom
+        length = Decimal(str(params.road_length)) / 1000
+
+        corrent_useful = length * (wire_top_max + wire_bottom_max)
+
+        needed_wire = 0
+        for plate in self.plates.all():
+            needed_wire += Decimal(str(plate.length)) / 1000 * (int(plate.wire_top) + int(plate.wire_bottom))
+        return corrent_useful - needed_wire
+
+    @property
+    def overendering_wire_kg(self):
+        return self.overendering_wire * Decimal("0.156")
 
 class AbstractPlate(models.Model):
     name = models.CharField(max_length=255)

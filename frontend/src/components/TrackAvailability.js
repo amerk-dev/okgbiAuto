@@ -615,14 +615,44 @@ const TrackAvailability = ({calculating}) => {
 		const track = tracks.find(t => t.id === trackId);
 		const day = track.days[dayIndex];
 
-		// If the day has reconfiguration data, use it; otherwise, use an empty array
-		const reconfigData = (day.reconfiguration && day.reconfigurationData)
-			? day.reconfigurationData
-			: [{type: 'Нет данных о переналадке', width: '-', height: '-'}];
+		// Get all tracks for this day to collect all unique width/height combinations
+		const dayTracks = tracks.map(t => t.days[dayIndex]).filter(d => d && (d.width || d.height));
+
+		// Create reconfiguration data from unique width/height combinations
+		let reconfigData = [];
+
+		if (dayTracks.length > 0) {
+			// Set to store unique width/height combinations
+			const uniqueCombinations = new Set();
+
+			// Collect all unique width/height combinations
+			dayTracks.forEach(dayTrack => {
+				if (dayTrack.width && dayTrack.height) {
+					uniqueCombinations.add(`${dayTrack.width}|${dayTrack.height}`);
+				}
+			});
+
+			// Convert to array of objects
+			reconfigData = Array.from(uniqueCombinations).map((combo, index) => {
+				const [width, height] = combo.split('|');
+				return {
+					type: `Переналадка ${index}`,
+					width: width,
+					height: height
+				};
+			});
+		}
+		reconfigData = reconfigData.slice(1,)
+
+		// If no reconfiguration data was found, use default message
+		if (reconfigData.length === 0) {
+			reconfigData = [{type: 'Нет данных о переналадке', width: '-', height: '-'}];
+		}
 
 		setSelectedReconfiguration({
 			trackName: track.name,
-			date: day.date,
+			date: day.date === 'today' ? 'Сегодня' : 
+				day.date === 'tomorrow' ? 'Завтра' : day.date,
 			data: reconfigData
 		});
 		setShowModal(true);
@@ -1047,8 +1077,22 @@ const TrackAvailability = ({calculating}) => {
                 <p>{dateText}</p>
                 {day.total_overendering_wire_kg && (
                   <span className="flex items-center justify-center gap-1 text-red-600">
-                    <FontAwesomeIcon icon="exclamation-triangle" className="text-red-600" />
+                    {hasOverrun && <FontAwesomeIcon icon="exclamation-triangle" className="text-red-600" />}
                     {day.total_overendering_wire_kg ? `${day.total_overendering_wire_kg.toFixed(2)}КГ` : '0КГ'}
+                    <FontAwesomeIcon 
+                      icon="info-circle" 
+                      className="ml-1 text-blue-500 cursor-pointer" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Find the track index for the first track (just to get the day data)
+                        const trackIndex = 0;
+                        // Get the day index from the current iteration
+                        const dayIdx = dayOffset + dayIndex;
+                        // Open the reconfiguration modal for this day
+                        handleOpenReconfigurationModal(tracks[trackIndex].id, dayIdx);
+                      }}
+                      title="Показать переналадки"
+                    />
                   </span>
                 )}
               </div>
