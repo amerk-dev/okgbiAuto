@@ -369,6 +369,7 @@ const TrackAvailability = ({calculating}) => {
 			const isSwappingTracks = draggedTrackDay.id !== targetDay.id;
 
 			if (isSwappingTracks) {
+				setLoading(true)
 				// Call API to swap tracks
 				await swapTracks(draggedTrackDay.id, targetDay.id);
 
@@ -379,8 +380,11 @@ const TrackAvailability = ({calculating}) => {
 					console.log(`Swapped track ${draggedTrackId} with track ${targetTrackId}`);
 				} catch (error) {
 					console.error('Error refreshing tracks after swap:', error);
+				} finally {
+					setLoading(false)
 				}
 			} else {
+				setLoading(true)
 				// Call API to move slab
 				await moveSlab(draggedItem.id, targetTrackId, targetDay.date);
 
@@ -393,6 +397,8 @@ const TrackAvailability = ({calculating}) => {
 				} catch (error) {
 					console.error('Error refreshing tracks after move:', error);
 					// Fall back to manual state update if the API call fails
+				} finally {
+					setLoading(false)
 				}
 
 				// Create a deep copy of the tracks state
@@ -1075,10 +1081,10 @@ const TrackAvailability = ({calculating}) => {
             return (
               <div key={`header-${day.date}`} className="p-2 text-center bg-white">
                 <p>{dateText}</p>
-                {day.total_overendering_wire_kg && (
+                {day.total_overendering_wire_kg !== 0 && (
                   <span className="flex items-center justify-center gap-1 text-red-600">
                     {hasOverrun && <FontAwesomeIcon icon="exclamation-triangle" className="text-red-600" />}
-                    {day.total_overendering_wire_kg ? `${day.total_overendering_wire_kg.toFixed(2)}КГ` : '0КГ'}
+                    {day.total_overendering_wire_kg && `${day.total_overendering_wire_kg.toFixed(2)}КГ`}
                     <FontAwesomeIcon 
                       icon="info-circle" 
                       className="ml-1 text-blue-500 cursor-pointer" 

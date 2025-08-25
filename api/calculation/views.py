@@ -1,5 +1,6 @@
 import datetime
 
+from django.db.models import Prefetch
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -76,95 +77,124 @@ class TrackViewSet(viewsets.ModelViewSet):
 
         return Response(slabs_data)
 
-    def list(self, request):
-        """Override list method to return tracks with slabs"""
-        # Get all unique positions
-        positions = Track.objects.values_list('position', flat=True).distinct().order_by('position')
 
-        # Format data for frontend
+    def list(self, request):
+        """Optimized list method to return tracks with slabs"""
+
+        today = datetime.date.today()
+        tomorrow = today + datetime.timedelta(days=1)
+
+        # Берём все треки с нужными связями
+        tracks = (
+            Track.objects
+            .select_related("customer")
+            .prefetch_related(
+                Prefetch("plates", queryset=Plate.objects.select_related("deadline__order"))
+            )
+            .order_by("position", "day")
+        )
+
+        # Группируем по position
+        positions = {}
+        for track in tracks:
+            if track.position not in positions:
+                positions[track.position] = []
+            positions[track.position].append(track)
+
         result = []
-        for position in positions:
-            # Get the first track with this position
-            track = Track.objects.filter(position=position).first()
+
+        for pos, pos_tracks in positions.items():
+            first_track = pos_tracks[0]
 
             track_data = {
-                'id': track.id,
-                'name': f'Дорожка {track.position + 1}',
-                'contractor': track.customer.name if track.customer else '',
-                'days': []
+                "id": first_track.id,
+                "name": f"Дорожка {pos + 1}",
+                "contractor": first_track.customer.name if first_track.customer else "",
+                "days": [],
             }
 
-            # Get all dates for this track
-            dates = Track.objects.filter(position=track.position).values_list('day', flat=True).distinct().order_by('day')
+            # Группировка по дате
+            days = {}
+            for t in pos_tracks:
+                if t.day not in days:
+                    days[t.day] = []
+                days[t.day].append(t)
 
-            # Add data for each date
-            for date in dates:
-                day_track = Track.objects.filter(position=track.position, day=date).prefetch_related('plates', 'plates__deadline__order').first()
+            for date, day_tracks in days.items():
+                day_track = day_tracks[0]  # берём первый (или можно объединять данные)
 
-                if day_track:
-                    # Format date for display
-                    if date == datetime.date.today():
-                        display_date = 'today'
-                    elif date == datetime.date.today() + datetime.timedelta(days=1):
-                        display_date = 'tomorrow'
-                    else:
-                        display_date = date.strftime('%Y-%m-%d')
+                # Формат даты
+                if date == today:
+                    display_date = "today"
+                elif date == tomorrow:
+                    display_date = "tomorrow"
+                else:
+                    display_date = date.strftime("%Y-%m-%d")
 
-                    # Calculate KPI for this day
-                    day_kpi = Stats.calculate_day_kpi(date)
-                    kpi_score = round(day_kpi['score'], 2)
+                # KPI
+                # day_kpi = Stats.calculate_day_kpi(date)
+                kpi_score = 0
 
-                    # Calculate sum of overendering_wire_kg for this day
-                    day_tracks = Track.objects.filter(day=date).prefetch_related('plates')
-                    total_overendering_wire_kg = sum(track.overendering_wire_kg for track in day_tracks if track.plates.exists())
+                # Сумма overendering_wire_kg по всем трекам за этот день
+                total_overendering_wire_kg = sum(
+                    t.overendering_wire_kg for t in day_tracks if t.plates.exists()
+                )
 
-                    # Create day data
-                    day_data = {
-                        'date': display_date,
-                        'slabs': [],
-                        'freeSpace': f"{day_track.free_length}мм",
-                        'kpi': kpi_score,
-                        'total_overendering_wire_kg': total_overendering_wire_kg
+                day_data = {
+                    "date": display_date,
+                    "slabs": [],
+                    "freeSpace": f"{day_track.free_length}мм",
+                    "kpi": kpi_score,
+                    "total_overendering_wire_kg": total_overendering_wire_kg,
+                }
+
+                if day_track.plates.exists():
+                    price_str = f"{day_track.cost:.2f}".replace(".", ",")
+                    track_orders = [
+                        plate.deadline.order.order_number
+                        for plate in day_track.plates.all()
+                        if plate.deadline and plate.deadline.order
+                    ]
+                    track_plates_names = [plate.name for plate in day_track.plates.all()]
+
+                    info = {
+                        "id": str(day_track.id),
+                        "number": f"#{day_track.id}",
+                        "orders": track_orders,
+                        "plates": track_plates_names,
+                        "size": f"{int(day_track.width)}x{int(day_track.height)}",
+                        "width": int(day_track.width),
+                        "height": int(day_track.height),
+                        "wireTop": str(day_track.wire_top),
+                        "wireBottom": str(day_track.wire_bottom),
+                        "concrete": day_track.concrete_class,
+                        "occupied": str(day_track.useful_length),
+                        "free": str(day_track.free_length),
+                        "price": f"{price_str} ₽",
+                        "deadline": (
+                            day_track.deadline.strftime("%d-%m-%Y")
+                            if day_track.deadline
+                            else None
+                        ),
+                        "status": "overdue" if day_track.has_overdue_deadline else "booked",
+                        "is_manual": day_track.is_manual,
+                        "overendering_wire_kg": day_track.overendering_wire_kg,
                     }
-
-                    # Instead of individual slabs, add track info
-                    if day_track.plates.exists():
-                        # Format price with comma as decimal separator
-                        price_str = f"{day_track.cost:.2f}".replace('.', ',')
-                        track_orders = [plate.deadline.order.order_number for plate in day_track.plates.all() if plate.deadline and plate.deadline.order]
-                        track_plates_names = [plate.name for plate in day_track.plates.all()]
-                        info = {
-                            'id': f'{day_track.id}',
-                            'number': f'#{day_track.id}',
-                            'orders': track_orders,
-                            'plates': track_plates_names,
-                            'size': f'{int(day_track.width)}x{int(day_track.height)}',
-                            'width': int(day_track.width),
-                            'height': int(day_track.height),
-                            'wireTop': f'{day_track.wire_top}',
-                            'wireBottom': f'{day_track.wire_bottom}',
-                            'concrete': day_track.concrete_class,
-                            'occupied': f'{day_track.useful_length}',
-                            'free': f'{day_track.free_length}',
-                            'price': f'{price_str} ₽',
-                            'deadline': day_track.deadline.strftime('%d-%m-%Y') if day_track.deadline else None,
-                            'status': 'overdue' if day_track.has_overdue_deadline else 'booked',
-                            'is_manual': day_track.is_manual,
-                            'overendering_wire_kg': day_track.overendering_wire_kg,
+                    day_data.update(info)
+                else:
+                    day_data.update(
+                        {
+                            "id": str(day_track.id),
+                            "free": str(day_track.free_length),
                         }
-                        day_data.update(info)
-                    else:
-                        info = {
-                            'id': f'{day_track.id}',
-                            'free': f'{day_track.free_length}',
-                        }
-                        day_data.update(info)
+                    )
 
-                    track_data['days'].append(day_data)
+                track_data["days"].append(day_data)
 
             result.append(track_data)
 
         return Response(result)
+
 
     @action(detail=True, methods=['post'])
     def update_contractor(self, request, pk=None):
