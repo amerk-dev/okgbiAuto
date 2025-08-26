@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 import requests
 from django.db import transaction
 
-from calculation.models import ReadyPlate, Order, Plate, Parameters, Deadline
+from calculation.models import ReadyPlate, Order, Plate, Parameters, Deadline, Customer
+
 
 class Update1CDataCommand:
     def __init__(self):
@@ -35,8 +36,13 @@ class Update1CDataCommand:
 
     def _process_orders(self, orders):
         for order_data in orders:
+            cust = None
+            if order_data.get('customer'):
+                cust, _ = Customer.objects.get_or_create(name=order_data['customer'])
+
             order = Order.objects.create(
                 order_number=order_data['number'].strip(),
+                customer=cust,
                 # TODO: После получения информации о структуре Контрагента, добавить его создание
             )
             for completion_date in order_data['completion_dates']:
@@ -68,13 +74,13 @@ class Update1CDataCommand:
                 Plate.objects.bulk_create(plates_to_create)
 
     def execute(self):
-        # with open("input_data.json", "r") as f:
-        data = self._fetch_data()
-        ready_plates = data['ready_plates']
-        orders = data['orders']
-        with transaction.atomic():
-            ReadyPlate.all_objects.all().delete()
-            Order.objects.all().delete()
-            self._process_ready_plates(ready_plates)
-            self._process_orders(orders)
+        with open("input_data.json", "r") as f:
+            data = json.load(f) #self._fetch_data()
+            ready_plates = data['ready_plates']
+            orders = data['orders']
+            with transaction.atomic():
+                ReadyPlate.all_objects.all().delete()
+                Order.objects.all().delete()
+                self._process_ready_plates(ready_plates)
+                self._process_orders(orders)
 

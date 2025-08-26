@@ -63,18 +63,19 @@ def calculate_plan():
     if not ready_plates:
         print("Готовых плит нет.")
 
-    tracks_with_customers = Track.objects.filter(customer__isnull=False)
+    tracks_with_customers = Track.objects.filter(customer__isnull=False).order_by('day', 'position')
 
     for track in tracks_with_customers:
+        print(track)
         order = Order.objects.filter(customer=track.customer)
-        plates = Plate.objects.filter(deadline__order__in=order)
+        plates = Plate.objects.filter(deadline__order__in=order, track__isnull=True)
         if not plates: break
-        if track.free_length == track_len:
-            plate = plates[0]
-            plate.track = track
-            plate.save()
-        else:
-            for plate in plates:
+        for plate in plates:
+            if track.free_length == track_len:
+                plate = plates[0]
+                plate.track = track
+                plate.save()
+            else:
                 if plate.length <= track.free_length and plate.width == track.width and plate.height == track.height:
                     plate.track = track
                     plate.save()
@@ -83,7 +84,6 @@ def calculate_plan():
     is_real = reality_check(plates, tracks, track_len)
 
     create_plan(tracks)
-    # post_calculating()
 
     # fill_remaining_plates()  # Новый шаг
 
@@ -395,7 +395,7 @@ def post_calculating_deadlines():
 
     for i, this_track in enumerate(tracks):
         crit_deadline_i = deadlines.get(this_track.id, {}).get('critical')
-        if crit_deadline_i is None:
+        if crit_deadline_i is None and not this_track.customer:
             continue
         try:
             if this_track.day <= crit_deadline_i:
@@ -407,7 +407,7 @@ def post_calculating_deadlines():
         fallback_j = None
 
         for j, other in enumerate(tracks):
-            if i == j:
+            if i == j and not other.customer:
                 continue
             crit_deadline_j = deadlines.get(other.id, {}).get('critical')
 
@@ -441,7 +441,10 @@ def post_calculating_deadlines():
         chosen_j = preferred_j if preferred_j is not None else fallback_j
         if chosen_j is not None:
             other = tracks[chosen_j]
+            if other.customer or this_track.customer:
+                continue
             this_track.day, other.day = other.day, this_track.day
+            this_track.customer, other.customer = other.customer, this_track.customer
             this_track.save()
             other.save()
             updated_tracks.extend((this_track, other))
@@ -453,7 +456,7 @@ def post_calculating_deadlines():
     for _, idx_tracks in day_track_indices.items():
         sorted_tracks = [track for _, track in sorted(idx_tracks, key=lambda x: x[0])]
         for pos, track in enumerate(sorted_tracks):
-            track.position = pos
+            if not track.customer: track.position = pos
 
     if updated_tracks:
         unique_updates = {t.id: t for t in updated_tracks}.values()

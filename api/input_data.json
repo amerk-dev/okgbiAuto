@@ -2,7 +2,8 @@
     "ready_plates": [],
     "orders": [
         {
-            "number": "ТПК40895   ",
+            "number": "ТПК40895",
+            "customer": "Vadim",
             "production_days": 0,
             "completion_dates": [
                 {
@@ -12,7 +13,7 @@
                             "name": "ПБ 3000-10 8 нагрузка",
                             "count": 3,
                             "length": 3000,
-                            "width": 995,
+                            "width": 991,
                             "height": 220,
                             "class": "В25",
                             "wire_bottom": 24,
@@ -23,7 +24,7 @@
                             "count": 6,
                             "length": 3000,
                             "width": 1495,
-                            "height": 220,
+                            "height": 221,
                             "class": "В25",
                             "wire_bottom": 24,
                             "wire_top": 4
