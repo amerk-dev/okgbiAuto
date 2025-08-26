@@ -6,6 +6,10 @@ from django.conf import settings
 
 from calculation.models import Parameters
 
+from calculation.models import Export1c
+
+from calculation.models import Plate, Track
+
 
 def export_to_1c():
     """
@@ -14,56 +18,47 @@ def export_to_1c():
     params = Parameters.get_solo()
     url = params.url_1c
     headers = {'sign': params.sign_1c, 'Content-Type': 'application/json'}
-    
+
     # Получаем сегодняшнюю дату
     today = datetime.date.today()
-    
-    # Получаем все дорожки на сегодня
-    production_days = ProductionDay.objects.filter(date=today)
-    
+    export_1c = Export1c.objects.get_or_create(date=today)[0]
+
+    today_tracks_ids = Track.objects.filter(day=today).values_list('id', flat=True)
+    plates = Plate.objects.filter(track_id__in=today_tracks_ids).prefetch_related('deadline__order')
+
+    plates_data = {}
+    for plate in plates:
+        key = (plate.name, plate.deadline.order.order_number)
+        if key in plates_data:
+            plates_data[key]['count'] += 1
+        else:
+            plates_data[key] = {
+                'name': plate.name,
+                'count': 1,
+                'OrderNumber': plate.deadline.order.order_number,
+            }
+
+
     # Формируем данные для отправки
     export_data = {
-        'date': today.strftime('%Y-%m-%d'),
-        'tracks': []
-    }
-    
-    # Добавляем информацию о каждой дорожке
-    for track in production_days:
-        track_data = {
-            'id': track.id,
-            'width': track.width,
-            'height': track.height,
-            'concrete_class': track.concrete_class,
-            'wire_top': track.wire_top,
-            'wire_bottom': track.wire_bottom,
-            'useful_len': track.useful_len,
-            'free_len': track.free_len,
-            'total_cost': float(track.total_cost),
-            'plates': []
-        }
-        
-        # Добавляем информацию о плитах на дорожке
-        for plate in track.plates.all():
-            plate_data = {
-                'id': plate.id,
-                'name': plate.name,
-                'count': plate.count,
-                'length': plate.length,
-                'width': plate.width,
-                'height': plate.height,
-                'order': plate.order,
-                'concrete_class': plate.concrete_class,
-                'wire_bottom': plate.wire_bottom,
-                'wire_top': plate.wire_top
+        "OPZS": [
+            {
+                "date": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "number": export_1c.document_number or "",
+                "plates": list(plates_data.values()),
             }
-            track_data['plates'].append(plate_data)
-        
-        export_data['tracks'].append(track_data)
-    
+        ]
+    }
+
+    print(json.dump(export_data, open('test_export_1c.json', 'w'), indent=2, ensure_ascii=False))
+
     # Отправляем данные в 1С
     try:
-        response = requests.post(url, headers=headers, json=export_data)
-        response.raise_for_status()
+    #     response = requests.post(url, headers=headers, json=export_data)
+    #     response.raise_for_status()
+    #     response = response.json()
+    #     export_1c.document_number = response['OPZS'][0]['number']
+    #     export_1c.save()
         return {'status': 'success', 'message': 'Данные успешно выгружены в 1С'}
     except requests.exceptions.RequestException as e:
         return {'status': 'error', 'message': f'Ошибка при отправке данных в 1С: {str(e)}'}

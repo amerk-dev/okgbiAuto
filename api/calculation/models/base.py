@@ -223,20 +223,6 @@ class Track(models.Model):
         return self.width, self.height
 
     @property
-    def overendering_wire_kg(self):
-        params = Parameters.get_solo()
-        wire_top_max = self.wire_top
-        wire_bottom_max = self.wire_bottom
-        length = Decimal(str(params.road_length)) / 1000
-
-        corrent_useful_kg = length * (wire_top_max + wire_bottom_max) * Decimal("0.156")
-
-        needed_wire_kg = 0
-        for plate in self.plates.all():
-            needed_wire_kg += Decimal(str(plate.length)) / 1000 * (int(plate.wire_top) + int(plate.wire_bottom))
-        return corrent_useful_kg - needed_wire_kg * Decimal("0.156")
-
-    @property
     def overendering_wire(self):
         params = Parameters.get_solo()
         wire_top_max = self.wire_top
@@ -247,7 +233,11 @@ class Track(models.Model):
 
         needed_wire = 0
         for plate in self.plates.all():
+            # if self.position == 2:
+                # print(self.day, self.position, plate.wire_top, plate.wire_bottom, wire_top_max, wire_bottom_max)
             needed_wire += Decimal(str(plate.length)) / 1000 * (int(plate.wire_top) + int(plate.wire_bottom))
+
+        # print(self.day, corrent_useful, needed_wire)
         return corrent_useful - needed_wire
 
     @property
@@ -315,3 +305,9 @@ class ReadyPlate(AbstractPlate):
     all_objects = models.Manager()
     used_in_order = models.ForeignKey(Order, on_delete=models.CASCADE,
                                       related_name='ready_plates', null=True, blank=True)
+
+
+
+class Export1c(models.Model):
+    document_number = models.CharField(max_length=255, null=True, blank=True)
+    date = models.DateField(auto_now_add=True)

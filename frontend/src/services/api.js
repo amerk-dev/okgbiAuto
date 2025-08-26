@@ -353,3 +353,22 @@ export const printTrackPlan = (date, trackId) => {
   // Open the URL in a new window/tab
   window.open(url, '_blank');
 };
+
+// Export to 1C API
+export const exportTo1C = async () => {
+  try {
+    const response = await fetch(`${API_URL}/api/export-1c/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error exporting to 1C:', error);
+    throw error;
+  }
+};

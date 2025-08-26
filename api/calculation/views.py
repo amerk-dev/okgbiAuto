@@ -15,6 +15,7 @@ from weasyprint import HTML
 from django.db import transaction
 from .services.calculator.calculate import calculate_plan
 from .services.manage_1c import Update1CDataCommand
+from .services.export_1c import export_to_1c
 
 from .models import (
     Customer, Order, Parameters, ReadyPlate, Track, UnitPrice, Plate,
@@ -143,7 +144,7 @@ class TrackViewSet(viewsets.ModelViewSet):
 
                 # Сумма overendering_wire_kg по всем трекам за этот день
                 total_overendering_wire_kg = sum(
-                    t.overendering_wire_kg for t in day_tracks if t.plates.exists()
+                    t.overendering_wire_kg for t in Track.objects.filter(day=date) if t.plates.exists()
                 )
 
                 day_data = {
@@ -913,4 +914,20 @@ class PrintTrackPlanView(APIView):
             return response
 
         except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class Export1CView(APIView):
+    """
+    API endpoint for exporting data to 1C
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        """Export data to 1C"""
+        try:
+            result = export_to_1c()
+            return Response(result)
+        except Exception as e:
+            print(e)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

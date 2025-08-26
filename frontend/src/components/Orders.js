@@ -623,17 +623,6 @@ const Orders = () => {
                       <FontAwesomeIcon icon={getSortIcon('slabCount')} className="ml-1 text-gray-400" />
                     </div>
                   </th>
-                  <th
-                    scope="col"
-                    className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    style={{ fontSize: "0.7rem" }}
-                    onClick={() => requestSort('status')}
-                  >
-                    <div className="flex items-center">
-                      <span>Статус</span>
-                      <FontAwesomeIcon icon={getSortIcon('status')} className="ml-1 text-gray-400" />
-                    </div>
-                  </th>
                   <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{ fontSize: "0.7rem" }}>
                   </th>
                 </tr>
@@ -679,11 +668,6 @@ const Orders = () => {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
                       {order.slabCount}
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-xs">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${order.status ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                        {order.status ? 'Просрочен' : 'В работе'}
-                      </span>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
                       {viewingDeleted ? (

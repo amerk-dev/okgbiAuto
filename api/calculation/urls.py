@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CustomerViewSet, TrackViewSet, OrderViewSet, PlateViewSet, ReadyPlateViewSet,
     UnitPriceViewSet, ParametersViewSet, StockView, DashboardStatsView, CalculationView,
-    PrintTrackPlanView
+    PrintTrackPlanView, Export1CView
 )
 
 
@@ -43,4 +43,7 @@ urlpatterns = [
 
     # Print endpoint
     path('print/', PrintTrackPlanView.as_view(), name='print_track_plan'),
+
+    # Export to 1C endpoint
+    path('export-1c/', Export1CView.as_view(), name='export_1c'),
 ]
