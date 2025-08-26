@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     CustomerViewSet, TrackViewSet, OrderViewSet, PlateViewSet, ReadyPlateViewSet,
-    UnitPriceViewSet, ParametersViewSet, StockView, DashboardStatsView, CalculationView
+    UnitPriceViewSet, ParametersViewSet, StockView, DashboardStatsView, CalculationView,
+    PrintTrackPlanView
 )
 
 
@@ -39,4 +40,7 @@ urlpatterns = [
 
     # Calculation endpoint
     path('calculate/', CalculationView.as_view(), name='calculate'),
+
+    # Print endpoint
+    path('print/', PrintTrackPlanView.as_view(), name='print_track_plan'),
 ]

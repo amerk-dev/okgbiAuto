@@ -1,11 +1,16 @@
 import datetime
+import tempfile
 
 from django.db.models import Prefetch
+from django.shortcuts import render
+from django.http import HttpResponse
+from django.template.loader import render_to_string
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
+from weasyprint import HTML
 
 from django.db import transaction
 from .services.calculator.calculate import calculate_plan
@@ -15,10 +20,11 @@ from .models import (
     Customer, Order, Parameters, ReadyPlate, Track, UnitPrice, Plate,
     UnitTypeChoice
 )
+from .models.params import HolidayDate
 from .services.stats import Stats
 from .serializers import (
     CustomerSerializer, TrackSerializer, PlateSerializer, ReadyPlateSerializer,
-    OrderSerializer, UnitPriceSerializer, ParametersSerializer
+    OrderSerializer, UnitPriceSerializer, ParametersSerializer, HolidayDateSerializer
 )
 
 # ViewSets
@@ -71,8 +77,8 @@ class TrackViewSet(viewsets.ModelViewSet):
                 'height': plate.height,
                 'load': plate.capacity,
                 'concrete_class': plate.concrete_class,
-                'wire_top': plate.wire_top,
-                'wire_bottom': plate.wire_bottom
+                'wire_top': int(plate.wire_top),
+                'wire_bottom': int(plate.wire_bottom)
             })
 
         return Response(slabs_data)
@@ -89,7 +95,7 @@ class TrackViewSet(viewsets.ModelViewSet):
             Track.objects
             .select_related("customer")
             .prefetch_related(
-                Prefetch("plates", queryset=Plate.objects.select_related("deadline__order"))
+                Prefetch("plates", queryset=Plate.objects.all().select_related("deadline__order"))
             )
             .order_by("position", "day")
         )
@@ -165,11 +171,11 @@ class TrackViewSet(viewsets.ModelViewSet):
                         "size": f"{int(day_track.width)}x{int(day_track.height)}",
                         "width": int(day_track.width),
                         "height": int(day_track.height),
-                        "wireTop": str(day_track.wire_top),
-                        "wireBottom": str(day_track.wire_bottom),
+                        "wireTop": day_track.wire_top,
+                        "wireBottom": day_track.wire_bottom,
                         "concrete": day_track.concrete_class,
-                        "occupied": str(day_track.useful_length),
-                        "free": str(day_track.free_length),
+                        "occupied": day_track.useful_length,
+                        "free": day_track.free_length,
                         "price": f"{price_str} ₽",
                         "deadline": (
                             day_track.deadline.strftime("%d-%m-%Y")
@@ -276,7 +282,7 @@ class TrackViewSet(viewsets.ModelViewSet):
                 )
 
             # Get the slabs to transfer
-            slabs = Plate.objects.filter(id__in=slab_ids)
+            slabs = Plate.objects.filter(id__in=slab_ids, is_deleted=False)
             if not slabs:
                 raise ValidationError('No slabs found with the provided IDs')
 
@@ -336,25 +342,87 @@ class OrderViewSet(viewsets.ModelViewSet):
     def list(self, request):
         """Override list method to return orders in the format expected by the frontend"""
         orders = self.queryset
-        serializer = self.get_serializer(orders, many=True)
-        orders_data = serializer.data
+        orders_data = []
+        for order in orders:
+            for plate in Plate.objects.filter(deadline__order=order, is_deleted=False):
+                if not any(data['number'] == order.order_number and data['raw_name'] == plate.name for data in orders_data):
+                    orders_data.append({
+                        'id': order.id,
+                        'customer': order.customer.name if order.customer else None,
+                        'number': order.order_number,
+                        'deadline': order.last_deadline.date.strftime('%d.%m.%Y') if order.last_deadline.date else None,
+                        'completeDate': order.complete_date.strftime('%d.%m.%Y') if order.complete_date else None,
+                        'is_deleted': order.is_deleted,
+                        'raw_name': plate.name,
+                        'name': plate.clean_name,
+                        'capacity': plate.capacity,
+                        'concrete': plate.concrete_class,
+                        'height': plate.height,
+                        'width': plate.width,
+                        'length': plate.length,
+                        'wireTop': int(plate.wire_top),
+                        'wireBottom': int(plate.wire_bottom),
+                        'status': plate.is_overdue,
+                        'slabCount': 1
+                    })
+                else:
+                    for data in orders_data:
+                        if data['number'] == order.order_number and data['raw_name'] == plate.name:
+                            data['slabCount'] += 1
+                            data['status'] = data['status'] or plate.is_overdue
+                            break
 
-        # Format data for frontend
-        for order_data in orders_data:
-            # Rename fields to match frontend expectations
-            order_data['completeDate'] = order_data.pop('complete_date', '')
-            order_data['wireTop'] = order_data.pop('wire_top', 0)
-            order_data['wireBottom'] = order_data.pop('wire_bottom', 0)
-            order_data['slabCount'] = order_data.pop('slab_count', 0)
-            order_data['statusClass'] = order_data.pop('status_class', '')
+        return Response(orders_data)
+
+    @action(detail=False, methods=['get'])
+    def deleted(self, request):
+        """Return deleted orders"""
+        orders = self.queryset
+        orders_data = []
+        for order in orders:
+            for plate in Plate.all_objects.filter(deadline__order=order, is_deleted=True):
+                if not any(data['number'] == order.order_number and data['raw_name'] == plate.name for data in orders_data):
+                    orders_data.append({
+                        'id': order.id,
+                        'customer': order.customer.name if order.customer else None,
+                        'number': order.order_number,
+                        'deadline': order.last_deadline.date.strftime('%d.%m.%Y') if order.last_deadline.date else None,
+                        'completeDate': order.complete_date.strftime('%d.%m.%Y') if order.complete_date else None,
+                        'is_deleted': order.is_deleted,
+                        'raw_name': plate.name,
+                        'name': plate.clean_name,
+                        'capacity': plate.capacity,
+                        'concrete': plate.concrete_class,
+                        'height': plate.height,
+                        'width': plate.width,
+                        'length': plate.length,
+                        'wireTop': int(plate.wire_top),
+                        'wireBottom': int(plate.wire_bottom),
+                        'status': plate.is_overdue,
+                        'slabCount': 1
+                    })
+                else:
+                    for data in orders_data:
+                        if data['number'] == order.order_number and data['raw_name'] == plate.name:
+                            data['slabCount'] += 1
+                            data['status'] = data['status'] or plate.is_overdue
+                            break
 
         return Response(orders_data)
 
     def destroy(self, request, *args, **kwargs):
         """Mark order as deleted instead of actually deleting it"""
         order = self.get_object()
-        order.is_deleted = True
-        order.save()
+        plate_name = request.data.get('plateName')
+        Plate.objects.filter(deadline__order=order, name=plate_name).update(is_deleted=True)
+        return Response({'status': 'success'})
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, *args, **kwargs):
+        """Restore a deleted order by marking its plates as not deleted"""
+        order = self.get_object()
+        plate_name = request.data.get('plateName')
+        Plate.all_objects.filter(deadline__order=order, name=plate_name, is_deleted=True).update(is_deleted=False)
         return Response({'status': 'success'})
 
 class PlateViewSet(viewsets.ModelViewSet):
@@ -400,14 +468,15 @@ class PlateViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def destroy(self, request, *args, **kwargs):
-        """Delete a plate"""
+        """Mark plate as deleted instead of actually deleting it"""
         plate = self.get_object()
 
-        # Store the track reference before deleting the plate
+        # Store the track reference
         track = plate.track
 
-        # Delete the plate
-        plate.delete()
+        # Mark the plate as deleted
+        plate.is_deleted = True
+        plate.save()
 
         # Refresh the track data if the plate was assigned to a track
         if track:
@@ -497,11 +566,37 @@ class ParametersViewSet(viewsets.ModelViewSet):
         retooling_serializer = UnitPriceSerializer(retooling_price)
         retooling_data = retooling_serializer.data
 
+        # Get holiday dates
+        holiday_dates = HolidayDate.objects.all()
+        holiday_dates_serializer = HolidayDateSerializer(holiday_dates, many=True)
+        holiday_dates_data = holiday_dates_serializer.data
+
+        # Map weekend days to frontend format
+        weekend_days = []
+        if params_data.get('monday_weekend'):
+            weekend_days.append('Понедельник')
+        if params_data.get('tuesday_weekend'):
+            weekend_days.append('Вторник')
+        if params_data.get('wednesday_weekend'):
+            weekend_days.append('Среда')
+        if params_data.get('thursday_weekend'):
+            weekend_days.append('Четверг')
+        if params_data.get('friday_weekend'):
+            weekend_days.append('Пятница')
+        if params_data.get('saturday_weekend'):
+            weekend_days.append('Суббота')
+        if params_data.get('sunday_weekend'):
+            weekend_days.append('Воскресенье')
+
         # Format data for frontend
         track_settings = {
             'reconfigurationCost': float(retooling_data.get('price', 0)),
             'trackLength': params_data.get('road_length', 0),
-            'trackCount': params_data.get('tracks_count', 0)
+            'trackCount': params_data.get('tracks_count', 0),
+            'tracksInWork': params_data.get('tracks_count', 0),  # Default to all tracks
+            'tailLength': params_data.get('tail_length', 0),
+            'weekendDays': weekend_days,
+            'holidayDates': [item['date'] for item in holiday_dates_data]
         }
 
         return Response(track_settings)
@@ -518,7 +613,28 @@ class ParametersViewSet(viewsets.ModelViewSet):
         params = Parameters.get_solo()
         params.road_length = request.data.get('trackLength', params.road_length)
         params.tracks_count = request.data.get('trackCount', params.tracks_count)
+        params.tail_length = request.data.get('tailLength', params.tail_length)
+
+        # Update weekend days
+        weekend_days = request.data.get('weekendDays', [])
+        params.monday_weekend = 'Понедельник' in weekend_days
+        params.tuesday_weekend = 'Вторник' in weekend_days
+        params.wednesday_weekend = 'Среда' in weekend_days
+        params.thursday_weekend = 'Четверг' in weekend_days
+        params.friday_weekend = 'Пятница' in weekend_days
+        params.saturday_weekend = 'Суббота' in weekend_days
+        params.sunday_weekend = 'Воскресенье' in weekend_days
+
         params.save()
+
+        # Update holiday dates
+        holiday_dates = request.data.get('holidayDates', [])
+
+        # Clear existing holiday dates and create new ones
+        HolidayDate.objects.all().delete()
+
+        for date_str in holiday_dates:
+            HolidayDate.objects.create(date=date_str)
 
         return Response({'status': 'success'})
 
@@ -532,69 +648,25 @@ class StockView(APIView):
     def get(self, request):
         """Get stock data (used, available, unplaced)"""
         # Get used stock (plates assigned to orders)
-        used_plates = Plate.objects.filter(order__isnull=False, track__isnull=False)
-        used_serializer = PlateSerializer(used_plates, many=True)
+        plates = ReadyPlate.objects.all()
         used_stock = []
 
-        for plate_data in used_serializer.data:
+        for plate in plates:
             used_stock.append({
-                'id': plate_data['id'],
-                'name': plate_data.get('name', ''),
-                'length': plate_data.get('length', 0),
-                'width': plate_data.get('width', 0),
-                'height': plate_data.get('height', 0),
-                'capacity': f"{plate_data.get('capacity', 0)} кг/м²",
-                'concrete': plate_data.get('concrete_class', ''),
-                'wireTop': plate_data.get('wire_top', 0),
-                'wireBottom': plate_data.get('wire_bottom', 0),
+                'id': plate.id,
+                'name': plate.clean_name,
+                'length': plate.length,
+                'width': plate.width,
+                'height': plate.height,
+                'capacity': f"{plate.capacity} кг/м²",
+                'concrete': plate.concrete_class,
+                'wireTop': plate.wire_top,
+                'wireBottom': plate.wire_bottom,
                 'count': 1,
-                'order': plate_data.get('order', None)
+                'order': f"#{plate.used_in_order.order_number}" if plate.used_in_order else None,
             })
 
-        # Get available stock (ready plates not assigned to orders)
-        ready_plates = ReadyPlate.objects.all()
-        ready_serializer = ReadyPlateSerializer(ready_plates, many=True)
-        available_stock = []
-
-        for plate_data in ready_serializer.data:
-            available_stock.append({
-                'id': plate_data['id'],
-                'name': plate_data.get('name', ''),
-                'length': plate_data.get('length', 0),
-                'width': plate_data.get('width', 0),
-                'height': plate_data.get('height', 0),
-                'capacity': f"{plate_data.get('capacity', 0)} кг/м²",
-                'concrete': plate_data.get('concrete_class', ''),
-                'wireTop': plate_data.get('wire_top', 0),
-                'wireBottom': plate_data.get('wire_bottom', 0),
-                'count': 1
-            })
-
-        # Get unplaced slabs (plates assigned to orders but not to tracks)
-        unplaced_plates = Plate.objects.filter(order__isnull=False, track__isnull=True)
-        unplaced_serializer = PlateSerializer(unplaced_plates, many=True)
-        unplaced_slabs = []
-
-        for plate_data in unplaced_serializer.data:
-            unplaced_slabs.append({
-                'id': plate_data['id'],
-                'name': plate_data.get('name', ''),
-                'length': plate_data.get('length', 0),
-                'width': plate_data.get('width', 0),
-                'height': plate_data.get('height', 0),
-                'capacity': f"{plate_data.get('capacity', 0)} кг/м²",
-                'concrete': plate_data.get('concrete_class', ''),
-                'wireTop': plate_data.get('wire_top', 0),
-                'wireBottom': plate_data.get('wire_bottom', 0),
-                'count': 1,
-                'order': plate_data.get('order', None)
-            })
-
-        return Response({
-            'usedStock': used_stock,
-            'availableStock': available_stock,
-            'unplacedSlabs': unplaced_slabs
-        })
+        return Response(used_stock)
 
 class DashboardStatsView(APIView):
     """
@@ -681,7 +753,7 @@ class DashboardStatsView(APIView):
                 'id': 9,
                 'section': 'Общая статистика',
                 'title': 'Дата готовности',
-                'value': overall_stats['last_track'].strftime('%d.%m.%Y'),
+                'value': overall_stats['last_track'],
                 'icon': 'calendar-check',
                 'color': 'blue'
             },
@@ -758,3 +830,87 @@ class CalculationView(APIView):
 
             calculate_plan()
         return Response({'status': 'success', 'message': 'Calculation successfully'})
+
+
+class PrintTrackPlanView(APIView):
+    """
+    API endpoint for printing track plans
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        date_str = request.query_params.get('date')
+        track_id = request.query_params.get('track_id')
+
+        try:
+            # Parse the date string to a datetime object
+            if date_str:
+                date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            else:
+                date = datetime.date.today()
+
+            # Get tracks for the specified date
+            if track_id:
+                # Get a specific track
+                tracks = Track.objects.filter(id=track_id)
+            else:
+                # Get all tracks
+                tracks = Track.objects.filter(day=date).order_by('position')
+
+            # Prepare data for the template
+            tracks_data = []
+            for track in tracks:
+                # Get plates for this track on the specified date
+                plates = track.plates.all()
+                if not plates:
+                    continue
+
+                # Prepare plate data
+                plates_data = []
+                for plate in plates:
+                    customer = plate.deadline.order.customer.name if plate.deadline.order.customer else None
+                    plate_data = {
+                        'deadline': plate.deadline.date.strftime('%d.%m.%Y') if plate.deadline and plate.deadline.date else None,
+                        'order': plate.deadline.order.order_number if plate.deadline else None,
+                        'clean_name': plate.clean_name,
+                        'length': plate.length,
+                        'width': track.width,
+                        'height': track.height,
+                        'capacity': plate.capacity,
+                        'concrete_class': plate.concrete_class,
+                        'wire_top': plate.wire_top,
+                        'wire_bottom': plate.wire_bottom,
+                        'customer': customer,
+                    }
+                    plates_data.append(plate_data)
+
+                # Add track data
+                track_data = {
+                    'name': f"Дорожка {track.position + 1}",
+                    'plates': plates_data
+                }
+                tracks_data.append(track_data)
+
+            # Format the date for display
+            if track_id:
+                formatted_date = tracks[0].day.strftime('%d.%m.%Y')
+            else:
+                formatted_date = date.strftime('%d.%m.%Y')
+
+            # Render the HTML template to a string
+            html_string = render_to_string('calculation/production_calendar_template.html', {
+                'date': formatted_date,
+                'tracks': tracks_data
+            })
+
+            # Generate PDF from HTML
+            pdf_file = HTML(string=html_string).write_pdf()
+
+            # Create HTTP response with PDF content
+            response = HttpResponse(pdf_file, content_type='application/pdf')
+            response['Content-Disposition'] = f'filename="track_plan_{date_str or datetime.date.today()}.pdf"'
+
+            return response
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.functional import cached_property
+from django.utils import timezone
 
 
 class UnitTypeChoice(models.IntegerChoices):
@@ -129,7 +130,7 @@ class Parameters(SingletonModel):
 
     @staticmethod
     def check_is_weekend_day(date):
-        """Check if a date is marked as a weekend day in the admin panel"""
+        """Check if a date is marked as a weekend day in the admin panel or is a holiday"""
         params = Parameters.get_solo()
         weekday = date.weekday()  # 0 is Monday, 6 is Sunday
 
@@ -143,4 +144,24 @@ class Parameters(SingletonModel):
             (6, params.sunday_weekend)
         ]
 
-        return any(day == weekday and is_weekend for day, is_weekend in weekend_settings)
+        # Check if it's a regular weekend day
+        is_weekend = any(day == weekday and is_weekend for day, is_weekend in weekend_settings)
+
+        # Check if it's a holiday
+        is_holiday = HolidayDate.objects.filter(date=date).exists()
+
+        return is_weekend or is_holiday
+
+
+class HolidayDate(models.Model):
+    """Model to store specific dates marked as holidays"""
+    date = models.DateField(unique=True, verbose_name="Дата")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Выходной день"
+        verbose_name_plural = "Выходные дни"
+        ordering = ['date']
+
+    def __str__(self):
+        return self.date.strftime("%d.%m.%Y")

@@ -45,7 +45,7 @@ class Stats:
                         str(plate.width))) / 10 ** 9
                     penalty = (max_price - plate_price) * val * Decimal(str(0.65))
                     total_penalty += penalty
-        total_penalty /= len(tracks)
+        total_penalty /= len(tracks) if tracks else 1
         return total_penalty
 
     @staticmethod
@@ -63,7 +63,7 @@ class Stats:
         for track in tracks:
             total_penalty += track.overendering_wire * wire_price
 
-        total_penalty /= len(tracks)
+        total_penalty /= len(tracks) if tracks else 1
         return total_penalty
 
     @staticmethod
@@ -93,7 +93,7 @@ class Stats:
                     # Penalty is the square of days overdue
                     penalty = days_overdue ** 2
                     total_penalty += penalty
-        total_penalty /= len(tracks)
+        total_penalty /= len(tracks) if tracks else 1
         return total_penalty
 
     @staticmethod
@@ -250,7 +250,7 @@ class Stats:
             'retool_count': retool_count,
             'retool_price': retool_price,
             'all_cost': all_cost,
-            'last_track': last_track.day if last_track else 'Нет данных',
+            'last_track': last_track.day.strftime('%d.%m.%Y') if last_track else 'Нет данных',
             'kpi_score': round(kpi_data['score'], 2),
             'kpi_concrete_economy': round(kpi_data['concrete_economy'], 2),
             'kpi_wire_economy': round(kpi_data['wire_economy'], 2),
@@ -262,6 +262,8 @@ class Stats:
     @staticmethod
     def get_today_stats():
         today_tracks = Track.get_today_tracks()
+
+        today_tracks = list(filter(lambda t: t.plates.exists(), today_tracks))
         if not today_tracks:
             return {
                 'tracks': 0,
@@ -279,16 +281,16 @@ class Stats:
             [track.useful_length for track in today_tracks]) / today_max_length if today_max_length else 0
 
         # Calculate KPI efficiency score for today
-        kpi_data = Stats.calculate_efficiency_score(today_tracks)
+        # kpi_data = Stats.calculate_efficiency_score(today_tracks)
 
         return {
             'tracks': sum([int(track.plates.exists()) for track in today_tracks]),
             'plates': sum([track.plates.count() for track in today_tracks]),
             'useful': round(today_useful * 100, 2),
-            'kpi_score': round(kpi_data['score'], 2),
-            'kpi_concrete_economy': round(kpi_data['concrete_economy'], 2),
-            'kpi_wire_economy': round(kpi_data['wire_economy'], 2),
-            'kpi_deadline_compliance': round(kpi_data['deadline_compliance'], 2),
-            'kpi_track_loading': round(kpi_data['track_loading'], 2),
-            'kpi_retooling_efficiency': round(kpi_data['retooling_efficiency'], 2)
+            # 'kpi_score': round(kpi_data['score'], 2),
+            # 'kpi_concrete_economy': round(kpi_data['concrete_economy'], 2),
+            # 'kpi_wire_economy': round(kpi_data['wire_economy'], 2),
+            # 'kpi_deadline_compliance': round(kpi_data['deadline_compliance'], 2),
+            # 'kpi_track_loading': round(kpi_data['track_loading'], 2),
+            # 'kpi_retooling_efficiency': round(kpi_data['retooling_efficiency'], 2)
         }

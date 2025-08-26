@@ -8,7 +8,11 @@ const TabNavigation = ({ activeTab, setActiveTab }) => {
     },
     {
       id: 'orders',
-      label: 'Остатки и заказы'
+      label: 'Заказы'
+    },
+    {
+      id: 'inventory',
+      label: 'Остатки'
     },
     {
       id: 'cost-params',

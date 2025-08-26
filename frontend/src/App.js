@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import { 
-  faRoad, faCubes, faPercentage, faCog, faPrint, faCalculator, 
+  faRoad, faCubes, faUndo, faPercentage, faCog, faPrint, faCalculator,
   faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, 
   faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
   faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
@@ -14,11 +14,12 @@ import Header from './components/Header';
 import TabNavigation from './components/TabNavigation';
 import TrackAvailability from './components/TrackAvailability';
 import Orders from './components/Orders';
+import Inventory from './components/Inventory';
 import CostParams from './components/CostParams';
 
 // Add all icons to the library
 library.add(
-  faRoad, faCubes, faWrench, faLineChart, faPercentage, faCog, faPrint, faCalculator,
+  faRoad, faCubes, faUndo, faWrench, faLineChart, faPercentage, faCog, faPrint, faCalculator,
   faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, 
   faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
   faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
@@ -103,6 +104,7 @@ function App() {
         <div>
           {activeTab === 'track-availability' && <TrackAvailability calculating={calculating} />}
           {activeTab === 'orders' && <Orders />}
+          {activeTab === 'inventory' && <Inventory />}
           {activeTab === 'cost-params' && <CostParams />}
         </div>
       </div>

@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
+import { printTrackPlan } from '../services/api';
 
 const Header = ({title, stats, actions, loading = false, onAction}) => {
+	// State for date input
+	const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+
 	// Color mapping for action buttons
 	const colorMap = {
 		blue: 'bg-blue-700 hover:bg-blue-800',
@@ -25,8 +29,16 @@ const Header = ({title, stats, actions, loading = false, onAction}) => {
         <header className="flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-700 tracking-wider">{title}</h1>
           <div className="flex items-center gap-4">
-            <input type="date" className="border border-gray-300 rounded-md px-3 py-1.5 text-sm text-gray-500" />
-            <button className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50">
+            <input 
+              type="date" 
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm text-gray-500" 
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+            />
+            <button 
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50"
+              onClick={() => printTrackPlan(selectedDate)}
+            >
               <FontAwesomeIcon icon="print" className="w-5 h-5" />
               <span>Печать</span>
             </button>

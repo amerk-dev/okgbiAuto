@@ -180,6 +180,19 @@ export const getOrders = async () => {
   }
 };
 
+export const getDeletedOrders = async () => {
+  try {
+    const response = await fetch(`${API_URL}/api/orders/deleted/`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching deleted orders:', error);
+    throw error;
+  }
+};
+
 export const getStock = async () => {
   try {
     const response = await fetch(`${API_URL}/api/stock/`);
@@ -193,10 +206,14 @@ export const getStock = async () => {
   }
 };
 
-export const deleteOrder = async (orderId) => {
+export const deleteOrder = async (orderId, plateName) => {
   try {
     const response = await fetch(`${API_URL}/api/orders/${orderId}/`, {
       method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ plateName }),
     });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -204,6 +221,25 @@ export const deleteOrder = async (orderId) => {
     return await response.json();
   } catch (error) {
     console.error('Error deleting order:', error);
+    throw error;
+  }
+};
+
+export const restoreOrder = async (orderId, plateName) => {
+  try {
+    const response = await fetch(`${API_URL}/api/orders/${orderId}/restore/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ plateName }),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error restoring order:', error);
     throw error;
   }
 };
@@ -304,4 +340,16 @@ export const startCalculation = async () => {
     console.error('Error starting calculation:', error);
     throw error;
   }
+};
+
+// Print API
+export const printTrackPlan = (date, trackId) => {
+  // Construct the URL with query parameters
+  let url = `${API_URL}/api/print/?date=${date}`;
+  if (trackId) {
+    url += `&track_id=${trackId}`;
+  }
+
+  // Open the URL in a new window/tab
+  window.open(url, '_blank');
 };

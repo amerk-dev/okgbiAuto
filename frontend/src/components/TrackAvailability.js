@@ -2,7 +2,8 @@ import React, {useEffect, useState, useRef} from 'react';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 import { 
   getTracks, getContractors, updateTrackContractor, moveSlab, swapTracks, 
-  startCalculation, getTrackSlabs, updateSlab, deleteSlab, transferSlabs 
+  startCalculation, getTrackSlabs, updateSlab, deleteSlab, transferSlabs,
+  printTrackPlan
 } from '../services/api';
 
 const TrackAvailability = ({calculating}) => {
@@ -24,9 +25,11 @@ const TrackAvailability = ({calculating}) => {
 	const [transferTrackId, setTransferTrackId] = useState('');
  const [isSubmitting, setIsSubmitting] = useState(false);
  const [dayOffset, setDayOffset] = useState(0);
-	const [searchTerm, setSearchTerm] = useState('');
+ const [searchTerm, setSearchTerm] = useState('');
 	const [searchResults, setSearchResults] = useState([]);
 	const [showSearchResults, setShowSearchResults] = useState(false);
+	const [sortColumn, setSortColumn] = useState(null);
+	const [sortDirection, setSortDirection] = useState('asc');
 
 	// Refs for edit form
 	const nameRef = useRef(null);
@@ -642,13 +645,12 @@ const TrackAvailability = ({calculating}) => {
 			reconfigData = Array.from(uniqueCombinations).map((combo, index) => {
 				const [width, height] = combo.split('|');
 				return {
-					type: `Переналадка ${index}`,
+					type: index === 0 ? `Начало дня` : `Переналадка ${index}`,
 					width: width,
 					height: height
 				};
 			});
 		}
-		reconfigData = reconfigData.slice(1,)
 
 		// If no reconfiguration data was found, use default message
 		if (reconfigData.length === 0) {
@@ -1335,7 +1337,38 @@ const TrackAvailability = ({calculating}) => {
 
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-blue-600">Стоимость {selectedCell.price}</span>
-                    <button className="flex items-center gap-1 px-3 py-1 text-sm border border-gray-500 rounded-md text-white bg-gray-600 hover:bg-gray-700">
+                    <button 
+                      className="flex items-center gap-1 px-3 py-1 text-sm border border-gray-500 rounded-md text-white bg-gray-600 hover:bg-gray-700"
+                      onClick={() => {
+                        // Get the date from the selected cell
+                        const cellDate = selectedCell.date;
+
+                        // Parse the date string based on its format
+                        let formattedDate;
+                        if (cellDate === 'Сегодня') {
+                          // If the date is "Today", use today's date
+                          formattedDate = new Date().toISOString().split('T')[0];
+                        } else if (cellDate === 'Завтра') {
+                          // If the date is "Tomorrow", use tomorrow's date
+                          const tomorrow = new Date();
+                          tomorrow.setDate(tomorrow.getDate() + 1);
+                          formattedDate = tomorrow.toISOString().split('T')[0];
+                        } else {
+                          // Try to parse the date in DD.MM.YYYY format
+                          const parts = cellDate.split('.');
+                          if (parts.length === 3) {
+                            // Convert DD.MM.YYYY to YYYY-MM-DD
+                            formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                          } else {
+                            // Fallback to current date if parsing fails
+                            formattedDate = new Date().toISOString().split('T')[0];
+                          }
+                        }
+
+                        // Call the print function with the date and track ID
+                        printTrackPlan(formattedDate, selectedCell.trackId);
+                      }}
+                    >
 					  <FontAwesomeIcon icon="print" className="w-4 h-4" />
 					  <span>Печать</span>
 					</button>
@@ -1375,21 +1408,244 @@ const TrackAvailability = ({calculating}) => {
                               checked={selectedSlabs.length > 0 && selectedSlabs.length === selectedCell.slabs.length}
                             />
                           </th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Заказчик</th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата дедлайна</th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Номер заказа</th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Длина</th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Нагрузка</th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Класс бетона</th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Проволока верх</th>
-                          <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Проволока низ</th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'customer') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('customer');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Заказчик
+                            {sortColumn === 'customer' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'deadline') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('deadline');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Дата дедлайна
+                            {sortColumn === 'deadline' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'order') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('order');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Номер заказа
+                            {sortColumn === 'order' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'name') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('name');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Название
+                            {sortColumn === 'name' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'length') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('length');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Длина
+                            {sortColumn === 'length' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'capacity') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('capacity');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Нагрузка
+                            {sortColumn === 'capacity' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'concrete_class') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('concrete_class');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Класс бетона
+                            {sortColumn === 'concrete_class' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'wire_top') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('wire_top');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Проволока верх
+                            {sortColumn === 'wire_top' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
+                          <th 
+                            scope="col" 
+                            className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                            onClick={() => {
+                              if (sortColumn === 'wire_bottom') {
+                                setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+                              } else {
+                                setSortColumn('wire_bottom');
+                                setSortDirection('asc');
+                              }
+                            }}
+                          >
+                            Проволока низ
+                            {sortColumn === 'wire_bottom' && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? '↑' : '↓'}
+                              </span>
+                            )}
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {selectedCell.slabs.map((slab, index) => {
-                          const slabId = slab.id;
-                          const isSelected = selectedSlabs.includes(slabId);
+                        {selectedCell.slabs
+                          .slice()
+                          .sort((a, b) => {
+                            if (!sortColumn) return 0;
+
+                            let valueA, valueB;
+
+                            switch(sortColumn) {
+                              case 'customer':
+                                valueA = a.customer || '';
+                                valueB = b.customer || '';
+                                break;
+                              case 'deadline':
+                                // Convert date strings to Date objects for comparison
+                                valueA = a.deadline ? new Date(a.deadline.split('.').reverse().join('-')) : new Date(0);
+                                valueB = b.deadline ? new Date(b.deadline.split('.').reverse().join('-')) : new Date(0);
+                                break;
+                              case 'order':
+                                valueA = a.order || '';
+                                valueB = b.order || '';
+                                break;
+                              case 'name':
+                                valueA = a.clean_name || '';
+                                valueB = b.clean_name || '';
+                                break;
+                              case 'length':
+                                valueA = parseFloat(a.length) || 0;
+                                valueB = parseFloat(b.length) || 0;
+                                break;
+                              case 'capacity':
+                                valueA = parseFloat(a.capacity) || 0;
+                                valueB = parseFloat(b.capacity) || 0;
+                                break;
+                              case 'concrete_class':
+                                valueA = a.concrete_class || '';
+                                valueB = b.concrete_class || '';
+                                break;
+                              case 'wire_top':
+                                valueA = a.wire_top || '';
+                                valueB = b.wire_top || '';
+                                break;
+                              case 'wire_bottom':
+                                valueA = a.wire_bottom || '';
+                                valueB = b.wire_bottom || '';
+                                break;
+                              default:
+                                return 0;
+                            }
+
+                            // For string comparison
+                            if (typeof valueA === 'string' && typeof valueB === 'string') {
+                              return sortDirection === 'asc' 
+                                ? valueA.localeCompare(valueB) 
+                                : valueB.localeCompare(valueA);
+                            }
+
+                            // For number or date comparison
+                            return sortDirection === 'asc' 
+                              ? valueA - valueB 
+                              : valueB - valueA;
+                          })
+                          .map((slab, index) => {
+                            const slabId = slab.id;
+                            const isSelected = selectedSlabs.includes(slabId);
 
                           return (
                             <tr key={index} className={isSelected ? "bg-blue-50" : ""}>

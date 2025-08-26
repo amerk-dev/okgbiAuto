@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.db import models, transaction
 # from django.utils.functional import property
 
-from .params import Parameters, UnitPrice
+from .params import HolidayDate, Parameters, UnitPrice
 
 
 class Customer(models.Model):
@@ -101,7 +101,7 @@ class Track(models.Model):
                 is_weekend = any(
                     day.weekday() == day_num and getattr(params, day_attr)
                     for day_num, day_attr in weekend_settings
-                )
+                ) or HolidayDate.objects.filter(date=day).exists()
 
                 if is_weekend:
                     continue
@@ -260,6 +260,7 @@ class AbstractPlate(models.Model):
     wire_bottom = models.CharField(max_length=50)
     wire_top = models.CharField(max_length=50)
     height = models.FloatField()
+    is_deleted = models.BooleanField('Удален', default=False)
 
     def __str__(self):
         return f'name - {self.name}, l - {self.length}, w:{self.width}, h:{self.height}, {self.concrete_class}, wb-{self.wire_bottom}, wt-{self.wire_top}'
@@ -288,10 +289,17 @@ class AbstractPlate(models.Model):
         else:
             return 0
 
+class PlateManager(models.Manager):
+
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+
 class Plate(AbstractPlate):
     track = models.ForeignKey(Track, on_delete=models.SET_NULL, null=True, related_name='plates')
     deadline = models.ForeignKey(Deadline, on_delete=models.CASCADE, related_name='plates')
-
+    objects = PlateManager()
+    all_objects = models.Manager()
 
     @property
     def is_overdue(self):
@@ -301,4 +309,7 @@ class Plate(AbstractPlate):
 
 
 class ReadyPlate(AbstractPlate):
-    pass
+    objects = PlateManager()
+    all_objects = models.Manager()
+    used_in_order = models.ForeignKey(Order, on_delete=models.CASCADE,
+                                      related_name='ready_plates', null=True, blank=True)

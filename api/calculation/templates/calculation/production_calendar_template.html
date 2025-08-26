@@ -6,7 +6,7 @@
     <style>
 	    body {
 		    font-family: Arial, sans-serif;
-		    font-size: 15px;
+		    font-size: 13px;
 		    margin: 1cm;
 	    }
 
@@ -25,7 +25,7 @@
 		    border-collapse: collapse;
 		    table-layout: fixed;
 		    word-wrap: break-word;
-		    font-size: 13px;
+		    font-size: 11px;
 		    margin-top: 10px;
 	    }
 	    thead {
@@ -61,6 +61,7 @@
             <table class="table-wrapper">
                 <thead>
                     <tr>
+                        <th>Контрагент</th>
                         <th>Дата отгрузки</th>
                         <th>Номер</th>
                         <th>Плита</th>
@@ -71,12 +72,12 @@
                         <th>Класс бетона</th>
                         <th>Проволока верх, мм</th>
                         <th>Проволока низ, мм</th>
-                        <th>Количество, шт</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for plate in track.plates %}
 	                    <tr>
+                            <td>{{ plate.customer|default:"-" }}</td>
                             <td>{{ plate.deadline|default:"-" }}</td>
                             <td>{{ plate.order }}</td>
                             <td>{{ plate.clean_name }}</td>
@@ -87,7 +88,6 @@
                             <td>{{ plate.concrete_class }}</td>
                             <td>{{ plate.wire_top }}</td>
                             <td>{{ plate.wire_bottom }}</td>
-                            <td>{{ plate.count }}</td>
                         </tr>
                     {% endfor %}
                 </tbody>

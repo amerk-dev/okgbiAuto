@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models.base import Customer, Order, Deadline, Track, Plate, ReadyPlate
-from .models.params import Parameters, UnitPrice
+from .models.params import Parameters, UnitPrice, HolidayDate
 
 
 class PlateInline(admin.TabularInline):
@@ -38,3 +38,4 @@ admin.site.register(Plate)
 admin.site.register(ReadyPlate)
 admin.site.register(UnitPrice)
 admin.site.register(Parameters, ParametersAdmin)
+admin.site.register(HolidayDate)

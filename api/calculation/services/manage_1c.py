@@ -73,7 +73,7 @@ class Update1CDataCommand:
         ready_plates = data['ready_plates']
         orders = data['orders']
         with transaction.atomic():
-            ReadyPlate.objects.all().delete()
+            ReadyPlate.all_objects.all().delete()
             Order.objects.all().delete()
             self._process_ready_plates(ready_plates)
             self._process_orders(orders)

@@ -56,6 +56,8 @@ def calculate_plan():
                                           wire_bottom=int(plate.wire_bottom), wire_top=int(plate.wire_top)).first()
         if need_plate:
             need_plate.delete()
+            plate.used_in_order = need_plate.deadline.order
+            plate.save()
             use_ready_plates += 1
 
     if not ready_plates:

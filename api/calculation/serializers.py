@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import (
     Customer, Order, Parameters, ReadyPlate, Track, UnitPrice, Plate
 )
+from .models.params import HolidayDate
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -43,7 +44,7 @@ class PlateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Plate
         fields = ['id', 'name', 'width', 'height', 'wire_top', 'wire_bottom', 
-                 'concrete_class', 'deadline', 'track']
+                 'concrete_class', 'deadline', 'track', 'is_deleted']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -58,7 +59,7 @@ class ReadyPlateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReadyPlate
         fields = ['id', 'name', 'width', 'height', 'length', 'wire_top', 
-                 'wire_bottom', 'concrete_class', 'capacity']
+                 'wire_bottom', 'concrete_class', 'capacity', 'is_deleted']
 
 class OrderSerializer(serializers.ModelSerializer):
     customer = CustomerSerializer(read_only=True)
@@ -70,14 +71,14 @@ class OrderSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # Add deadline and complete date
-        deadline = instance.last_deadline()
-        data['deadline'] = deadline.date.strftime('%d.%m.%Y') if deadline else ""
+        deadline = instance.last_deadline
+        data['deadline'] = deadline.date.strftime('%d.%m.%Y') if deadline.date else ""
 
-        complete_date = instance.complete_date()
+        complete_date = instance.complete_date
         data['complete_date'] = complete_date.strftime('%d.%m.%Y') if complete_date else ""
 
         # Get plates for this order
-        plates = Plate.objects.filter(order=instance)
+        plates = Plate.objects.filter(deadline__order=instance)
         if plates.exists():
             first_plate = plates.first()
             data['name'] = first_plate.name
@@ -90,8 +91,8 @@ class OrderSerializer(serializers.ModelSerializer):
             data['wire_bottom'] = first_plate.wire_bottom
 
         data['slab_count'] = plates.count()
-        data['status'] = 'Просрочен' if instance.is_overdue() else ('В производстве' if plates.filter(track__isnull=False).exists() else 'Ожидает')
-        data['status_class'] = 'bg-red-100 text-red-800' if instance.is_overdue() else ('bg-green-100 text-green-800' if plates.filter(track__isnull=False).exists() else 'bg-yellow-100 text-yellow-800')
+        data['status'] = 'Просрочен' if instance.is_overdue else ('В производстве' if plates.filter(track__isnull=False).exists() else 'Ожидает')
+        data['status_class'] = 'bg-red-100 text-red-800' if instance.is_overdue else ('bg-green-100 text-green-800' if plates.filter(track__isnull=False).exists() else 'bg-yellow-100 text-yellow-800')
 
         return data
 
@@ -106,7 +107,16 @@ class UnitPriceSerializer(serializers.ModelSerializer):
         data['unit_name'] = instance.unit_name
         return data
 
+class HolidayDateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HolidayDate
+        fields = ['id', 'date']
+
 class ParametersSerializer(serializers.ModelSerializer):
     class Meta:
         model = Parameters
-        fields = ['road_length', 'tracks_count', 'production_lag']
+        fields = [
+            'road_length', 'tracks_count', 'production_lag', 'tail_length',
+            'monday_weekend', 'tuesday_weekend', 'wednesday_weekend', 
+            'thursday_weekend', 'friday_weekend', 'saturday_weekend', 'sunday_weekend'
+        ]
