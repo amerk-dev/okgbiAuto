@@ -46,7 +46,6 @@ def calculate_plan():
     track_len, tail_len = get_parameters()
 
     Track.recreate_tracks()
-    tracks = Track.get_tracks()
 
     ready_plates = ReadyPlate.objects.all()
     use_ready_plates = 0
@@ -66,7 +65,6 @@ def calculate_plan():
     tracks_with_customers = Track.objects.filter(customer__isnull=False).order_by('day', 'position')
 
     for track in tracks_with_customers:
-        print(track)
         order = Order.objects.filter(customer=track.customer)
         plates = Plate.objects.filter(deadline__order__in=order, track__isnull=True)
         if not plates: break
@@ -79,26 +77,30 @@ def calculate_plan():
                 if plate.length <= track.free_length and plate.width == track.width and plate.height == track.height:
                     plate.track = track
                     plate.save()
+        if track_len-track.free_length > 5000:
+            plus_plates = Plate.objects.filter(width=track.width, height=track.height, track__isnull=True)
+            if not plus_plates: print("нечем дополнять")
+            for plate in plus_plates:
+                if plate.length <= track.free_length:
+                    plate.track = track
+                    plate.save()
+        track.save()
 
-    plates = Plate.objects.filter(track__isnull=True)
-    is_real = reality_check(plates, tracks, track_len)
 
-    create_plan(tracks)
+
+    create_plan()
 
     # fill_remaining_plates()  # Новый шаг
 
     print({
         "plan": True,
         "Use_ready_plates": use_ready_plates,
-        "is_real": is_real
     })
 
 
 @profile_time
-def create_plan(tracks):
+def create_plan():
     """Основная функция - алгоритм распределения плит по дорожкам
-    Args:
-        tracks (list[Track]): Список доступных дорожек.
     """
 
     plates = Plate.objects.filter(track__isnull=True)
@@ -116,6 +118,7 @@ def create_plan(tracks):
     if not plates_with_deadline and not plates_without_deadline:
         print("Нет плит для размещения. План пуст.")
 
+    tracks = Track.get_tracks()
 
     placed_plate_ids = set()
 
@@ -125,6 +128,8 @@ def create_plan(tracks):
         prev_current_properties = None
         last_track_day = None
         for track in tracks:
+            # print(track, track.free_length, track.width, track.height)
+
             if last_track_day != track.day:
                 prev_current_properties = None
 
