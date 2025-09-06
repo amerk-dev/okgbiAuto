@@ -106,6 +106,7 @@ class Parameters(SingletonModel):
                                      verbose_name='Режим переноса хвоста',
                                      help_text='0 - мягкий режим, 1 - средний режим, 2 - жесткий режим')
     url_1c = models.CharField(max_length=255, verbose_name='URL 1c', default='')
+    url_1c_export = models.CharField(max_length=255, verbose_name='URL 1c', default='')
     sign_1c = models.CharField(max_length=255, verbose_name='Пароль 1с', default='123456788')
 
     # Weekend day settings

@@ -16,7 +16,7 @@ def export_to_1c():
     Экспортирует данные о выполненных за день работах в 1С
     """
     params = Parameters.get_solo()
-    url = 'http://82.142.152.43/UPP/hs/slabs/opzs'
+    url = params.url_1c_export
     headers = {'Authorization': 'Basic V2ViVXNlcjo3ODk0NTYxMjMw', 'Content-Type': 'application/json'}
 
     # Получаем сегодняшнюю дату
