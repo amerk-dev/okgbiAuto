@@ -15,7 +15,7 @@ parameters_dump = """[
     "tail_length": 1000,
     "force_tail": 2,
     "url_1c": "http://82.142.152.43/UPP/hs/slabs/all",
-    "url_1c_export": "http://82.142.152.43/UPP/hs/slabs/all",
+    "url_1c_export": "http://82.142.152.43/UPP/hs/slabs/opzs",
     "sign_1c": "123456788",
     "monday_weekend": false,
     "tuesday_weekend": false,
