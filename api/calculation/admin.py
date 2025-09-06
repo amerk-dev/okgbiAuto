@@ -25,7 +25,7 @@ class ParametersAdmin(admin.ModelAdmin):
             'description': 'Укажите, какие дни недели считать выходными (количество доступных дорожек будет 0)'
         }),
         ('Настройки 1C', {
-            'fields': ('url_1c', 'sign_1c'),
+            'fields': ('url_1c', 'url_1c_export', 'sign_1c'),
             'classes': ('grp-collapse grp-closed',),
         }),
     )
