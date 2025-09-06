@@ -16,9 +16,10 @@ from django.db import transaction
 from .services.calculator.calculate import calculate_plan
 from .services.manage_1c import Update1CDataCommand
 from .services.export_1c import export_to_1c
+from django.views.generic import TemplateView
 
 from .models import (
-    Customer, Order, Parameters, ReadyPlate, Track, UnitPrice, Plate,
+    Customer, Deadline, Order, Parameters, ReadyPlate, Track, UnitPrice, Plate,
     UnitTypeChoice
 )
 from .models.params import HolidayDate
@@ -931,3 +932,210 @@ class Export1CView(APIView):
         except Exception as e:
             print(e)
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AlgorithmView(TemplateView):
+    """
+    View for displaying the algorithm description and demonstration
+    """
+    template_name = 'calculation/algorithm.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return context
+
+
+class AlgorithmDemoView(APIView):
+    """
+    API endpoint for demonstrating the algorithm with uploaded data
+    """
+    def post(self, request):
+        """Process uploaded file and demonstrate algorithm"""
+        if 'demo_file' not in request.FILES:
+            return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+
+        demo_file = request.FILES['demo_file']
+        try:
+            import json
+            import tempfile
+            from django.db import transaction
+            from .services.calculator.calculate import calculate_plan
+
+            # Parse the uploaded JSON file
+            file_content = demo_file.read().decode('utf-8')
+            data = json.loads(file_content)
+
+            # Start a transaction to create a temporary database state
+            with transaction.atomic():
+                # Create a savepoint to be able to rollback
+                sid = transaction.savepoint()
+
+                # Copy parameters and unit prices from the main database
+                params = Parameters.get_solo()
+                unit_prices = UnitPrice.objects.all()
+
+                # Process the data and create necessary objects
+                # Create customers, orders, deadlines, and plates
+                customers = {}
+                for order_data in data.get('orders', []):
+                    # Create or get customer
+                    customer_name = order_data.get('customer', 'Unknown')
+                    if customer_name not in customers:
+                        customer, _ = Customer.objects.get_or_create(name=customer_name)
+                        customers[customer_name] = customer
+                    else:
+                        customer = customers[customer_name]
+
+                    # Create order
+                    order = Order.objects.create(
+                        customer=customer,
+                        order_number=order_data.get('number', 'Unknown')
+                    )
+
+                    # Process completion dates
+                    for completion_date in order_data.get('completion_dates', []):
+                        date_str = completion_date.get('date')
+                        if date_str:
+                            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S').date()
+                            deadline = Deadline.objects.create(
+                                order=order,
+                                date=date_obj
+                            )
+
+                            # Process plates
+                            for plate_data in completion_date.get('plates', []):
+                                for _ in range(plate_data.get('count', 1)):
+                                    Plate.objects.create(
+                                        name=plate_data.get('name', 'Unknown'),
+                                        length=plate_data.get('length', 0),
+                                        width=plate_data.get('width', 0),
+                                        height=plate_data.get('height', 0),
+                                        concrete_class=plate_data.get('class', 'B25'),
+                                        wire_bottom=plate_data.get('wire_bottom', 0),
+                                        wire_top=plate_data.get('wire_top', 0),
+                                        deadline=deadline
+                                    )
+
+                # Process ready plates
+                for ready_plate_data in data.get('ready_plates', []):
+                    ReadyPlate.objects.create(
+                        name=ready_plate_data.get('name', 'Unknown'),
+                        length=ready_plate_data.get('length', 0),
+                        width=ready_plate_data.get('width', 0),
+                        height=ready_plate_data.get('height', 0),
+                        concrete_class=ready_plate_data.get('class', 'B25'),
+                        wire_bottom=ready_plate_data.get('wire_bottom', 0),
+                        wire_top=ready_plate_data.get('wire_top', 0)
+                    )
+
+                # Run the calculation
+                calculate_plan()
+
+                # Get the results in a format similar to the main frontend
+                tracks = Track.objects.all().order_by('position', 'day')
+
+                # Group tracks by position
+                positions = {}
+                for track in tracks:
+                    if track.position not in positions:
+                        positions[track.position] = []
+                    positions[track.position].append(track)
+
+                result = []
+
+                for pos, pos_tracks in positions.items():
+                    first_track = pos_tracks[0]
+
+                    track_data = {
+                        "id": first_track.id,
+                        "name": f"Дорожка {pos + 1}",
+                        "contractor": first_track.customer.name if first_track.customer else "",
+                        "days": [],
+                    }
+
+                    # Group by date
+                    days = {}
+                    for t in pos_tracks:
+                        if t.day not in days:
+                            days[t.day] = []
+                        days[t.day].append(t)
+
+                    for date, day_tracks in days.items():
+                        day_track = day_tracks[0]
+
+                        day_data = {
+                            "date": date.strftime("%Y-%m-%d"),
+                            "slabs": [],
+                            "freeSpace": f"{day_track.free_length}мм",
+                        }
+
+                        if day_track.plates.exists():
+                            price_str = f"{day_track.cost:.2f}".replace(".", ",")
+                            track_orders = [
+                                plate.deadline.order.order_number
+                                for plate in day_track.plates.all()
+                                if plate.deadline and plate.deadline.order
+                            ]
+                            track_plates_names = [plate.name for plate in day_track.plates.all()]
+
+                            info = {
+                                "id": str(day_track.id),
+                                "number": f"#{day_track.id}",
+                                "orders": track_orders,
+                                "plates": track_plates_names,
+                                "size": f"{int(day_track.width)}x{int(day_track.height)}",
+                                "width": int(day_track.width),
+                                "height": int(day_track.height),
+                                "wireTop": day_track.wire_top,
+                                "wireBottom": day_track.wire_bottom,
+                                "concrete": day_track.concrete_class,
+                                "occupied": day_track.useful_length,
+                                "free": day_track.free_length,
+                                "price": f"{price_str} ₽",
+                                "deadline": (
+                                    day_track.deadline.strftime("%d-%m-%Y")
+                                    if day_track.deadline
+                                    else None
+                                ),
+                                "status": "overdue" if day_track.has_overdue_deadline else "booked",
+                            }
+                            day_data.update(info)
+
+                            # Add slabs data
+                            for plate in day_track.plates.all():
+                                customer_name = plate.deadline.order.customer.name if plate.deadline.order.customer else "Не указан"
+                                deadline_date = plate.deadline.date.strftime('%d.%m.%Y') if plate.deadline and plate.deadline.date else "Не указан"
+                                order_number = plate.deadline.order.order_number if plate.deadline and plate.deadline.order else "Не указан"
+
+                                day_data["slabs"].append({
+                                    'customer': customer_name,
+                                    'deadline_date': deadline_date,
+                                    'order_number': order_number,
+                                    'id': plate.id,
+                                    'name': plate.name,
+                                    'length': plate.length,
+                                    'width': plate.width,
+                                    'height': plate.height,
+                                    'load': plate.capacity,
+                                    'concrete_class': plate.concrete_class,
+                                    'wire_top': int(plate.wire_top),
+                                    'wire_bottom': int(plate.wire_bottom)
+                                })
+                        else:
+                            day_data.update({
+                                "id": str(day_track.id),
+                                "free": str(day_track.free_length),
+                            })
+
+                        track_data["days"].append(day_data)
+
+                    result.append(track_data)
+
+                # Rollback to the savepoint to clean up
+                transaction.savepoint_rollback(sid)
+
+            return Response({'result': result})
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

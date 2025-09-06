@@ -29,8 +29,8 @@ class Update1CDataCommand:
                     width=plate['width'],
                     height=plate['height'],
                     concrete_class=plate['class'] or 'В25',
-                    wire_bottom=plate['wire_bottom'],
-                    wire_top=plate['wire_top'],
+                    wire_bottom=plate['wire_bottom'] or '14',
+                    wire_top=plate['wire_top'] or '4',
                 ))
         ReadyPlate.objects.bulk_create(plates)
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models.base import Customer, Order, Deadline, Track, Plate, ReadyPlate
+from .models.base import Customer, Export1c, Order, Deadline, Track, Plate, ReadyPlate
 from .models.params import Parameters, UnitPrice, HolidayDate
 
 
@@ -30,6 +30,9 @@ class ParametersAdmin(admin.ModelAdmin):
         }),
     )
 
+class Export1CAdmin(admin.ModelAdmin):
+    list_filter = ['date']
+
 admin.site.register(Customer)
 admin.site.register(Order)
 admin.site.register(Deadline)
@@ -39,3 +42,4 @@ admin.site.register(ReadyPlate)
 admin.site.register(UnitPrice)
 admin.site.register(Parameters, ParametersAdmin)
 admin.site.register(HolidayDate)
+admin.site.register(Export1c, Export1CAdmin)

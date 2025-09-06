@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CustomerViewSet, TrackViewSet, OrderViewSet, PlateViewSet, ReadyPlateViewSet,
     UnitPriceViewSet, ParametersViewSet, StockView, DashboardStatsView, CalculationView,
-    PrintTrackPlanView, Export1CView
+    PrintTrackPlanView, Export1CView, AlgorithmView, AlgorithmDemoView
 )
 
 
@@ -46,4 +46,8 @@ urlpatterns = [
 
     # Export to 1C endpoint
     path('export-1c/', Export1CView.as_view(), name='export_1c'),
+
+    # Algorithm description and demo endpoints
+    path('algorithm/', AlgorithmView.as_view(), name='algorithm'),
+    path('algorithm/demo/', AlgorithmDemoView.as_view(), name='algorithm_demo'),
 ]

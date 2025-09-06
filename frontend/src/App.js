@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {library} from '@fortawesome/fontawesome-svg-core';
 import {
+	faArrowLeft,
 	faBoxOpen,
 	faCalculator,
 	faCalendarCheck,
@@ -8,6 +9,7 @@ import {
 	faChevronUp,
 	faCog,
 	faCubes,
+	faDownload,
 	faEdit,
 	faExchangeAlt,
 	faExclamationTriangle,
@@ -37,6 +39,7 @@ import TrackAvailability from './components/TrackAvailability';
 import Orders from './components/Orders';
 import Inventory from './components/Inventory';
 import CostParams from './components/CostParams';
+import Algorithm from './components/Algorithm';
 
 // Add all icons to the library
 library.add(
@@ -44,7 +47,7 @@ library.add(
 	faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort,
 	faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
 	faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
-	faHandPaper
+	faHandPaper, faArrowLeft, faDownload
 );
 
 function App() {
@@ -52,6 +55,10 @@ function App() {
 	const [stats, setStats] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [calculating, setCalculating] = useState(false);
+	const [exporting, setExporting] = useState(false);
+
+	// Check if we're on the algorithm page
+	const isAlgorithmPage = window.location.pathname === '/algorithm';
 
 	// Fetch dashboard stats from API
 	useEffect(() => {
@@ -93,6 +100,7 @@ function App() {
 		}
 		if (actionId === 2) {
 			try {
+				setExporting(true);
 				const result = await exportTo1C();
 				if (result.status === 'success') {
 					alert(result.message);
@@ -103,6 +111,9 @@ function App() {
 			catch (error) {
 				console.error('Error exporting to 1C:', error);
 				alert('Ошибка при выгрузке в 1С');
+			}
+			finally {
+				setExporting(false);
 			}
 		}
 	};
@@ -125,28 +136,39 @@ function App() {
 
 	return (
 		<div className="px-10 pb-4" style={{backgroundColor: "#F8FAFD"}}>
-      <Header
-		  title="ПАНЕЛЬ УПРАВЛЕНИЯ"
-		  stats={stats}
-		  actions={actions}
-		  loading={loading || calculating}
-		  onAction={handleAction}
-	  />
+			{isAlgorithmPage ? (
+				<Algorithm />
+			) : (
+				<>
+					<Header
+						title="ПАНЕЛЬ УПРАВЛЕНИЯ"
+						stats={stats}
+						actions={actions}
+						loading={loading || calculating || exporting}
+						loadingMessage={
+							exporting ? "Выгрузка в 1С..." : 
+							calculating ? "Выполняется расчет..." : 
+							"Загрузка статистики..."
+						}
+						onAction={handleAction}
+					/>
 
-      <div className="mx-auto rounded-xl shadow-sm p-6 space-y-6 mt-4">
-        <TabNavigation
-			activeTab={activeTab}
-			setActiveTab={setActiveTab}
-		/>
+					<div className="mx-auto rounded-xl shadow-sm p-6 space-y-6 mt-4">
+						<TabNavigation
+							activeTab={activeTab}
+							setActiveTab={setActiveTab}
+						/>
 
-        <div>
-          {activeTab === 'track-availability' && <TrackAvailability calculating={calculating} />}
-			{activeTab === 'orders' && <Orders />}
-			{activeTab === 'inventory' && <Inventory />}
-			{activeTab === 'cost-params' && <CostParams />}
-        </div>
-      </div>
-    </div>
+						<div>
+							{activeTab === 'track-availability' && <TrackAvailability calculating={calculating} />}
+							{activeTab === 'orders' && <Orders />}
+							{activeTab === 'inventory' && <Inventory />}
+							{activeTab === 'cost-params' && <CostParams />}
+						</div>
+					</div>
+				</>
+			)}
+		</div>
 	);
 }
 

@@ -311,3 +311,10 @@ class ReadyPlate(AbstractPlate):
 class Export1c(models.Model):
     document_number = models.CharField(max_length=255, null=True, blank=True)
     date = models.DateField(auto_now_add=True)
+    track_position = models.PositiveSmallIntegerField()
+
+    class Meta:
+        unique_together = ('date', 'track_position')
+
+    def __str__(self):
+        return f'{self.date} Дорожка {self.track_position}'

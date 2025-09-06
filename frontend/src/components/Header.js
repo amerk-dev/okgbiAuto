@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 import { printTrackPlan } from '../services/api';
 
-const Header = ({title, stats, actions, loading = false, onAction}) => {
+const Header = ({title, stats, actions, loading = false, loadingMessage = "Загрузка статистики...", onAction}) => {
 	// State for date input
 	const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -42,6 +42,13 @@ const Header = ({title, stats, actions, loading = false, onAction}) => {
               <FontAwesomeIcon icon="print" className="w-5 h-5" />
               <span>Печать</span>
             </button>
+            <a 
+              href="/algorithm" 
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50"
+            >
+              <FontAwesomeIcon icon="info-circle" className="w-5 h-5" />
+              <span>Алгоритм</span>
+            </a>
           </div>
         </header>
       </div>
@@ -51,7 +58,7 @@ const Header = ({title, stats, actions, loading = false, onAction}) => {
 		  {loading ? (
 			  <div className="bg-white rounded-xl shadow-sm p-6 text-center py-10">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
-          <p className="mt-2 text-gray-600">Загрузка статистики...</p>
+          <p className="mt-2 text-gray-600">{loadingMessage}</p>
         </div>
 		  ) : (
 			  <div className="bg-white rounded-xl shadow-sm p-6" style={{width: '80%'}}>
