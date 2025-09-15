@@ -12,7 +12,7 @@ const TrackAvailability = ({calculating}) => {
 	const [showCellModal, setShowCellModal] = useState(false);
 	const [selectedReconfiguration, setSelectedReconfiguration] = useState(null);
 	const [selectedCell, setSelectedCell] = useState(null);
-	const [pendingContractorChange, setPendingContractorChange] = useState(null);
+ const [pendingContractorChange, setPendingContractorChange] = useState(null);
 	const [contractors, setContractors] = useState([]);
 	const [tracks, setTracks] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -23,6 +23,8 @@ const TrackAvailability = ({calculating}) => {
 	const [editingSlab, setEditingSlab] = useState(null);
 	const [transferDate, setTransferDate] = useState('');
 	const [transferTrackId, setTransferTrackId] = useState('');
+ const [openDropdowns, setOpenDropdowns] = useState({});
+	const [contractorSearchTerms, setContractorSearchTerms] = useState({});
  const [isSubmitting, setIsSubmitting] = useState(false);
  const [dayOffset, setDayOffset] = useState(0);
  const [searchTerm, setSearchTerm] = useState('');
@@ -868,10 +870,48 @@ const TrackAvailability = ({calculating}) => {
 		}
 	};
 
+ // Toggle dropdown open/close state
+	const toggleDropdown = (trackId) => {
+		setOpenDropdowns(prev => ({
+			...prev,
+			[trackId]: !prev[trackId]
+		}));
+	};
+
+	// Handle contractor search input
+	const handleContractorSearch = (trackId, searchTerm) => {
+		setContractorSearchTerms(prev => ({
+			...prev,
+			[trackId]: searchTerm
+		}));
+	};
+
+	// Get filtered contractors based on search term
+	const getFilteredContractors = (trackId) => {
+		const searchTerm = contractorSearchTerms[trackId] || '';
+		if (!searchTerm.trim()) return contractors;
+
+		return contractors.filter(contractor => 
+			contractor.toLowerCase().includes(searchTerm.toLowerCase())
+		);
+	};
+
 	// Handle contractor assignment
 	const handleContractorChange = (trackId, contractorName) => {
 		// Get the current track
 		const track = tracks.find(t => t.id === trackId);
+
+		// Close the dropdown
+		setOpenDropdowns(prev => ({
+			...prev,
+			[trackId]: false
+		}));
+
+		// Clear the search term
+		setContractorSearchTerms(prev => ({
+			...prev,
+			[trackId]: ''
+		}));
 
 		// Show the modal for all contractor changes, including initial assignment
 		setPendingContractorChange({ trackId, contractorName });
@@ -970,6 +1010,28 @@ const TrackAvailability = ({calculating}) => {
 		};
 	}, []);
 
+	// Handle click outside dropdown
+	useEffect(() => {
+		const handleClickOutside = (event) => {
+			// Check if the click was inside a dropdown or dropdown trigger
+			const isDropdownClick = event.target.closest('.contractor-dropdown') || 
+				event.target.closest('.contractor-dropdown-trigger');
+
+			// If the click was outside all dropdowns, close them all
+			if (!isDropdownClick) {
+				setOpenDropdowns({});
+			}
+		};
+
+		// Add event listener
+		document.addEventListener('mousedown', handleClickOutside);
+
+		// Clean up on component unmount
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside);
+		};
+	}, []);
+
  // Function to handle scrolling left (previous day)
   const handleScrollLeft = () => {
     if (dayOffset > 0) {
@@ -1041,7 +1103,7 @@ const TrackAvailability = ({calculating}) => {
               onClick={handleScrollLeft}
             >
               <svg width="26" height="27" viewBox="0 0 26 27" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 13.5L14.5 2M3 13.5L14.5 25M3 13.5H26" stroke="#727579" stroke-width="3"/>
+                <path d="M3 13.5L14.5 2M3 13.5L14.5 25M3 13.5H26" stroke="#727579" strokeWidth="3"/>
               </svg>
             </button>
             <button 
@@ -1049,21 +1111,22 @@ const TrackAvailability = ({calculating}) => {
               onClick={handleScrollRight}
             >
               <svg width="26" height="27" viewBox="0 0 26 27" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M23 13.5L11.5 2M23 13.5L11.5 25M23 13.5H0" stroke="#727579" stroke-width="3"/>
+                <path d="M23 13.5L11.5 2M23 13.5L11.5 25M23 13.5H0" stroke="#727579" strokeWidth="3"/>
               </svg>
             </button>
           </div>
         </div>
       )}
-      {(loading || calculating) ? (
-        <div className="bg-white shadow rounded-lg overflow-hidden mb-4">
-          <div className="p-10 text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-gray-600">Загрузка данных о дорожках и плитах...</p>
+      <div className="relative">
+        {(loading || calculating) && (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-white bg-opacity-50">
+            <div className="p-10 text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
+              <p className="text-gray-600">Загрузка данных о дорожках и плитах...</p>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-[150px_repeat(5,1fr)] gap-1 bg-gray-200 border border-gray-200 rounded-lg overflow-hidden text-xs font-medium responsive-table">
+        )}
+        <div className={`grid grid-cols-[250px_repeat(5,1fr)] gap-1 bg-gray-200 border border-gray-200 rounded-lg overflow-hidden text-xs font-medium responsive-table ${(loading || calculating) ? 'opacity-50' : ''}`}>
           {/* Header */}
           <div className="p-2 bg-gray-50 text-gray-800 font-semibold flex items-center justify-center">Дорожки</div>
 
@@ -1113,18 +1176,55 @@ const TrackAvailability = ({calculating}) => {
               {/* Track Name and Contractor Dropdown */}
               <div className={`p-2 bg-white font-semibold text-gray-600 flex flex-col items-center justify-center ${track.contractor ? 'border-2 border-blue-300 border-r-0' : ''}`}>
                 <div>{track.name}</div>
-                <select 
-                  className="mt-1 p-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
-                  value={track.contractor || ''}
-                  onChange={(e) => handleContractorChange(track.id, e.target.value)}
-                >
-                  <option value="">Выберите контрагента</option>
-                  {contractors.map((contractor, index) => (
-                    <option key={index} value={contractor}>
-                      {contractor}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative mt-1 w-full">
+                  {/* Custom dropdown trigger */}
+                  <div 
+                    className="contractor-dropdown-trigger p-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer flex justify-between items-center"
+                    onClick={() => toggleDropdown(track.id)}
+                  >
+                    <span>{track.contractor || 'Выберите контрагента'}</span>
+                    <span className="ml-1">▼</span>
+                  </div>
+
+                  {/* Dropdown menu */}
+                  {openDropdowns[track.id] && (
+                    <div 
+                      className="contractor-dropdown absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                    >
+                      {/* Search input */}
+                      <div className="p-1 border-b border-gray-300">
+                        <input
+                          type="text"
+                          className="w-full p-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Поиск контрагента..."
+                          value={contractorSearchTerms[track.id] || ''}
+                          onChange={(e) => handleContractorSearch(track.id, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                        />
+                      </div>
+
+                      {/* Dropdown options */}
+                      <div className="max-h-40 overflow-y-auto">
+                        <div 
+                          className="p-1 text-xs hover:bg-gray-100 cursor-pointer"
+                          onClick={() => handleContractorChange(track.id, '')}
+                        >
+                          Выберите контрагента
+                        </div>
+                        {getFilteredContractors(track.id).map((contractor, index) => (
+                          <div 
+                            key={index} 
+                            className="p-1 text-xs hover:bg-gray-100 cursor-pointer"
+                            onClick={() => handleContractorChange(track.id, contractor)}
+                          >
+                            {contractor}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Track Days */}
@@ -1212,7 +1312,7 @@ const TrackAvailability = ({calculating}) => {
             </React.Fragment>
           ))}
         </div>
-      )}
+      </div>
 
 			{/* Reconfiguration Modal */}
 			{showModal && selectedReconfiguration && (
@@ -1279,12 +1379,6 @@ const TrackAvailability = ({calculating}) => {
               </div>
               <div className="items-center px-4 py-3 flex justify-center space-x-4">
                 <button
-					onClick={handleRecalculateCancel}
-					className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
-				>
-                  Отмена
-                </button>
-                <button
 					onClick={handleRecalculateWithoutCalc}
 					className="px-4 py-2 bg-yellow-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-300"
 				>
@@ -1295,6 +1389,12 @@ const TrackAvailability = ({calculating}) => {
 					className="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
 				>
                   Расчитать
+                </button>
+                <button
+					onClick={handleRecalculateCancel}
+					className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+				>
+                  Отмена
                 </button>
               </div>
             </div>
@@ -1710,6 +1810,20 @@ const TrackAvailability = ({calculating}) => {
                   <FontAwesomeIcon icon="edit" className="w-4 h-4" />
                   <span>Изменить</span>
                 </button>
+                <button
+                  className="flex items-center gap-1 px-3 py-1 text-sm border border-green-500 rounded-md text-white bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    // Check if at least one slab is selected
+                    if (selectedSlabs.length > 0) {
+                      setShowTransferModal(true);
+                    } else {
+                      alert('Пожалуйста, выберите плиты для переноса');
+                    }
+                  }}
+                >
+                  <FontAwesomeIcon icon="exchange-alt" className="w-4 h-4" />
+                  <span>Перенос</span>
+                </button>
                 <button 
                   className="flex items-center gap-1 px-3 py-1 text-sm border border-red-500 rounded-md text-white bg-red-600 hover:bg-red-700"
                   onClick={() => {
@@ -1723,20 +1837,6 @@ const TrackAvailability = ({calculating}) => {
                 >
                   <FontAwesomeIcon icon="trash-alt" className="w-4 h-4" />
                   <span>Удалить</span>
-                </button>
-                <button 
-                  className="flex items-center gap-1 px-3 py-1 text-sm border border-green-500 rounded-md text-white bg-green-600 hover:bg-green-700"
-                  onClick={() => {
-                    // Check if at least one slab is selected
-                    if (selectedSlabs.length > 0) {
-                      setShowTransferModal(true);
-                    } else {
-                      alert('Пожалуйста, выберите плиты для переноса');
-                    }
-                  }}
-                >
-                  <FontAwesomeIcon icon="exchange-alt" className="w-4 h-4" />
-                  <span>Перенос</span>
                 </button>
               </div>
 
@@ -1792,18 +1892,18 @@ const TrackAvailability = ({calculating}) => {
               </div>
               <div className="flex justify-end gap-3 mt-4">
                 <button
-                  onClick={() => setShowTransferModal(false)}
-                  className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                  disabled={isSubmitting}
-                >
-                  Отмена
-                </button>
-                <button
                   onClick={handleTransferSubmit}
                   className="px-4 py-2 bg-green-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-300"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Перенос...' : 'Перенести'}
+                </button>
+                <button
+                  onClick={() => setShowTransferModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  disabled={isSubmitting}
+                >
+                  Отмена
                 </button>
               </div>
             </div>
@@ -1829,18 +1929,18 @@ const TrackAvailability = ({calculating}) => {
               </div>
               <div className="flex justify-center gap-3 mt-4">
                 <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                  disabled={isSubmitting}
-                >
-                  Отмена
-                </button>
-                <button
                   onClick={handleDeleteConfirm}
                   className="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? 'Удаление...' : 'Удалить'}
+                </button>
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 bg-gray-300 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  disabled={isSubmitting}
+                >
+                  Отмена
                 </button>
               </div>
             </div>
@@ -1924,6 +2024,13 @@ const TrackAvailability = ({calculating}) => {
               </div>
               <div className="flex justify-end gap-3 mt-4">
                 <button
+                  onClick={handleEditSubmit}
+                  className="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Сохранение...' : 'Сохранить'}
+                </button>
+                <button
                   onClick={() => {
                     setShowEditModal(false);
                     setEditingSlab(null);
@@ -1932,13 +2039,6 @@ const TrackAvailability = ({calculating}) => {
                   disabled={isSubmitting}
                 >
                   Отмена
-                </button>
-                <button
-                  onClick={handleEditSubmit}
-                  className="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Сохранение...' : 'Сохранить'}
                 </button>
               </div>
             </div>

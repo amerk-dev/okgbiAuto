@@ -128,7 +128,7 @@ const CostParams = () => {
 
       <div className="flex gap-8">
         {/* Material Prices */}
-        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+        <div style={{maxHeight: 'fit-content'}} className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
           <div className="flex items-center mb-4">
             <span className="text-blue-600 mr-2"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M13 24.375C6.7275 24.375 1.625 19.2725 1.625 13C1.625 6.7275 6.7275 1.625 13 1.625C19.2725 1.625 24.375 6.7275 24.375 13C24.375 19.2725 19.2725 24.375 13 24.375ZM13 3.25C7.62125 3.25 3.25 7.62125 3.25 13C3.25 18.3787 7.62125 22.75 13 22.75C18.3787 22.75 22.75 18.3787 22.75 13C22.75 7.62125 18.3787 3.25 13 3.25Z" fill="#1E2536"/>
@@ -138,7 +138,7 @@ const CostParams = () => {
 </span>
             <h3 className="text-lg font-medium text-gray-900">Цены на материал</h3>
           </div>
-          <div className="overflow-x-auto">
+          <div style={{paddingBottom: '4rem'}} className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -160,18 +160,6 @@ const CostParams = () => {
                           value={material.price}
                           onChange={(e) => handleMaterialPriceChange(material.id, parseInt(e.target.value, 10) || 0)}
                         />
-                        <button
-                          onClick={() => handleMaterialPriceChange(material.id, material.price + 100)}
-                          className="ml-1 text-xs text-blue-600 hover:text-blue-800"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          onClick={() => handleMaterialPriceChange(material.id, material.price - 100)}
-                          className="ml-1 text-xs text-red-600 hover:text-red-800"
-                        >
-                          ↓
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -182,7 +170,8 @@ const CostParams = () => {
         </div>
 
         {/* Track Settings with Flex Layout */}
-        <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200 flex flex-col h-full">
+        <div className="h-full">
+          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200 flex flex-col ">
           <div className="flex items-center mb-4">
             <span className="text-blue-600 mr-2"><svg width="18" height="23" viewBox="0 0 18 23" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M2.16667 1.75008C2.16667 1.46276 2.05253 1.18721 1.84937 0.984049C1.6462 0.780885 1.37065 0.666748 1.08333 0.666748C0.796016 0.666748 0.520466 0.780885 0.317301 0.984049C0.114137 1.18721 0 1.46276 0 1.75008V21.2501C0 21.5374 0.114137 21.8129 0.317301 22.0161C0.520466 22.2193 0.796016 22.3334 1.08333 22.3334C1.37065 22.3334 1.6462 22.2193 1.84937 22.0161C2.05253 21.8129 2.16667 21.5374 2.16667 21.2501V1.75008ZM17.3333 1.75008C17.3333 1.46276 17.2192 1.18721 17.016 0.984049C16.8129 0.780885 16.5373 0.666748 16.25 0.666748C15.9627 0.666748 15.6871 0.780885 15.484 0.984049C15.2808 1.18721 15.1667 1.46276 15.1667 1.75008V21.2501C15.1667 21.5374 15.2808 21.8129 15.484 22.0161C15.6871 22.2193 15.9627 22.3334 16.25 22.3334C16.5373 22.3334 16.8129 22.2193 17.016 22.0161C17.2192 21.8129 17.3333 21.5374 17.3333 21.2501V1.75008ZM9.75 1.75008C9.75 1.46276 9.63586 1.18721 9.4327 0.984049C9.22954 0.780885 8.95399 0.666748 8.66667 0.666748C8.37935 0.666748 8.1038 0.780885 7.90063 0.984049C7.69747 1.18721 7.58333 1.46276 7.58333 1.75008V5.00008C7.58333 5.2874 7.69747 5.56295 7.90063 5.76611C8.1038 5.96928 8.37935 6.08341 8.66667 6.08341C8.95399 6.08341 9.22954 5.96928 9.4327 5.76611C9.63586 5.56295 9.75 5.2874 9.75 5.00008V1.75008ZM7.58333 13.1251C7.58333 13.4124 7.69747 13.6879 7.90063 13.8911C8.1038 14.0943 8.37935 14.2084 8.66667 14.2084C8.95399 14.2084 9.22954 14.0943 9.4327 13.8911C9.63586 13.6879 9.75 13.4124 9.75 13.1251V9.87508C9.75 9.58776 9.63586 9.31221 9.4327 9.10905C9.22954 8.90588 8.95399 8.79175 8.66667 8.79175C8.37935 8.79175 8.1038 8.90588 7.90063 9.10905C7.69747 9.31221 7.58333 9.58776 7.58333 9.87508V13.1251ZM7.58333 18.0001C7.58333 17.7128 7.69747 17.4372 7.90063 17.234C8.1038 17.0309 8.37935 16.9167 8.66667 16.9167C8.95399 16.9167 9.22954 17.0309 9.4327 17.234C9.63586 17.4372 9.75 17.7128 9.75 18.0001V21.2501C9.75 21.5374 9.63586 21.8129 9.4327 22.0161C9.22954 22.2193 8.95399 22.3334 8.66667 22.3334C8.37935 22.3334 8.1038 22.2193 7.90063 22.0161C7.69747 21.8129 7.58333 21.5374 7.58333 21.2501V18.0001Z" fill="#1E2536"/>
@@ -193,8 +182,8 @@ const CostParams = () => {
 
           <div className="flex space-y-4 flex-grow">
             {/* Track settings inputs */}
-            <div className="grid grid-cols-1 gap-4 p-3">
-              <div>
+            <div className="gap-4 p-3">
+              <div className="mb-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Стоимость переналадки</label>
                 <input
                   type="number"
@@ -204,7 +193,7 @@ const CostParams = () => {
                 />
               </div>
 
-              <div>
+              <div className="mb-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Длина дорожки</label>
                 <input
                   type="number"
@@ -214,7 +203,7 @@ const CostParams = () => {
                 />
               </div>
 
-              <div>
+              <div className="mb-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Дорожек ВСЕГО</label>
                 <input
                   type="number"
@@ -224,7 +213,7 @@ const CostParams = () => {
                 />
               </div>
 
-              <div>
+              <div className="mb-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Дорожек В РАБОТЕ</label>
                 <input
                   type="number"
@@ -246,7 +235,7 @@ const CostParams = () => {
             </div>
 
             {/* Weekend days */}
-            <div className="px-5">
+            <div className="px-10">
               <h4 className="text-sm font-medium text-gray-700 mb-2">Настройка выходных</h4>
               <div className="grid grid-cols-1 gap-2">
                 {['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'].map((day) => (
@@ -266,7 +255,7 @@ const CostParams = () => {
             {/* Holiday calendar with multiple selection */}
             <div className="flex-grow px-5">
               <h4 className="text-sm font-medium text-gray-700 mb-2">Выбрать выходной день</h4>
-              <div className="border border-gray-300 rounded-md p-2 max-h-64 overflow-auto">
+              <div className="border border-gray-300 rounded-md p-2">
                 <DayPicker
                   mode="multiple"
                   selected={selectedHolidayDates}
@@ -282,17 +271,17 @@ const CostParams = () => {
               </div>
             </div>
           </div>
+</div>
+          {/* Save Button */}
+          <div className="mt-4 flex justify-end">
+            <button
+              className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              onClick={handleSaveChanges}
+            >
+              <FontAwesomeIcon icon="save" className="mr-2" /> Сохранить и продолжить
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* Save Button */}
-      <div className="mt-8 flex justify-end">
-        <button
-          className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-          onClick={handleSaveChanges}
-        >
-          <FontAwesomeIcon icon="save" className="mr-2" /> Сохранить и продолжить
-        </button>
       </div>
 
       {/* Saving indicator */}

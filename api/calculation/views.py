@@ -343,7 +343,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def list(self, request):
         """Override list method to return orders in the format expected by the frontend"""
-        orders = self.queryset
+        orders = self.get_queryset()
         orders_data = []
         for order in orders:
             for plate in Plate.objects.filter(deadline__order=order, is_deleted=False):
@@ -700,7 +700,7 @@ class DashboardStatsView(APIView):
                 'section': 'Статистика на сегодня',
                 'title': 'Изготовления',
                 'value': f"{today_stats['plates']} плит",
-                'icon': 'cubes',
+                'icon': 'cube',
                 'color': 'green'
             },
             {
@@ -724,7 +724,7 @@ class DashboardStatsView(APIView):
                 'section': 'Общая статистика',
                 'title': 'Изготовления',
                 'value': f"{overall_stats['plates']} плит",
-                'icon': 'cubes',
+                'icon': 'cube',
                 'color': 'green'
             },
             {

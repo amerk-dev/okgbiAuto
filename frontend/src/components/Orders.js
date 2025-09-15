@@ -35,7 +35,7 @@ const Orders = () => {
     fetchData();
   }, [viewingDeleted]);
 
-  const [selectedCustomer, setSelectedCustomer] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedConcrete, setSelectedConcrete] = useState([]);
   const [selectedWidths, setSelectedWidths] = useState([]);
@@ -46,16 +46,24 @@ const Orders = () => {
   // Функция для сортировки
   const requestSort = (key) => {
     let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let newKey = key;
+
+    if (sortConfig.key === key) {
+      if (sortConfig.direction === 'asc') {
+        direction = 'desc';
+      } else if (sortConfig.direction === 'desc') {
+        // Третье нажатие - сброс сортировки
+        newKey = null;
+        direction = 'asc';
+      }
     }
-    setSortConfig({ key, direction });
+
+    setSortConfig({ key: newKey, direction });
   };
 
   // Мемоизированные уникальные значения для фильтров
-  const { uniqueStatuses, uniqueConcreteClasses, uniqueWidths, uniqueLengths, uniqueHeights, uniqueCustomers } = useMemo(() => {
+  const { uniqueConcreteClasses, uniqueWidths, uniqueLengths, uniqueHeights, uniqueCustomers } = useMemo(() => {
     return {
-      uniqueStatuses: [...new Set(orders.map(order => order.status))].filter(o => o !== null),
       uniqueConcreteClasses: [...new Set(orders.map(order => order.concrete))].sort(),
       uniqueWidths: [...new Set(orders.map(order => order.width))].sort((a, b) => a - b),
       uniqueLengths: [...new Set(orders.map(order => order.length))].sort((a, b) => a - b),
@@ -72,14 +80,12 @@ const Orders = () => {
     setSelectedLengths(prev => prev.filter(l => uniqueLengths.includes(l)));
     setSelectedHeights(prev => prev.filter(h => uniqueHeights.includes(h)));
 
-    // Если выбранного статуса больше нет, сбрасываем
-    if (selectedStatus && !uniqueStatuses.includes(selectedStatus)) {
-      setSelectedStatus('');
+    // Для статуса мы теперь используем фиксированные значения, поэтому не нужно проверять
+    // Проверяем только контрагентов - удаляем тех, которых больше нет в данных
+    if (selectedCustomer.length > 0) {
+      setSelectedCustomer(selectedCustomer.filter(customer => uniqueCustomers.includes(customer)));
     }
-    if (selectedCustomer && !uniqueCustomers.includes(selectedCustomer)) {
-      setSelectedCustomer('');
-    }
-  }, [orders, uniqueConcreteClasses, uniqueWidths, uniqueLengths, uniqueHeights, uniqueStatuses, uniqueCustomers, selectedStatus, selectedCustomer]);
+  }, [orders, uniqueConcreteClasses, uniqueWidths, uniqueLengths, uniqueHeights, uniqueCustomers]);
 
   const handleConcreteChange = (concrete) => {
     setSelectedConcrete(prev =>
@@ -116,12 +122,15 @@ const Orders = () => {
   // Filter orders based on selected filters
   const filteredOrders = orders.filter(order => {
     // Filter by customer
-    if (selectedCustomer && order.customer !== selectedCustomer) {
+    if (selectedCustomer.length > 0 && !selectedCustomer.includes(order.customer)) {
       return false;
     }
 
     // Filter by status
-    if (selectedStatus && order.status !== selectedStatus) {
+    if (selectedStatus === 'overdue' && !order.status) {
+      return false;
+    }
+    if (selectedStatus === 'not_overdue' && order.status) {
       return false;
     }
 
@@ -263,7 +272,7 @@ const Orders = () => {
   };
 
   const resetFilters = () => {
-    setSelectedCustomer('');
+    setSelectedCustomer([]);
     setSelectedStatus('');
     setSelectedConcrete([]);
     setSelectedWidths([]);
@@ -271,7 +280,7 @@ const Orders = () => {
     setSelectedHeights([]);
   };
 
-  const hasActiveFilters = selectedCustomer || selectedStatus ||
+  const hasActiveFilters = selectedCustomer.length > 0 || selectedStatus ||
     selectedConcrete.length > 0 || selectedWidths.length > 0 ||
     selectedLengths.length > 0 || selectedHeights.length > 0;
 
@@ -333,7 +342,7 @@ const Orders = () => {
               }`}
               onClick={handleViewDeleted}
             >
-              <FontAwesomeIcon icon="trash-alt" className="mr-2" />
+              <FontAwesomeIcon icon={viewingDeleted ? "arrow-left" : "trash-alt"} className="mr-2" />
               {viewingDeleted ? 'Вернуться к активным' : 'Удаленные'}
             </button>
           </div>
@@ -350,33 +359,41 @@ const Orders = () => {
               {/* Customer Filter with Tags */}
               <div className="col-span-1 bg-white p-3 rounded-lg shadow">
                 <label htmlFor="customer-filter" className="block text-sm font-medium text-gray-700 mb-1">
-                  Выбор контрагента
+                  Выбор контрагентов
                 </label>
                 <select
                   id="customer-filter"
                   className="block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={selectedCustomer}
-                  onChange={(e) => setSelectedCustomer(e.target.value)}
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value && !selectedCustomer.includes(e.target.value)) {
+                      setSelectedCustomer([...selectedCustomer, e.target.value]);
+                    }
+                  }}
                 >
-                  <option value="">Все контрагенты</option>
-                  {contractors.map((contractor, index) => (
-                    <option key={index} value={contractor}>
-                      {contractor}
-                    </option>
-                  ))}
+                  <option value="">Выберите контрагента</option>
+                  {contractors
+                    .filter(contractor => !selectedCustomer.includes(contractor))
+                    .map((contractor, index) => (
+                      <option key={index} value={contractor}>
+                        {contractor}
+                      </option>
+                    ))}
                 </select>
 
-                {selectedCustomer && (
+                {selectedCustomer.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {selectedCustomer}
-                      <button
-                        onClick={() => setSelectedCustomer('')}
-                        className="ml-1 text-blue-600 hover:text-blue-800"
-                      >
-                        ×
-                      </button>
-                    </span>
+                    {selectedCustomer.map((customer, index) => (
+                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {customer}
+                        <button
+                          onClick={() => setSelectedCustomer(selectedCustomer.filter(c => c !== customer))}
+                          className="ml-1 text-blue-600 hover:text-blue-800"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>
@@ -385,19 +402,33 @@ const Orders = () => {
               <div className="bg-white p-3 rounded-lg shadow">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Статус</label>
                 <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {uniqueStatuses.map(status => (
-                    <label key={status} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedStatus === status}
-                        onChange={() => setSelectedStatus(selectedStatus === status ? '' : status)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">
-                        {status ? 'Просрочен' : 'В работе'}
-                      </span>
-                    </label>
-                  ))}
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={selectedStatus === ''}
+                      onChange={() => setSelectedStatus('')}
+                      className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Все</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={selectedStatus === 'overdue'}
+                      onChange={() => setSelectedStatus('overdue')}
+                      className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Просрочен</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={selectedStatus === 'not_overdue'}
+                      onChange={() => setSelectedStatus('not_overdue')}
+                      className="border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Не просрочен</span>
+                  </label>
                 </div>
               </div>
 

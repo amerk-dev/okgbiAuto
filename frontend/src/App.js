@@ -26,6 +26,8 @@ import {
 	faSave,
 	faSearch,
 	faSort,
+	faSortDown,
+	faSortUp,
 	faTags,
 	faTrashAlt,
 	faUndo,
@@ -44,7 +46,7 @@ import Algorithm from './components/Algorithm';
 // Add all icons to the library
 library.add(
 	faRoad, faCubes, faUndo, faWrench, faLineChart, faPercentage, faCog, faPrint, faCalculator,
-	faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort,
+	faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, faSortUp, faSortDown,
 	faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
 	faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
 	faHandPaper, faArrowLeft, faDownload
