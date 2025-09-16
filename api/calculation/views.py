@@ -55,18 +55,17 @@ class TrackViewSet(viewsets.ModelViewSet):
     def slabs(self, request, pk=None):
         """Get slabs for a specific track"""
         track = self.get_object()
-        plates = track.plates.all()
+        plates = track.plates.all().prefetch_related('deadline', 'deadline__order')
 
         slabs_data = []
         for plate in plates:
             # Get customer name from the track
-            customer_name = track.customer.name if track.customer else "Не указан"
-
             # Get deadline date
             deadline_date = plate.deadline.date.strftime('%d.%m.%Y') if plate.deadline and plate.deadline.date else "Не указан"
 
             # Get order number
             order_number = plate.deadline.order.order_number if plate.deadline and plate.deadline.order else "Не указан"
+            customer_name = plate.deadline.order.customer.name if plate.deadline and plate.deadline.order and plate.deadline.order.customer else "Не указан"
 
             slabs_data.append({
                 'customer': customer_name,
