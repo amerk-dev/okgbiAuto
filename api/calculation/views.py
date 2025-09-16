@@ -249,7 +249,7 @@ class TrackViewSet(viewsets.ModelViewSet):
             track2.save()
 
             return Response({'status': 'success'})
-         raise ValidationError('Invalid request')
+         raise ValidationError('Некорректный запрос')
 
     @action(detail=False, methods=['post'], url_path='transfer-slabs')
     def transfer_slabs(self, request):
@@ -264,7 +264,7 @@ class TrackViewSet(viewsets.ModelViewSet):
                 try:
                     target_date = datetime.datetime.strptime(target_date, '%Y-%m-%d').date()
                 except ValueError:
-                    raise ValidationError('Invalid date format. Expected YYYY-MM-DD')
+                    raise ValidationError('Неверный формат даты. Ожидается YYYY-MM-DD')
 
             # Get the target track
             try:
@@ -285,7 +285,7 @@ class TrackViewSet(viewsets.ModelViewSet):
             # Get the slabs to transfer
             slabs = Plate.objects.filter(id__in=slab_ids, is_deleted=False)
             if not slabs:
-                raise ValidationError('No slabs found with the provided IDs')
+                raise ValidationError('Не найдено плит с указанными ID')
 
             # Check if the target track already has slabs
             if target_track.plates.exists():
@@ -307,8 +307,8 @@ class TrackViewSet(viewsets.ModelViewSet):
 
             if current_length + additional_length > params.road_length:
                 raise ValidationError(
-                    f'Track length would be exceeded. Current: {current_length}, '
-                    f'Additional: {additional_length}, Maximum: {params.road_length}'
+                    f'Превышена длина дорожки. Текущая: {current_length}, '
+                    f'Дополнительная: {additional_length}, Максимальная: {params.road_length}'
                 )
 
             # Store the source tracks before transferring
@@ -330,7 +330,7 @@ class TrackViewSet(viewsets.ModelViewSet):
 
             return Response({'status': 'success'})
 
-        raise ValidationError('Invalid request. Required parameters: slabIds, targetTrackPosition, targetDate')
+        raise ValidationError('Некорректный запрос. Необходимые параметры: slabIds, targetTrackPosition, targetDate')
 
 class OrderViewSet(viewsets.ModelViewSet):
     """
@@ -951,7 +951,7 @@ class AlgorithmDemoView(APIView):
     def post(self, request):
         """Process uploaded file and demonstrate algorithm"""
         if 'demo_file' not in request.FILES:
-            return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Файл не загружен'}, status=status.HTTP_400_BAD_REQUEST)
 
         demo_file = request.FILES['demo_file']
         try:
