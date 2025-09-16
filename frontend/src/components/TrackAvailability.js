@@ -1295,13 +1295,13 @@ const TrackAvailability = ({calculating}) => {
                     onClick={() => handleCellClick(track, day)}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, track.id, dayIndex)}
+                    onDrop={(e) => handleDrop(e, track.id, dayIndex + dayOffset)}
                   >
                     {typeof cellContent === 'string' ? cellContent : (
                       <div 
                         className="w-full cursor-grab"
                         draggable={day.width || day.number ? true : false}
-                        onDragStart={(e) => handleDragStart(track.id, dayIndex, 0, day)}
+                        onDragStart={(e) => handleDragStart(track.id, dayIndex + dayOffset, 0, day)}
                       >
                         {cellContent}
                       </div>
