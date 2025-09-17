@@ -111,48 +111,26 @@ def create_plan():
     plates_with_deadline = [p for p in plates if p.deadline.date is not None]
     plates_without_deadline = [p for p in plates if p.deadline.date is None]
 
-    # Сортируем каждую группу
-    plates_with_deadline.sort(key=lambda p: (p.deadline.date, p.width, p.height))
+    plates_with_deadline.sort(key=lambda p: (p.deadline.date, p.width, p.height, p.wire_bottom))
     plates_without_deadline.sort(key=lambda p: (p.width, p.height))
 
     if not plates_with_deadline and not plates_without_deadline:
         print("Нет плит для размещения. План пуст.")
+        return True
 
     tracks = Track.get_tracks()
-
     placed_plate_ids = set()
 
-    # Функция для попытки размещения плит на дорожках
-    def place_plates(plates_list, is_dedline = False):
-        nonlocal placed_plate_ids
-        prev_current_properties = None
-        last_track_day = None
-        for track in tracks:
-            # print(track, track.free_length, track.width, track.height)
+    for track in tracks:
+        remaining_length = track.free_length
+        current_track_properties = None
 
-            if last_track_day != track.day:
-                prev_current_properties = None
+        # 1. Сначала пытаемся ставить плиты с дедлайнами
+        current_track_properties = fill_track(plates_with_deadline, placed_plate_ids, remaining_length, track, current_track_properties)
 
-            remaining_length = track.free_length
-            if prev_current_properties is not None and not is_dedline:
-                current_track_properties = prev_current_properties
-            elif track.width is not None and track.height is not None:
-                current_track_properties = (track.width, track.height)
-            else:
-                current_track_properties = None
-
-            current_track_properties = fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties)
-
-            if track.free_length == track_len:
-                current_track_properties = None
-                current_track_properties = fill_track(plates_list, placed_plate_ids, remaining_length, track, current_track_properties)
-
-            last_track_day = track.day
-            prev_current_properties = current_track_properties
-    # 1. Сначала размещаем плиты с дедлайнами
-    place_plates(plates_with_deadline, True)
-    # 2. Затем — без дедлайнов
-    place_plates(plates_without_deadline)
+        # 2. Если что-то ещё осталось – добиваем плитами без дедлайнов
+        if track.free_length > 0:
+            current_track_properties = fill_track(plates_without_deadline, placed_plate_ids, track.free_length, track, current_track_properties)
 
     # Плиты, которые не удалось разместить
     unplaced_plates = [p for p in plates if p.id not in placed_plate_ids]
