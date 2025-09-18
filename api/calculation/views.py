@@ -594,7 +594,7 @@ class ParametersViewSet(viewsets.ModelViewSet):
             'reconfigurationCost': float(retooling_data.get('price', 0)),
             'trackLength': params_data.get('road_length', 0),
             'trackCount': params_data.get('tracks_count', 0),
-            'tracksInWork': params_data.get('tracks_count', 0),  # Default to all tracks
+            'tracksInWork': params_data.get('default_available_tracks', 0),  # Default to all tracks
             'tailLength': params_data.get('tail_length', 0),
             'weekendDays': weekend_days,
             'holidayDates': [item['date'] for item in holiday_dates_data]
@@ -614,6 +614,7 @@ class ParametersViewSet(viewsets.ModelViewSet):
         params = Parameters.get_solo()
         params.road_length = request.data.get('trackLength', params.road_length)
         params.tracks_count = request.data.get('trackCount', params.tracks_count)
+        params.default_available_tracks = request.data.get('tracksInWork', params.tracks_count)
         params.tail_length = request.data.get('tailLength', params.tail_length)
 
         # Update weekend days

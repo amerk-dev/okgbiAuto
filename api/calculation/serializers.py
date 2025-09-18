@@ -116,7 +116,8 @@ class ParametersSerializer(serializers.ModelSerializer):
     class Meta:
         model = Parameters
         fields = [
-            'road_length', 'tracks_count', 'production_lag', 'tail_length',
+            'road_length', 'tracks_count', 'default_available_tracks',
+            'production_lag', 'tail_length',
             'monday_weekend', 'tuesday_weekend', 'wednesday_weekend', 
             'thursday_weekend', 'friday_weekend', 'saturday_weekend', 'sunday_weekend'
         ]
