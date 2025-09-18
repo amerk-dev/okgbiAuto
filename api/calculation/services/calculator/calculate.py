@@ -124,9 +124,14 @@ def create_plan():
     for track in tracks:
         remaining_length = track.free_length
         current_track_properties = None
+        if track.customer != None:
+            tmp_need_plates = list(Plate.objects.filter(track__customer=track.customer))
+            tmp_need_plates.sort(key=lambda p: (p.width, p.height, p.wire_bottom))
+            current_track_properties = fill_track(tmp_need_plates, placed_plate_ids, remaining_length, track, current_track_properties)
 
-        # 1. Сначала пытаемся ставить плиты с дедлайнами
-        current_track_properties = fill_track(plates_with_deadline, placed_plate_ids, remaining_length, track, current_track_properties)
+        else:
+            # 1. Сначала пытаемся ставить плиты с дедлайнами
+            current_track_properties = fill_track(plates_with_deadline, placed_plate_ids, remaining_length, track, current_track_properties)
 
         # 2. Если что-то ещё осталось – добиваем плитами без дедлайнов
         if track.free_length > 0:
@@ -138,6 +143,7 @@ def create_plan():
         print(f"{len(unplaced_plates)} плит не удалось разместить.")
 
     # post_calculating()
+    post_calculating_deadlines()
     post_calculating_deadlines()
     post_calculating_deadlines()
 
