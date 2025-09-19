@@ -103,9 +103,16 @@ def create_plan():
     """Основная функция - алгоритм распределения плит по дорожкам
     """
 
-    plates = Plate.objects.filter(track__isnull=True)
-    track_len, tail_len = get_parameters()
 
+    track_len, tail_len = get_parameters()
+    tracks = Track.get_tracks()
+    tracks_with_customers = [t for t in tracks if t.customer is not None]
+    print(tracks_with_customers)
+    customers_with_tracks = [t.customer for t in tracks_with_customers]
+    print(customers_with_tracks)
+    plates = Plate.objects.filter(track__isnull=True).exclude(
+        id__in=Plate.objects.filter(track__customer__in=customers_with_tracks).values_list("id", flat=True)
+    )
 
     # Разделяем плиты на две группы
     plates_with_deadline = [p for p in plates if p.deadline.date is not None]
@@ -118,7 +125,6 @@ def create_plan():
         print("Нет плит для размещения. План пуст.")
         return True
 
-    tracks = Track.get_tracks()
     placed_plate_ids = set()
 
     for track in tracks:
