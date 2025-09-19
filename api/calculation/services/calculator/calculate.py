@@ -4,6 +4,9 @@ from collections import defaultdict
 from typing import Any, List
 from django.db.models import Min, Max
 
+from ortools.sat.python import cp_model
+from collections import namedtuple
+
 from calculation.models import Track, Order, ReadyPlate, Plate, Parameters
 
 
@@ -130,8 +133,8 @@ def create_plan():
     for track in tracks:
         remaining_length = track.free_length
         current_track_properties = None
-        if track.customer != None:
-            tmp_need_plates = list(Plate.objects.filter(track__customer=track.customer))
+        if track.customer is not None:
+            tmp_need_plates = list(Plate.objects.filter(deadline__order__customer=track.customer))
             tmp_need_plates.sort(key=lambda p: (p.width, p.height, p.wire_bottom))
             current_track_properties = fill_track(tmp_need_plates, placed_plate_ids, remaining_length, track, current_track_properties)
 
@@ -152,6 +155,7 @@ def create_plan():
     post_calculating_deadlines()
     post_calculating_deadlines()
     post_calculating_deadlines()
+    regroup_plates_by_wire()
 
     return True
 
@@ -456,3 +460,243 @@ def post_calculating_deadlines():
     if updated_tracks:
         unique_updates = {t.id: t for t in updated_tracks}.values()
         Track.objects.bulk_update(list(unique_updates), ['position', 'day'])
+
+
+# Убедитесь, что эти импорты присутствуют в начале вашего файла
+from collections import namedtuple, defaultdict
+# +++ НАЧАЛО: Вспомогательная функция-решатель с OR-Tools +++
+
+# Определяем структуру для передачи данных в решатель.
+# Это делает код чище и позволяет отделить логику решателя от Django-моделей.
+Slab = namedtuple('Slab', ['id', 'length', 'wire_top', 'wire_bottom'])
+
+from collections import defaultdict
+from datetime import date
+from ortools.sat.python import cp_model
+
+
+def solve_slab_grouping_ortools(slabs_data: list[Slab], num_available_tracks: int, track_capacity: int, time_limit_seconds: float = 30.0):
+    """
+    Улучшенная версия:
+    - минимизирует суммарные разницы (max_on_track - slab_wire) для top и bottom,
+      используя линейную модель на уровне каждой плиты (cost_ij).
+    - сужает домены max_wire_on_track до реальных существующих значений.
+    """
+    model = cp_model.CpModel()
+    num_slabs = len(slabs_data)
+    if num_slabs == 0:
+        return {}
+
+    # --- предварительные множества значений проволоки ---
+    top_values = sorted({s.wire_top for s in slabs_data})
+    bottom_values = sorted({s.wire_bottom for s in slabs_data})
+    min_top, max_top = top_values[0], top_values[-1]
+    min_bottom, max_bottom = bottom_values[0], bottom_values[-1]
+
+    # 1) переменные размещения x[i,j]
+    x = {}
+    for i in range(num_slabs):
+        for j in range(num_available_tracks):
+            x[(i, j)] = model.NewBoolVar(f'x_slab{i}_track{j}')
+
+    # каждая плита ровно на одной дорожке
+    for i in range(num_slabs):
+        model.AddExactlyOne([x[(i, j)] for j in range(num_available_tracks)])
+
+    # длина по дорожке <= вместимость
+    for j in range(num_available_tracks):
+        model.Add(sum(slabs_data[i].length * x[(i, j)] for i in range(num_slabs)) <= track_capacity)
+
+    # 2) максимумы проволоки на дорожке: ограничим домен реальными значениями
+    # используем Domain.FromValues для ужатия доменов
+    max_wire_top_on_track = []
+    max_wire_bottom_on_track = []
+    for j in range(num_available_tracks):
+        if len(top_values) == 1:
+            # если только одно значение, можно взять простой NewIntVar
+            max_top_var = model.NewIntVar(min_top, max_top, f'max_top_track_{j}')
+        else:
+            max_top_var = model.NewIntVarFromDomain(cp_model.Domain.FromValues(top_values), f'max_top_track_{j}')
+        if len(bottom_values) == 1:
+            max_bottom_var = model.NewIntVar(min_bottom, max_bottom, f'max_bottom_track_{j}')
+        else:
+            max_bottom_var = model.NewIntVarFromDomain(cp_model.Domain.FromValues(bottom_values), f'max_bottom_track_{j}')
+
+        max_wire_top_on_track.append(max_top_var)
+        max_wire_bottom_on_track.append(max_bottom_var)
+
+    # 3) Связь: если плита i назначена на дорожку j, то max_on_track >= её значение проволоки
+    for j in range(num_available_tracks):
+        for i in range(num_slabs):
+            model.Add(max_wire_top_on_track[j] >= slabs_data[i].wire_top).OnlyEnforceIf(x[(i, j)])
+            model.Add(max_wire_bottom_on_track[j] >= slabs_data[i].wire_bottom).OnlyEnforceIf(x[(i, j)])
+
+    # 4) Линеаризация издержек на уровне каждой плиты (cost_top_ij, cost_bottom_ij)
+    max_top_range = max_top - min_top
+    max_bottom_range = max_bottom - min_bottom
+    cost_top = {}
+    cost_bottom = {}
+    for i in range(num_slabs):
+        for j in range(num_available_tracks):
+            # максимум возможной разницы — диапазон значений
+            ct = model.NewIntVar(0, max_top_range, f'cost_top_s{i}_t{j}')
+            cb = model.NewIntVar(0, max_bottom_range, f'cost_bottom_s{i}_t{j}')
+            cost_top[(i, j)] = ct
+            cost_bottom[(i, j)] = cb
+
+            # если плита i на дорожке j -> cost == max_on_track - slab_wire
+            # иначе cost == 0
+            model.Add(ct == max_wire_top_on_track[j] - slabs_data[i].wire_top).OnlyEnforceIf(x[(i, j)])
+            model.Add(ct == 0).OnlyEnforceIf(x[(i, j)].Not())
+
+            model.Add(cb == max_wire_bottom_on_track[j] - slabs_data[i].wire_bottom).OnlyEnforceIf(x[(i, j)])
+            model.Add(cb == 0).OnlyEnforceIf(x[(i, j)].Not())
+
+    # 5) Целевая функция: минимизировать суммарные издержки top + bottom
+    objective_terms = []
+    for i in range(num_slabs):
+        for j in range(num_available_tracks):
+            objective_terms.append(cost_top[(i, j)])
+            objective_terms.append(cost_bottom[(i, j)])
+    model.Minimize(sum(objective_terms))
+
+    # 6) Параметры решателя и запуск
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = time_limit_seconds
+    # совет: можно включить многопоточность, если нужно ускорить поиск
+    solver.parameters.num_search_workers = 8
+
+    status = solver.Solve(model)
+
+    if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+        # собираем результат: дорожки -> список плит
+        result = {f'track_{j}': [] for j in range(num_available_tracks)}
+        for j in range(num_available_tracks):
+            for i in range(num_slabs):
+                if solver.Value(x[(i, j)]) == 1:
+                    result[f'track_{j}'].append(slabs_data[i])
+        # отфильтруем пустые дорожки
+        result = {k: v for k, v in result.items() if v}
+        print(f"РЕЗУЛЬТАТ: статус {solver.StatusName(status)}, целевая = {solver.ObjectiveValue()}")
+        return result
+    else:
+        print("РЕЗУЛЬТАТ: решение не найдено")
+        return None
+
+# +++ КОНЕЦ: Вспомогательная функция-решатель с OR-Tools +++
+
+
+
+# +++ КОНЕЦ: Вспомогательная функция-решатель с OR-Tools +++
+
+
+@profile_time
+def regroup_plates_by_wire():
+    """
+    Перераспределяет плиты между дорожками для минимизации расхождений по проволоке
+    с использованием OR-Tools для оптимального решения.
+    """
+    print("--- Запуск перегруппировки плит по проволоке (с OR-Tools) ---")
+
+    try:
+        track_len = Parameters.get_solo().road_length
+        if not isinstance(track_len, (int, float)) or track_len <= 0:
+            print(f"ОШИБКА: Некорректное значение длины дорожки: {track_len}")
+            return
+    except (ValueError, TypeError) as e:
+        print(f"Не удалось получить параметры. Проверьте функцию get_parameters(). Ошибка: {e}")
+        return
+
+    all_plates_to_update = []
+
+    days = Track.objects.values_list('day', flat=True).distinct().order_by('day')
+
+    for day in days:
+        tracks_on_day = Track.objects.filter(
+            day=day,
+            customer__isnull=True,
+            is_manual=False
+        ).prefetch_related('plates')
+
+        dimension_groups = defaultdict(list)
+        for track in tracks_on_day:
+            if track.width is not None and track.height is not None:
+                dimension_groups[(track.width, track.height)].append(track)
+
+        for dimensions, tracks_in_group in dimension_groups.items():
+            width, height = dimensions
+            print(f"\nОбработка группы: День {day}, Размеры {width}x{height}, Дорожек: {len(tracks_in_group)}")
+
+            # 1. Собираем все плиты из группы
+            all_plates_in_group = []
+            for track in tracks_in_group:
+                all_plates_in_group.extend(list(track.plates.all()))
+
+            if not all_plates_in_group:
+                print("Плит в группе нет, пропускаем.")
+                continue
+
+            print(f"Всего плит для перераспределения: {len(all_plates_in_group)}")
+
+            # 2. Подготовка данных для решателя
+            # Создаем карту "ID плиты -> объект Plate" для быстрой обратной связи
+            plate_map = {p.id: p for p in all_plates_in_group}
+
+            # Конвертируем Django-объекты в простой формат данных для решателя
+            slabs_for_solver = [
+                Slab(
+                    id=plate.id,
+                    length=int(plate.length),
+                    wire_top=int(plate.wire_top),
+                    wire_bottom=int(plate.wire_bottom)
+                )
+                for plate in all_plates_in_group
+            ]
+
+            # 3. Вызов решателя OR-Tools
+            solution = solve_slab_grouping_ortools(
+                slabs_data=slabs_for_solver,
+                num_available_tracks=len(tracks_in_group),
+                track_capacity=track_len
+            )
+
+            # 4. Обработка результата
+            if solution:
+                # Решение найдено, распределяем плиты по реальным дорожкам
+
+                # Сначала "снимаем" все плиты, чтобы избежать конфликтов
+                for plate in all_plates_in_group:
+                    plate.track = None
+
+                # Сопоставляем виртуальные дорожки из решения с реальными
+                real_tracks = list(tracks_in_group)
+
+                # Перебираем группы плит из решения
+                for i, (virtual_track_name, slabs_on_track) in enumerate(solution.items()):
+                    if i < len(real_tracks):
+                        target_track = real_tracks[i]
+                        # Для каждой плиты в группе назначаем реальную дорожку
+                        for slab in slabs_on_track:
+                            plate_to_update = plate_map[slab.id]
+                            plate_to_update.track = target_track
+                    else:
+                        # Эта ситуация не должна возникать, если логика верна
+                        print(f"!!! ПРЕДУПРЕЖДЕНИЕ: Решатель вернул больше групп плит, чем доступно дорожек!")
+
+            else:
+                # Решение не найдено, значит, плиты не помещаются на дорожки.
+                # Оставляем их нераспределенными.
+                print(f"!!! ПРЕДУПРЕЖДЕНИЕ: Не удалось найти решение для группы {width}x{height} в день {day}. Все {len(all_plates_in_group)} плит станут нераспределенными.")
+                for plate in all_plates_in_group:
+                    plate.track = None
+
+            # Добавляем все обработанные плиты (и размещенные, и нет) в общий список на обновление
+            all_plates_to_update.extend(all_plates_in_group)
+
+    # После обработки всех дней и групп, одним запросом обновляем все изменения
+    if all_plates_to_update:
+        unique_plates_to_update = {p.id: p for p in all_plates_to_update}.values()
+        Plate.objects.bulk_update(list(unique_plates_to_update), ['track'])
+        print(f"\n--- Перегруппировка завершена. Обновлено состояние {len(unique_plates_to_update)} плит. ---")
+    else:
+        print("\n--- Перегруппировка завершена. Изменений не было. ---")
