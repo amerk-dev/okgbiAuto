@@ -33,7 +33,7 @@ import {
 	faUndo,
 	faWrench
 } from '@fortawesome/free-solid-svg-icons';
-import {exportTo1C, getDashboardStats, startCalculation} from './services/api';
+import {exportTo1C, getDashboardStats, startCalculation, getCalculationStatus} from './services/api';
 
 import Header from './components/Header';
 import TabNavigation from './components/TabNavigation';
@@ -58,6 +58,9 @@ function App() {
 	const [loading, setLoading] = useState(true);
 	const [calculating, setCalculating] = useState(false);
 	const [exporting, setExporting] = useState(false);
+	const [calculationTaskId, setCalculationTaskId] = useState(null);
+	const [calculationProgress, setCalculationProgress] = useState(0);
+	const [calculationMessage, setCalculationMessage] = useState('');
 
 	// Check if we're on the algorithm page
 	const isAlgorithmPage = window.location.pathname === '/algorithm';
@@ -79,24 +82,72 @@ function App() {
 		fetchStats();
 	}, []);
 
+	// Poll for calculation status
+	useEffect(() => {
+		let intervalId;
+
+		if (calculationTaskId && calculating) {
+			// Set up polling every 2 seconds
+			intervalId = setInterval(async () => {
+				try {
+					const statusData = await getCalculationStatus(calculationTaskId);
+					setCalculationProgress(statusData.progress);
+					setCalculationMessage(statusData.message);
+
+					// If calculation is completed or failed, stop polling
+					if (statusData.status === 'completed' || statusData.status === 'failed') {
+						setCalculating(false);
+						clearInterval(intervalId);
+
+						// Refresh the dashboard stats after calculation
+						const data = await getDashboardStats();
+						setStats(data);
+
+						// Reset task ID after a short delay
+						setTimeout(() => {
+							setCalculationTaskId(null);
+							setCalculationProgress(0);
+							setCalculationMessage('');
+						}, 3000);
+					}
+				} catch (error) {
+					console.error("Error fetching calculation status:", error);
+				}
+			}, 2000);
+		}
+
+		// Clean up interval on unmount or when calculation is done
+		return () => {
+			if (intervalId) {
+				clearInterval(intervalId);
+			}
+		};
+	}, [calculationTaskId, calculating]);
+
 	// Handle action button clicks
 	const handleAction = async (actionId) => {
 		// Action ID 1 is the "Calculate" button
 		if (actionId === 1) {
 			try {
 				setCalculating(true);
+				setCalculationProgress(0);
+				setCalculationMessage('Запуск расчета...');
+
 				const result = await startCalculation();
 				console.log("Calculation started successfully:", result);
 
-				// Refresh the dashboard stats after calculation
-				const data = await getDashboardStats();
-				setStats(data);
+				// Store the task ID for polling
+				if (result.task_id) {
+					setCalculationTaskId(result.task_id);
+				} else {
+					// If no task ID is returned, stop calculating
+					setCalculating(false);
+					alert("Ошибка при запуске расчета: не получен ID задачи.");
+				}
 			}
 			catch (error) {
 				console.error("Error during calculation:", error);
 				alert("Ошибка при запуске расчета. Пожалуйста, попробуйте снова.");
-			}
-			finally {
 				setCalculating(false);
 			}
 		}
@@ -149,9 +200,10 @@ function App() {
 						loading={loading || calculating || exporting}
 						loadingMessage={
 							exporting ? "Выгрузка в 1С..." : 
-							calculating ? "Выполняется расчет..." : 
+							calculating ? (calculationMessage || "Выполняется расчет...") : 
 							"Загрузка статистики..."
 						}
+						calculationProgress={calculating ? calculationProgress : null}
 						onAction={handleAction}
 					/>
 

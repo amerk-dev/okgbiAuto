@@ -2,7 +2,7 @@ import React, {useEffect, useState, useRef} from 'react';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 import { 
   getTracks, getContractors, updateTrackContractor, moveSlab, swapTracks, 
-  startCalculation, getTrackSlabs, updateSlab, deleteSlab, transferSlabs,
+  startCalculation, getCalculationStatus, getTrackSlabs, updateSlab, deleteSlab, transferSlabs,
   printTrackPlan, printTrackPlanShort
 } from '../services/api';
 
@@ -32,8 +32,14 @@ const TrackAvailability = ({calculating}) => {
 	const [showSearchResults, setShowSearchResults] = useState(false);
 	const [sortColumn, setSortColumn] = useState(null);
 	const [sortDirection, setSortDirection] = useState('asc');
-	const [isPrintDropdownOpen, setIsPrintDropdownOpen] = useState(false);
+ const [isPrintDropdownOpen, setIsPrintDropdownOpen] = useState(false);
 	const printDropdownRef = useRef(null);
+
+	// Calculation status state
+	const [calculationTaskId, setCalculationTaskId] = useState(null);
+	const [calculationStatus, setCalculationStatus] = useState(null);
+	const [calculationProgress, setCalculationProgress] = useState(0);
+	const [calculationMessage, setCalculationMessage] = useState('');
 
 	// Refs for edit form
 	const nameRef = useRef(null);
@@ -75,6 +81,51 @@ const TrackAvailability = ({calculating}) => {
 			document.removeEventListener("mousedown", handleClickOutside);
 		};
 	}, []);
+
+	// Poll for calculation status updates
+	useEffect(() => {
+		let intervalId = null;
+
+		const fetchCalculationStatus = async () => {
+			if (calculationTaskId) {
+				try {
+					const statusData = await getCalculationStatus(calculationTaskId);
+					setCalculationStatus(statusData.status);
+					setCalculationProgress(statusData.progress);
+					setCalculationMessage(statusData.message);
+
+					// If calculation is complete or failed, stop polling
+					if (statusData.status === 'completed' || statusData.status === 'failed') {
+						clearInterval(intervalId);
+						// Reset task ID after a delay to allow user to see the final status
+						setTimeout(() => {
+							setCalculationTaskId(null);
+						}, 3000);
+					}
+				} catch (error) {
+					console.error('Error fetching calculation status:', error);
+					// If there's an error, stop polling
+					clearInterval(intervalId);
+					setCalculationTaskId(null);
+				}
+			}
+		};
+
+		if (calculationTaskId) {
+			// Fetch status immediately
+			fetchCalculationStatus();
+
+			// Then set up polling every 2 seconds
+			intervalId = setInterval(fetchCalculationStatus, 2000);
+		}
+
+		// Clean up on unmount or when calculationTaskId changes
+		return () => {
+			if (intervalId) {
+				clearInterval(intervalId);
+			}
+		};
+	}, [calculationTaskId]);
 
 	const [draggedItem, setDraggedItem] = useState(null);
 	const [draggedTrackId, setDraggedTrackId] = useState(null);
@@ -976,6 +1027,14 @@ const TrackAvailability = ({calculating}) => {
 				const result = await startCalculation();
 				console.log("Calculation started successfully:", result);
 
+				// Store the task ID for status tracking
+				if (result && result.task_id) {
+					setCalculationTaskId(result.task_id);
+					setCalculationStatus('pending');
+					setCalculationProgress(0);
+					setCalculationMessage('Запуск расчета...');
+				}
+
 				// Refresh the tracks data after calculation
 				const tracksData = await getTracks();
 				setTracks(tracksData);
@@ -1136,15 +1195,43 @@ const TrackAvailability = ({calculating}) => {
         </div>
       )}
       <div className="relative">
-        {(loading || calculating) && (
+        {(loading || calculating || calculationTaskId) && (
           <div className="absolute inset-0 flex items-center justify-center z-10 bg-white bg-opacity-50">
             <div className="p-10 text-center">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
-              <p className="text-gray-600">Загрузка данных о дорожках и плитах...</p>
+
+              {calculationTaskId ? (
+                <div>
+                  <p className="text-gray-800 font-medium mb-2">
+                    {calculationStatus === 'completed' ? 'Расчет завершен' : 
+                     calculationStatus === 'failed' ? 'Ошибка расчета' : 
+                     'Выполняется расчет...'}
+                  </p>
+
+                  {calculationMessage && (
+                    <p className="text-gray-600 mb-2">{calculationMessage}</p>
+                  )}
+
+                  {calculationStatus !== 'completed' && calculationStatus !== 'failed' && (
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4 dark:bg-gray-700">
+                      <div 
+                        className="bg-blue-600 h-2.5 rounded-full" 
+                        style={{ width: `${calculationProgress}%` }}
+                      ></div>
+                    </div>
+                  )}
+
+                  {calculationProgress > 0 && calculationProgress < 100 && (
+                    <p className="text-sm text-gray-500">{calculationProgress}% завершено</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-600">Загрузка данных о дорожках и плитах...</p>
+              )}
             </div>
           </div>
         )}
-        <div className={`grid grid-cols-[250px_repeat(5,1fr)] gap-1 bg-gray-200 border border-gray-200 rounded-lg overflow-hidden text-xs font-medium responsive-table ${(loading || calculating) ? 'opacity-50' : ''}`}>
+        <div className={`grid grid-cols-[250px_repeat(5,1fr)] gap-1 bg-gray-200 border border-gray-200 rounded-lg overflow-hidden text-xs font-medium responsive-table ${(loading || calculating || calculationTaskId) ? 'opacity-50' : ''}`}>
           {/* Header */}
           <div className="p-2 bg-gray-50 text-gray-800 font-semibold flex items-center justify-center">Дорожки</div>
 

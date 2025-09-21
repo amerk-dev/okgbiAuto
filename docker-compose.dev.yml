@@ -13,12 +13,38 @@ services:
       - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL:-admin@example.com}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-admin}
       - DEBUG=True
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     env_file:
       - .env
     depends_on:
       - db
+      - redis
     ports:
       - "8000:8000"
+
+  celery:
+    build:
+      context: api
+    entrypoint: /code/celery-entrypoint.sh
+    volumes:
+      - ./api:/code
+    environment:
+      - DJANGO_SETTINGS_MODULE=okgbi.settings
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DEBUG=True
+    env_file:
+      - .env
+    depends_on:
+      - api
+      - redis
+      - db
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
 
   frontend:
     build:

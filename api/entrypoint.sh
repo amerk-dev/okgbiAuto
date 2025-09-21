@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Install dependencies
+pip install --no-cache-dir -r requirements.txt
+
 # Collect static files
 python manage.py collectstatic --noinput
 

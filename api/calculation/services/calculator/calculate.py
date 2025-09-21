@@ -1,7 +1,7 @@
 import datetime
 import time
 from collections import defaultdict
-from typing import Any, List
+from typing import Any, Callable, List
 from django.db.models import Min, Max
 
 from ortools.sat.python import cp_model
@@ -45,11 +45,13 @@ def get_parameters():
 
 
 @profile_time
-def calculate_plan():
+def calculate_plan(update_status_callback: Callable = None):
     track_len, tail_len = get_parameters()
 
+    update_status_callback(50, 'Создание пустых дорожек')
     Track.recreate_tracks()
 
+    update_status_callback(55, 'Расчет готовых плит')
     ready_plates = ReadyPlate.objects.all()
     use_ready_plates = 0
     for plate in ready_plates:
@@ -65,6 +67,7 @@ def calculate_plan():
     if not ready_plates:
         print("Готовых плит нет.")
 
+    update_status_callback(60, 'Заполнение выделенных дорожек')
     tracks_with_customers = Track.objects.filter(customer__isnull=False).order_by('day', 'position')
 
     for track in tracks_with_customers:
@@ -89,9 +92,7 @@ def calculate_plan():
                     plate.save()
         track.save()
 
-
-
-    create_plan()
+    create_plan(update_status_callback)
 
     # fill_remaining_plates()  # Новый шаг
 
@@ -102,11 +103,12 @@ def calculate_plan():
 
 
 @profile_time
-def create_plan():
+def create_plan(update_status_callback: Callable = None):
     """Основная функция - алгоритм распределения плит по дорожкам
     """
 
 
+    update_status_callback(70, 'Заполнение дорожек')
     track_len, tail_len = get_parameters()
     tracks = Track.get_tracks()
     tracks_with_customers = [t for t in tracks if t.customer is not None]
@@ -151,11 +153,13 @@ def create_plan():
     if unplaced_plates:
         print(f"{len(unplaced_plates)} плит не удалось разместить.")
 
+    update_status_callback(80, 'Перестановка дорожек с горящими дедлайнами')
     # post_calculating()
     post_calculating_deadlines()
     post_calculating_deadlines()
     post_calculating_deadlines()
-    regroup_plates_by_wire()
+    update_status_callback(90, 'Перегруппировка проволоки')
+    regroup_plates_by_wire(update_status_callback)
 
     return True
 
@@ -591,7 +595,7 @@ def solve_slab_grouping_ortools(slabs_data: list[Slab], num_available_tracks: in
 
 
 @profile_time
-def regroup_plates_by_wire():
+def regroup_plates_by_wire(update_status_callback: Callable = None):
     """
     Перераспределяет плиты между дорожками для минимизации расхождений по проволоке
     с использованием OR-Tools для оптимального решения.
@@ -609,9 +613,10 @@ def regroup_plates_by_wire():
 
     all_plates_to_update = []
 
-    days = Track.objects.values_list('day', flat=True).distinct().order_by('day')
-
-    for day in days:
+    days = Track.objects.filter(plates__isnull=False).values_list('day', flat=True).distinct().order_by('day')
+    step_percent = 10 / len(days)
+    for i, day in enumerate(days):
+        update_status_callback(90 + step_percent * i, 'Перегруппировка проволоки')
         tracks_on_day = Track.objects.filter(
             day=day,
             customer__isnull=True,
@@ -622,8 +627,9 @@ def regroup_plates_by_wire():
         for track in tracks_on_day:
             if track.width is not None and track.height is not None:
                 dimension_groups[(track.width, track.height)].append(track)
-
         for dimensions, tracks_in_group in dimension_groups.items():
+            if len(tracks_in_group) < 2:
+                continue
             width, height = dimensions
             print(f"\nОбработка группы: День {day}, Размеры {width}x{height}, Дорожек: {len(tracks_in_group)}")
 

@@ -29,8 +29,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копирование кода проекта
 COPY . .
 COPY ./entrypoint.sh /code/entrypoint.sh
-# Make entrypoint script executable
+COPY ./celery-entrypoint.sh /code/celery-entrypoint.sh
+# Make entrypoint scripts executable
 RUN chmod +x /code/entrypoint.sh
+RUN chmod +x /code/celery-entrypoint.sh
 
 # Сбор статики, если требуется
 RUN python manage.py collectstatic --noinput

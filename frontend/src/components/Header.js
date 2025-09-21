@@ -29,7 +29,7 @@ const icons = {
 
 
 
-const Header = ({title, stats, actions, loading = false, loadingMessage = "Загрузка статистики...", onAction}) => {
+const Header = ({title, stats, actions, loading = false, loadingMessage = "Загрузка статистики...", calculationProgress = null, onAction}) => {
 	// State for date input
 	const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 	// State for print dropdown
@@ -128,9 +128,26 @@ const Header = ({title, stats, actions, loading = false, loadingMessage = "За�
       <div style={{display: 'flex', justifyContent: 'space-between', width: '100%'}}>
       {/* Stats - Block 2 */}
 		  {loading ? (
-			  <div className="bg-white rounded-xl shadow-sm p-6 text-center py-10">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
-          <p className="mt-2 text-gray-600">{loadingMessage}</p>
+			  <div className="bg-white w-full rounded-xl shadow-sm p-6 text-center py-10">
+          {calculationProgress !== null ? (
+            <div className="w-full max-w-md mx-auto">
+              <div className="mb-2 flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-700 mr-2">{loadingMessage}</span>
+                <span className="text-sm font-medium text-gray-700">{calculationProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                  style={{ width: `${calculationProgress}%` }}
+                ></div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+              <p className="mt-2 text-gray-600">{loadingMessage}</p>
+            </>
+          )}
         </div>
 		  ) : (
 			  <div className="bg-white rounded-xl shadow-sm p-6" style={{width: '80%'}}>

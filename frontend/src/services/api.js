@@ -342,6 +342,23 @@ export const startCalculation = async () => {
   }
 };
 
+export const getCalculationStatus = async (taskId) => {
+  try {
+    const url = taskId 
+      ? `${API_URL}/api/calculation-status/${taskId}/` 
+      : `${API_URL}/api/calculation-status/`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error getting calculation status:', error);
+    throw error;
+  }
+};
+
 // Print API
 export const printTrackPlan = (date, trackId) => {
   // Construct the URL with query parameters

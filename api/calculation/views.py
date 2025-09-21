@@ -828,11 +828,60 @@ class CalculationView(APIView):
 
     def post(self, request):
         """Start a calculation"""
-        with transaction.atomic():
-            Update1CDataCommand().execute()
+        from .tasks import calculate_task
 
-            calculate_plan()
-        return Response({'status': 'success', 'message': 'Calculation successfully'})
+        # Start the calculation task asynchronously
+        task = calculate_task.delay()
+
+        return Response({
+            'status': 'success', 
+            'message': 'Calculation started successfully',
+            'task_id': task.id
+        })
+
+
+class CalculationStatusView(APIView):
+    """
+    API endpoint for getting the status of a calculation
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, task_id=None):
+        """Get the status of a calculation"""
+        from .models import CalculationStatus
+
+        if task_id:
+            # Get status for a specific task
+            try:
+                status = CalculationStatus.objects.get(task_id=task_id)
+                return Response({
+                    'task_id': status.task_id,
+                    'status': status.status,
+                    'progress': status.progress,
+                    'message': status.message,
+                    'updated_at': status.updated_at
+                })
+            except CalculationStatus.DoesNotExist:
+                return Response(
+                    {'error': f'No calculation found with task_id {task_id}'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # Get the latest calculation status
+            latest_status = CalculationStatus.objects.order_by('-created_at').first()
+            if latest_status:
+                return Response({
+                    'task_id': latest_status.task_id,
+                    'status': latest_status.status,
+                    'progress': latest_status.progress,
+                    'message': latest_status.message,
+                    'updated_at': latest_status.updated_at
+                })
+            else:
+                return Response(
+                    {'error': 'No calculations found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
 
 class PrintTrackPlanView(APIView):

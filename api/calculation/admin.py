@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models.base import Customer, Export1c, Order, Deadline, Track, Plate, ReadyPlate
 from .models.params import Parameters, UnitPrice, HolidayDate
+from .models.calculation_status import CalculationStatus
 
 
 class PlateInline(admin.TabularInline):
@@ -43,3 +44,4 @@ admin.site.register(UnitPrice)
 admin.site.register(Parameters, ParametersAdmin)
 admin.site.register(HolidayDate)
 admin.site.register(Export1c, Export1CAdmin)
+admin.site.register(CalculationStatus)

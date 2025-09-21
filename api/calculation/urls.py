@@ -4,7 +4,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CustomerViewSet, TrackViewSet, OrderViewSet, PlateViewSet, ReadyPlateViewSet,
     UnitPriceViewSet, ParametersViewSet, StockView, DashboardStatsView, CalculationView,
-    PrintTrackPlanView, PrintTrackPlanShortView, Export1CView, AlgorithmView, AlgorithmDemoView
+    CalculationStatusView, PrintTrackPlanView, PrintTrackPlanShortView, Export1CView, 
+    AlgorithmView, AlgorithmDemoView
 )
 
 
@@ -38,8 +39,10 @@ urlpatterns = [
     path('track-settings/', ParametersViewSet.as_view({'get': 'track_settings'}), name='track_settings'),
     path('track-settings/update/', ParametersViewSet.as_view({'post': 'update_track_settings'}), name='update_track_settings'),
 
-    # Calculation endpoint
+    # Calculation endpoints
     path('calculate/', CalculationView.as_view(), name='calculate'),
+    path('calculation-status/', CalculationStatusView.as_view(), name='calculation_status'),
+    path('calculation-status/<str:task_id>/', CalculationStatusView.as_view(), name='calculation_status_detail'),
 
     # Print endpoints
     path('print/', PrintTrackPlanView.as_view(), name='print_track_plan'),
