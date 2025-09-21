@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<title>{{ date }} | Печать производственного календаря (для рабочих)</title>
+    <meta charset="UTF-8">
+    <style>
+	    body {
+		    font-family: Arial, sans-serif;
+		    font-size: 13px;
+		    margin: 1cm;
+	    }
+
+	    h1, h3, p {
+		    text-align: center;
+		    page-break-after: avoid;
+	    }
+
+	    .track-section {
+		    margin-top: 20px;
+	    }
+
+	    table {
+		    width: 100%;
+		    border-collapse: collapse;
+		    table-layout: fixed;
+		    word-wrap: break-word;
+		    font-size: 11px;
+		    margin-top: 10px;
+	    }
+	    thead {
+		    font-size: 11px;
+	    }
+
+	    th, td {
+		    border: 1px solid black;
+		    padding: 4px;
+		    text-align: center;
+	    }
+
+	    th {
+		    background-color: #f2f2f2;
+	    }
+
+	    .table-wrapper {
+		    /* Simplified for workers */
+	    }
+
+	    @page {
+		    size: A4 landscape;
+		    margin: 1cm;
+	    }
+	</style>
+</head>
+<body>
+<h1>Печать производственного плана на {{ date }} (для рабочих)</h1>
+	{% for track in tracks %}
+		<div class="track-section">
+            <h3>{{ track.name }}</h3>
+            <table class="table-wrapper">
+                <thead>
+                    <tr>
+                        <th>Плита</th>
+                        <th>Количество</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plate in track.plates %}
+	                    <tr>
+                            <td>{{ plate.name }}</td>
+                            <td>{{ plate.count }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+	{% endfor %}
+</body>
+</html>

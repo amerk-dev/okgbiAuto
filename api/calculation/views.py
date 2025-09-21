@@ -186,6 +186,7 @@ class TrackViewSet(viewsets.ModelViewSet):
                         "status": "overdue" if day_track.has_overdue_deadline else "booked",
                         "is_manual": day_track.is_manual,
                         "overendering_wire_kg": day_track.overendering_wire_kg,
+                        "overendering_wire_percent": day_track.overendering_wire_percent,
                     }
                     day_data.update(info)
                 else:
@@ -911,6 +912,85 @@ class PrintTrackPlanView(APIView):
             # Create HTTP response with PDF content
             response = HttpResponse(pdf_file, content_type='application/pdf')
             response['Content-Disposition'] = f'filename="track_plan_{date_str or datetime.date.today()}.pdf"'
+
+            return response
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PrintTrackPlanShortView(APIView):
+    """
+    API endpoint for printing simplified track plans for workers
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        date_str = request.query_params.get('date')
+        track_id = request.query_params.get('track_id')
+
+        try:
+            # Parse the date string to a datetime object
+            if date_str:
+                date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            else:
+                date = datetime.date.today()
+
+            # Get tracks for the specified date
+            if track_id:
+                # Get a specific track
+                tracks = Track.objects.filter(id=track_id)
+            else:
+                # Get all tracks
+                tracks = Track.objects.filter(day=date).order_by('position')
+
+            # Prepare data for the template
+            tracks_data = []
+            for track in tracks:
+                # Get plates for this track on the specified date
+                plates = track.plates.all()
+                if not plates:
+                    continue
+
+                # Prepare plate data
+                plates_data = []
+                plates_data = {}
+                for plate in track.plates.all():
+                    key = plate.name
+                    if key in plates_data:
+                        plates_data[key]['count'] += 1
+                    else:
+                        plates_data[key] = {
+                            'name': plate.name,
+                            'count': 1,
+                        }
+
+
+            # Add track data
+                track_data = {
+                    'name': f"Дорожка {track.position + 1}",
+                    'plates': list(plates_data.values())
+                }
+                tracks_data.append(track_data)
+
+            # Format the date for display
+            if track_id:
+                formatted_date = tracks[0].day.strftime('%d.%m.%Y')
+            else:
+                formatted_date = date.strftime('%d.%m.%Y')
+
+            # Render the HTML template to a string
+            html_string = render_to_string('calculation/production_calendar_template_short.html', {
+                'date': formatted_date,
+                'tracks': tracks_data
+            })
+
+            # Generate PDF from HTML
+            pdf_file = HTML(string=html_string).write_pdf()
+
+            # Create HTTP response with PDF content
+            response = HttpResponse(pdf_file, content_type='application/pdf')
+            response['Content-Disposition'] = f'filename="track_plan_short_{date_str or datetime.date.today()}.pdf"'
 
             return response
 

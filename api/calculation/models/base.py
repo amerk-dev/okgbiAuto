@@ -224,10 +224,9 @@ class Track(models.Model):
 
     @property
     def overendering_wire(self):
-        params = Parameters.get_solo()
         wire_top_max = self.wire_top
         wire_bottom_max = self.wire_bottom
-        length = Decimal(str(params.road_length)) / 1000
+        length = Decimal(90)
 
         corrent_useful = length * (wire_top_max + wire_bottom_max)
 
@@ -241,8 +240,22 @@ class Track(models.Model):
         return corrent_useful - needed_wire
 
     @property
+    def overendering_wire_percent(self):
+        wire_top_max = self.wire_top
+        wire_bottom_max = self.wire_bottom
+        length = Decimal(90)
+
+        corrent_useful = length * (wire_top_max + wire_bottom_max)
+
+        needed_wire = 0
+        for plate in self.plates.all():
+            needed_wire += Decimal(str(plate.length)) / 1000 * (int(plate.wire_top) + int(plate.wire_bottom))
+
+        return round((corrent_useful / needed_wire - 1) * 100, 2)
+
+    @property
     def overendering_wire_kg(self):
-        return self.overendering_wire * Decimal("0.156")
+        return round(self.overendering_wire * Decimal("0.156"), 2)
 
 class AbstractPlate(models.Model):
     name = models.CharField(max_length=255)

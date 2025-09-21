@@ -34,6 +34,8 @@ class TrackSerializer(serializers.ModelSerializer):
             data['wire_top_mm'] = f"{instance.wire_top}мм"
             data['wire_bottom_mm'] = f"{instance.wire_bottom}мм"
             data['price'] = f"{instance.cost} ₽"
+            data['overendering_wire_percent'] = instance.overendering_wire_percent
+            data['overendering_wire_kg'] = instance.overendering_wire_kg
             data['status'] = 'overdue' if instance.has_overdue_deadline else 'booked'
             data['occupied'] = f"{instance.useful_length}мм"
             data['free'] = f"{instance.free_length}мм"

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
-import { printTrackPlan } from '../services/api';
+import { printTrackPlan, printTrackPlanShort } from '../services/api';
 
 
 const icons = {
@@ -32,6 +32,23 @@ const icons = {
 const Header = ({title, stats, actions, loading = false, loadingMessage = "Загрузка статистики...", onAction}) => {
 	// State for date input
 	const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+	// State for print dropdown
+	const [isPrintDropdownOpen, setIsPrintDropdownOpen] = useState(false);
+	const printDropdownRef = useRef(null);
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		function handleClickOutside(event) {
+			if (printDropdownRef.current && !printDropdownRef.current.contains(event.target)) {
+				setIsPrintDropdownOpen(false);
+			}
+		}
+
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+		};
+	}, []);
 
 	// Color mapping for action buttons
 	const colorMap = {
@@ -62,13 +79,41 @@ const Header = ({title, stats, actions, loading = false, loadingMessage = "За�
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             />
-            <button 
-              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50"
-              onClick={() => printTrackPlan(selectedDate)}
-            >
-              <FontAwesomeIcon icon="print" className="w-5 h-5" />
-              <span>Печать</span>
-            </button>
+            <div className="relative" ref={printDropdownRef}>
+              <button 
+                className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50"
+                onClick={() => setIsPrintDropdownOpen(!isPrintDropdownOpen)}
+              >
+                <FontAwesomeIcon icon="print" className="w-5 h-5" />
+                <span>Печать</span>
+                <FontAwesomeIcon icon={isPrintDropdownOpen ? "chevron-up" : "chevron-down"} className="w-3 h-3 ml-1" />
+              </button>
+
+              {isPrintDropdownOpen && (
+                <div className="absolute right-0 mt-1 w-40 bg-white border border-gray-300 rounded-md shadow-lg z-10">
+                  <button 
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={() => {
+                      printTrackPlan(selectedDate);
+                      setIsPrintDropdownOpen(false);
+                    }}
+                  >
+                    <FontAwesomeIcon icon="file-alt" className="w-4 h-4 mr-2" />
+                    Отчет
+                  </button>
+                  <button 
+                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={() => {
+                      printTrackPlanShort(selectedDate);
+                      setIsPrintDropdownOpen(false);
+                    }}
+                  >
+                    <FontAwesomeIcon icon="users" className="w-4 h-4 mr-2" />
+                    Для рабочих
+                  </button>
+                </div>
+              )}
+            </div>
             <a 
               href="/algorithm" 
               className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50"

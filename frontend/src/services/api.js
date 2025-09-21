@@ -354,6 +354,18 @@ export const printTrackPlan = (date, trackId) => {
   window.open(url, '_blank');
 };
 
+// Print Short API (for workers)
+export const printTrackPlanShort = (date, trackId) => {
+  // Construct the URL with query parameters
+  let url = `${API_URL}/api/print-short/?date=${date}`;
+  if (trackId) {
+    url += `&track_id=${trackId}`;
+  }
+
+  // Open the URL in a new window/tab
+  window.open(url, '_blank');
+};
+
 // Export to 1C API
 export const exportTo1C = async () => {
   try {

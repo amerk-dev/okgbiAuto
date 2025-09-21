@@ -3,7 +3,7 @@ import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 import { 
   getTracks, getContractors, updateTrackContractor, moveSlab, swapTracks, 
   startCalculation, getTrackSlabs, updateSlab, deleteSlab, transferSlabs,
-  printTrackPlan
+  printTrackPlan, printTrackPlanShort
 } from '../services/api';
 
 const TrackAvailability = ({calculating}) => {
@@ -32,6 +32,8 @@ const TrackAvailability = ({calculating}) => {
 	const [showSearchResults, setShowSearchResults] = useState(false);
 	const [sortColumn, setSortColumn] = useState(null);
 	const [sortDirection, setSortDirection] = useState('asc');
+	const [isPrintDropdownOpen, setIsPrintDropdownOpen] = useState(false);
+	const printDropdownRef = useRef(null);
 
 	// Refs for edit form
 	const nameRef = useRef(null);
@@ -59,6 +61,20 @@ const TrackAvailability = ({calculating}) => {
 
 		fetchData();
 	}, [calculating]);
+
+	// Close print dropdown when clicking outside
+	useEffect(() => {
+		function handleClickOutside(event) {
+			if (printDropdownRef.current && !printDropdownRef.current.contains(event.target)) {
+				setIsPrintDropdownOpen(false);
+			}
+		}
+
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => {
+			document.removeEventListener("mousedown", handleClickOutside);
+		};
+	}, []);
 
 	const [draggedItem, setDraggedItem] = useState(null);
 	const [draggedTrackId, setDraggedTrackId] = useState(null);
@@ -692,6 +708,8 @@ const TrackAvailability = ({calculating}) => {
 				wireBottom: day.wireBottom,
 				deadline: day.deadline,
 				price: day.price,
+				overendering_wire_percent: day.overendering_wire_percent,
+				overendering_wire_kg: day.overendering_wire_kg,
 				occupied: day.occupied,
 				free: day.free,
 				slabs: [],
@@ -1255,7 +1273,7 @@ const TrackAvailability = ({calculating}) => {
                           <p>↑{day.wireTop} ↓{day.wireBottom}</p>
                           <p>Занято: {day.occupied || "0"}мм</p>
                         </div>
-                        <p className="text-blue-600 font-bold mt-2 pt-2 border-t border-green-200">{day.price}</p>
+                        <p className="text-blue-600 font-bold mt-2 pt-2 border-t border-green-200">Перерасход: {day.overendering_wire_percent}% | {day.overendering_wire_kg} кг</p>
                       </>
                     );
                   } else if (day.status === 'overdue') {
@@ -1275,7 +1293,7 @@ const TrackAvailability = ({calculating}) => {
 							<p>↑{day.wireTop } ↓{day.wireBottom}</p>
 							<p>Занято: {day.occupied || "0"}мм</p>
                         </div>
-                        <p className="text-blue-600 font-bold mt-2 pt-2 border-t border-red-200">{day.price || "32,22 КГ"}</p>
+                        <p className="text-blue-600 font-bold mt-2 pt-2 border-t border-red-200">Перерасход: {day.overendering_wire_percent}% | {day.overendering_wire_kg} кг</p>
                       </>
                     );
                   }
@@ -1436,42 +1454,94 @@ const TrackAvailability = ({calculating}) => {
 					</div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-blue-600">Стоимость {selectedCell.price}</span>
-                    <button 
-                      className="flex items-center gap-1 px-3 py-1 text-sm border border-gray-500 rounded-md text-white bg-gray-600 hover:bg-gray-700"
-                      onClick={() => {
-                        // Get the date from the selected cell
-                        const cellDate = selectedCell.date;
+                    <span className="text-sm font-semibold text-blue-600">Перерасход {selectedCell.overendering_wire_percent}% | {selectedCell.overendering_wire_kg} кг</span>
+                    <div className="relative" ref={printDropdownRef}>
+                      <button
+                        className="flex items-center gap-1 px-3 py-1 text-sm border border-gray-500 rounded-md text-white bg-gray-600 hover:bg-gray-700"
+                        onClick={() => setIsPrintDropdownOpen(!isPrintDropdownOpen)}
+                      >
+                        <FontAwesomeIcon icon="print" className="w-4 h-4" />
+                        <span>Печать</span>
+                        <FontAwesomeIcon icon={isPrintDropdownOpen ? "chevron-up" : "chevron-down"} className="w-3 h-3 ml-1" />
+                      </button>
 
-                        // Parse the date string based on its format
-                        let formattedDate;
-                        if (cellDate === 'Сегодня') {
-                          // If the date is "Today", use today's date
-                          formattedDate = new Date().toISOString().split('T')[0];
-                        } else if (cellDate === 'Завтра') {
-                          // If the date is "Tomorrow", use tomorrow's date
-                          const tomorrow = new Date();
-                          tomorrow.setDate(tomorrow.getDate() + 1);
-                          formattedDate = tomorrow.toISOString().split('T')[0];
-                        } else {
-                          // Try to parse the date in DD.MM.YYYY format
-                          const parts = cellDate.split('.');
-                          if (parts.length === 3) {
-                            // Convert DD.MM.YYYY to YYYY-MM-DD
-                            formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                          } else {
-                            // Fallback to current date if parsing fails
-                            formattedDate = new Date().toISOString().split('T')[0];
-                          }
-                        }
+                      {isPrintDropdownOpen && (
+                        <div className="absolute right-0 mt-1 w-40 bg-white border border-gray-300 rounded-md shadow-lg z-10">
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 flex items-center"
+                            onClick={() => {
+                              // Get the date from the selected cell
+                              const cellDate = selectedCell.date;
 
-                        // Call the print function with the date and track ID
-                        printTrackPlan(formattedDate, selectedCell.trackId);
-                      }}
-                    >
-					  <FontAwesomeIcon icon="print" className="w-4 h-4" />
-					  <span>Печать</span>
-					</button>
+                              // Parse the date string based on its format
+                              let formattedDate;
+                              if (cellDate === 'Сегодня') {
+                                // If the date is "Today", use today's date
+                                formattedDate = new Date().toISOString().split('T')[0];
+                              } else if (cellDate === 'Завтра') {
+                                // If the date is "Tomorrow", use tomorrow's date
+                                const tomorrow = new Date();
+                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                formattedDate = tomorrow.toISOString().split('T')[0];
+                              } else {
+                                // Try to parse the date in DD.MM.YYYY format
+                                const parts = cellDate.split('.');
+                                if (parts.length === 3) {
+                                  // Convert DD.MM.YYYY to YYYY-MM-DD
+                                  formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                                } else {
+                                  // Fallback to current date if parsing fails
+                                  formattedDate = new Date().toISOString().split('T')[0];
+                                }
+                              }
+
+                              // Call the print function with the date and track ID
+                              printTrackPlan(formattedDate, selectedCell.trackId);
+                              setIsPrintDropdownOpen(false);
+                            }}
+                          >
+                            <FontAwesomeIcon icon="file-alt" className="w-4 h-4 mr-2" />
+                            Отчет
+                          </button>
+                          <button 
+                            className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 flex items-center"
+                            onClick={() => {
+                              // Get the date from the selected cell
+                              const cellDate = selectedCell.date;
+
+                              // Parse the date string based on its format
+                              let formattedDate;
+                              if (cellDate === 'Сегодня') {
+                                // If the date is "Today", use today's date
+                                formattedDate = new Date().toISOString().split('T')[0];
+                              } else if (cellDate === 'Завтра') {
+                                // If the date is "Tomorrow", use tomorrow's date
+                                const tomorrow = new Date();
+                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                formattedDate = tomorrow.toISOString().split('T')[0];
+                              } else {
+                                // Try to parse the date in DD.MM.YYYY format
+                                const parts = cellDate.split('.');
+                                if (parts.length === 3) {
+                                  // Convert DD.MM.YYYY to YYYY-MM-DD
+                                  formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                                } else {
+                                  // Fallback to current date if parsing fails
+                                  formattedDate = new Date().toISOString().split('T')[0];
+                                }
+                              }
+
+                              // Call the print function with the date and track ID
+                              printTrackPlanShort(formattedDate, selectedCell.trackId);
+                              setIsPrintDropdownOpen(false);
+                            }}
+                          >
+                            <FontAwesomeIcon icon="users" className="w-4 h-4 mr-2" />
+                            Для рабочих
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
