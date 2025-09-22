@@ -137,8 +137,14 @@ def create_plan(update_status_callback: Callable = None):
         current_track_properties = None
         if track.customer is not None:
             tmp_need_plates = list(Plate.objects.filter(deadline__order__customer=track.customer))
-            tmp_need_plates.sort(key=lambda p: (p.width, p.height, p.wire_bottom))
-            current_track_properties = fill_track(tmp_need_plates, placed_plate_ids, remaining_length, track, current_track_properties)
+            tmp_need_plates_with_deadline = [p for p in tmp_need_plates if p.deadline.date is not None]
+            tmp_need_plates_with_deadline.sort(key=lambda p: (p.deadline, p.width, p.height, p.wire_bottom))
+
+            tmp_need_plates_without_deadline = [p for p in tmp_need_plates if p.deadline.date is None]
+            tmp_need_plates_without_deadline.sort(key=lambda p: (p.width, p.height, p.wire_bottom))
+
+            current_track_properties = fill_track(tmp_need_plates_with_deadline, placed_plate_ids, remaining_length, track, current_track_properties)
+            current_track_properties = fill_track(tmp_need_plates_without_deadline, placed_plate_ids, remaining_length, track, current_track_properties)
 
         else:
             # 1. Сначала пытаемся ставить плиты с дедлайнами
