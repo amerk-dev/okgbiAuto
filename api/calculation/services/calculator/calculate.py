@@ -679,7 +679,7 @@ def regroup_plates_by_wire(update_status_callback: Callable = None):
                 slabs_data=slabs_for_solver,
                 num_available_tracks=len(tracks_in_group),
                 track_capacity=track_len,
-                time_limit_seconds=180
+                time_limit_seconds=30
             )
 
             # 4. Обработка результата
