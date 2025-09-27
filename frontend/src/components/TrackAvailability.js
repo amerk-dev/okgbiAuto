@@ -68,6 +68,17 @@ const TrackAvailability = ({calculating, onDashboardUpdate}) => {
 		fetchData();
 	}, [calculating]);
 
+	// Retrieve taskId from localStorage when component mounts
+	useEffect(() => {
+		const storedTaskId = localStorage.getItem('calculationTaskId');
+		if (storedTaskId) {
+			setCalculationTaskId(storedTaskId);
+			setCalculationStatus('pending');
+			setCalculationProgress(0);
+			setCalculationMessage('Возобновление отслеживания расчета...');
+		}
+	}, []);
+
 	// Close print dropdown when clicking outside
 	useEffect(() => {
 		function handleClickOutside(event) {
@@ -112,6 +123,8 @@ const TrackAvailability = ({calculating, onDashboardUpdate}) => {
 
 						// Reset task ID after a delay to allow user to see the final status
 						setTimeout(() => {
+							// Remove taskId from localStorage when calculation is complete
+							localStorage.removeItem('calculationTaskId');
 							setCalculationTaskId(null);
 						}, 3000);
 					}
@@ -119,6 +132,8 @@ const TrackAvailability = ({calculating, onDashboardUpdate}) => {
 					console.error('Error fetching calculation status:', error);
 					// If there's an error, stop polling
 					clearInterval(intervalId);
+					// Remove taskId from localStorage when there's an error
+					localStorage.removeItem('calculationTaskId');
 					setCalculationTaskId(null);
 				}
 			}
@@ -1045,6 +1060,8 @@ const TrackAvailability = ({calculating, onDashboardUpdate}) => {
 
 				// Store the task ID for status tracking
 				if (result && result.task_id) {
+					// Store taskId in localStorage to persist across page reloads
+					localStorage.setItem('calculationTaskId', result.task_id);
 					setCalculationTaskId(result.task_id);
 					setCalculationStatus('pending');
 					setCalculationProgress(0);
@@ -1399,6 +1416,11 @@ const TrackAvailability = ({calculating, onDashboardUpdate}) => {
                         <p className="text-blue-600 font-bold mt-2 pt-2 border-t border-red-200">Перерасход: {day.overendering_wire_percent}% | {day.overendering_wire_kg} кг</p>
                       </>
                     );
+                  }
+
+                  // Add error mark visualization if is_error_mark is true
+                  if (day.is_error_mark) {
+                    cellClass += " border-4 border-red-500";
                   }
                 }
 

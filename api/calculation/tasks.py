@@ -87,6 +87,9 @@ def calculate_algorithm_demo(self, file_content):
         with transaction.atomic():
             # Create a savepoint to be able to rollback
             sid = transaction.savepoint()
+            Plate.all_objects.all().delete()
+            Order.objects.all().delete()
+            Track.objects.update(customer=None)
 
             update_status(20, 'Обработка данных')
 
@@ -157,7 +160,7 @@ def calculate_algorithm_demo(self, file_content):
             update_status(90, 'Подготовка результатов')
 
             # Get the results in a format similar to the main frontend
-            tracks = Track.objects.all().order_by('position', 'day')
+            tracks = Track.objects.all().order_by('day', 'position')
 
             # Group tracks by position
             positions = {}

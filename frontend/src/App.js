@@ -84,6 +84,17 @@ function App() {
 		fetchStats();
 	}, []);
 
+	// Retrieve taskId from localStorage when component mounts
+	useEffect(() => {
+		const storedTaskId = localStorage.getItem('calculationTaskId');
+		if (storedTaskId) {
+			setCalculationTaskId(storedTaskId);
+			setCalculating(true);
+			setCalculationProgress(0);
+			setCalculationMessage('Возобновление отслеживания расчета...');
+		}
+	}, []);
+
 	// Poll for calculation status
 	useEffect(() => {
 		let intervalId;
@@ -109,6 +120,8 @@ function App() {
 
 							// Reset task ID after a short delay
 							setTimeout(() => {
+								// Remove taskId from localStorage when calculation is complete
+								localStorage.removeItem('calculationTaskId');
 								setCalculationTaskId(null);
 								setCalculationProgress(0);
 								setCalculationMessage('');
@@ -116,6 +129,10 @@ function App() {
 						}
 					} catch (error) {
 						console.error("Error fetching calculation status:", error);
+						// Remove taskId from localStorage when there's an error
+						localStorage.removeItem('calculationTaskId');
+						setCalculationTaskId(null);
+						setCalculating(false);
 					}
 				}, 2000);
 			}, 5000);
@@ -143,6 +160,8 @@ function App() {
 
 				// Store the task ID for polling
 				if (result.task_id) {
+					// Store taskId in localStorage to persist across page reloads
+					localStorage.setItem('calculationTaskId', result.task_id);
 					setCalculationTaskId(result.task_id);
 				} else {
 					// If no task ID is returned, stop calculating
@@ -153,6 +172,8 @@ function App() {
 			catch (error) {
 				console.error("Error during calculation:", error);
 				alert("Ошибка при запуске расчета. Пожалуйста, попробуйте снова.");
+				// Remove taskId from localStorage when there's an error starting calculation
+				localStorage.removeItem('calculationTaskId');
 				setCalculating(false);
 			}
 		}
@@ -170,6 +191,8 @@ function App() {
 
 					// Store the task ID for polling
 					if (result.task_id) {
+						// Store taskId in localStorage to persist across page reloads
+						localStorage.setItem('calculationTaskId', result.task_id);
 						setCalculationTaskId(result.task_id);
 					} else {
 						// If no task ID is returned, stop calculating
@@ -180,6 +203,8 @@ function App() {
 				catch (error) {
 					console.error("Error during reset calculation:", error);
 					alert("Ошибка при запуске расчета со сбросом. Пожалуйста, попробуйте снова.");
+					// Remove taskId from localStorage when there's an error starting reset calculation
+					localStorage.removeItem('calculationTaskId');
 					setCalculating(false);
 				}
 			}

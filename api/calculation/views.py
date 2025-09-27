@@ -187,6 +187,7 @@ class TrackViewSet(viewsets.ModelViewSet):
                         "is_manual": day_track.is_manual,
                         "overendering_wire_kg": day_track.overendering_wire_kg,
                         "overendering_wire_percent": day_track.overendering_wire_percent,
+                        "is_error_mark": day_track.free_length < 0,
                     }
                     day_data.update(info)
                 else:
@@ -307,11 +308,11 @@ class TrackViewSet(viewsets.ModelViewSet):
             current_length = target_track.useful_length
             additional_length = sum(slab.length for slab in slabs)
 
-            if current_length + additional_length > params.road_length:
-                raise ValidationError(
-                    f'Превышена длина дорожки. Текущая: {current_length}, '
-                    f'Дополнительная: {additional_length}, Максимальная: {params.road_length}'
-                )
+            # if current_length + additional_length > params.road_length:
+            #     raise ValidationError(
+            #         f'Превышена длина дорожки. Текущая: {current_length}, '
+            #         f'Дополнительная: {additional_length}, Максимальная: {params.road_length}'
+            #     )
 
             # Store the source tracks before transferring
             source_tracks = set()
