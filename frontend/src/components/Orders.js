@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { getOrders, deleteOrder, getContractors, getDeletedOrders, restoreOrder } from '../services/api';
+const compareArrayFunc = (a, b) =>
+    a.length === b.length &&
+    a.every((element, index) => element === b[index]);
+
 
 const Orders = () => {
   const [orders, setOrders] = useState([]);
@@ -241,7 +245,7 @@ const Orders = () => {
       try {
         await deleteOrder(orderId, plateName);
         // Remove the deleted order from the state
-        setOrders(orders.filter(order => order.id !== orderId));
+        setOrders(orders.filter(order => !compareArrayFunc([order.id, order.raw_name], [orderId, plateName])));
       } catch (error) {
         console.error('Error deleting order:', error);
         alert('Ошибка при удалении заказа. Пожалуйста, попробуйте снова.');
@@ -254,7 +258,7 @@ const Orders = () => {
       try {
         await restoreOrder(orderId, plateName);
         // Remove the restored order from the state
-        setOrders(orders.filter(order => order.id !== orderId));
+        setOrders(orders.filter(order => !compareArrayFunc([order.id, order.raw_name], [orderId, plateName])));
       } catch (error) {
         console.error('Error restoring order:', error);
         alert('Ошибка при восстановлении заказа. Пожалуйста, попробуйте снова.');

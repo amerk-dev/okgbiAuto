@@ -48,10 +48,12 @@ def get_parameters():
 def calculate_plan(update_status_callback: Callable = None):
     track_len, tail_len = get_parameters()
 
-    update_status_callback(50, 'Создание пустых дорожек')
+    if update_status_callback:
+        update_status_callback(50, 'Создание пустых дорожек')
     Track.recreate_tracks()
 
-    update_status_callback(55, 'Расчет готовых плит')
+    if update_status_callback:
+        update_status_callback(55, 'Расчет готовых плит')
     ready_plates = ReadyPlate.objects.all()
     use_ready_plates = 0
     for plate in ready_plates:
@@ -67,7 +69,8 @@ def calculate_plan(update_status_callback: Callable = None):
     if not ready_plates:
         print("Готовых плит нет.")
 
-    update_status_callback(60, 'Заполнение выделенных дорожек')
+    if update_status_callback:
+        update_status_callback(60, 'Заполнение выделенных дорожек')
     tracks_with_customers = Track.objects.filter(customer__isnull=False).order_by('day', 'position')
 
     for track in tracks_with_customers:
@@ -108,7 +111,8 @@ def create_plan(update_status_callback: Callable = None):
     """
 
 
-    update_status_callback(70, 'Заполнение дорожек')
+    if update_status_callback:
+        update_status_callback(70, 'Заполнение дорожек')
     track_len, tail_len = get_parameters()
     tracks = Track.get_tracks()
     tracks_with_customers = [t for t in tracks if t.customer is not None]
@@ -117,7 +121,7 @@ def create_plan(update_status_callback: Callable = None):
     print(customers_with_tracks)
     plates = Plate.objects.filter(track__isnull=True).exclude(
         id__in=Plate.objects.filter(track__customer__in=customers_with_tracks).values_list("id", flat=True)
-    )
+    ).exclude(is_manual=True)
 
     # Разделяем плиты на две группы
     plates_with_deadline = [p for p in plates if p.deadline.date is not None]
@@ -136,29 +140,40 @@ def create_plan(update_status_callback: Callable = None):
         remaining_length = track.free_length
         current_track_properties = None
         if track.customer is not None:
-            tmp_need_plates = list(Plate.objects.filter(deadline__order__customer=track.customer))
+            tmp_need_plates = [p for p in plates_with_deadline if p.deadline.order.customer == track.customer]
             tmp_need_plates.sort(key=lambda p: (p.width, p.height, p.wire_bottom))
             current_track_properties = fill_track(tmp_need_plates, placed_plate_ids, remaining_length, track, current_track_properties)
+            if track.free_length > 0:
+                tmp_need_plates = [p for p in plates_without_deadline if p.deadline.order.customer == track.customer]
+                fill_track(tmp_need_plates, placed_plate_ids, remaining_length, track, current_track_properties)
+            if track.free_length > 0:
+                tmp_need_plates = [p for p in plates_without_deadline if p.deadline.order.customer not in customers_with_tracks]
+                fill_track(tmp_need_plates, placed_plate_ids, track.free_length, track, current_track_properties)
+
 
         else:
+            tmp_need_plates = [p for p in plates_with_deadline if p.deadline.order.customer not in customers_with_tracks]
             # 1. Сначала пытаемся ставить плиты с дедлайнами
-            current_track_properties = fill_track(plates_with_deadline, placed_plate_ids, remaining_length, track, current_track_properties)
+            current_track_properties = fill_track(tmp_need_plates, placed_plate_ids, remaining_length, track, current_track_properties)
 
-        # 2. Если что-то ещё осталось – добиваем плитами без дедлайнов
-        if track.free_length > 0:
-            current_track_properties = fill_track(plates_without_deadline, placed_plate_ids, track.free_length, track, current_track_properties)
+            # 2. Если что-то ещё осталось – добиваем плитами без дедлайнов
+            if track.free_length > 0:
+                tmp_need_plates = [p for p in plates_without_deadline if p.deadline.order.customer not in customers_with_tracks]
+                fill_track(tmp_need_plates, placed_plate_ids, track.free_length, track, current_track_properties)
 
     # Плиты, которые не удалось разместить
     unplaced_plates = [p for p in plates if p.id not in placed_plate_ids]
     if unplaced_plates:
         print(f"{len(unplaced_plates)} плит не удалось разместить.")
 
-    update_status_callback(80, 'Перестановка дорожек с горящими дедлайнами')
+    if update_status_callback:
+        update_status_callback(80, 'Перестановка дорожек с горящими дедлайнами')
     # post_calculating()
     post_calculating_deadlines()
     post_calculating_deadlines()
     post_calculating_deadlines()
-    update_status_callback(90, 'Перегруппировка проволоки')
+    if update_status_callback:
+        update_status_callback(90, 'Перегруппировка проволоки')
     regroup_plates_by_wire(update_status_callback)
 
     return True
@@ -369,7 +384,7 @@ def post_calculating_deadlines():
     """Переставляет дорожки (меняет дни) так, чтобы дедлайны не «горели» с учётом производственного лага."""
     from django.utils.timezone import make_naive
 
-    tracks = list(Track.get_tracks())
+    tracks = list(Track.get_tracks().exclude(plates__is_manual=True))
     updated_tracks = []
 
     parameters = Parameters.get_solo()
@@ -614,13 +629,13 @@ def regroup_plates_by_wire(update_status_callback: Callable = None):
     all_plates_to_update = []
 
     days = Track.objects.filter(plates__isnull=False).values_list('day', flat=True).distinct().order_by('day')
-    step_percent = 10 / len(days)
+    step_percent = 10 / len(days) if days else 0
     for i, day in enumerate(days):
-        update_status_callback(90 + step_percent * i, 'Перегруппировка проволоки')
-        tracks_on_day = Track.objects.filter(
+        if update_status_callback:
+            update_status_callback(90 + step_percent * i, 'Перегруппировка проволоки')
+        tracks_on_day = Track.objects.exclude(plates__is_manual=True).filter(
             day=day,
-            customer__isnull=True,
-            is_manual=False
+            customer__isnull=True
         ).prefetch_related('plates')
 
         dimension_groups = defaultdict(list)

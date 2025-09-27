@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import axios from 'axios';
 
@@ -8,6 +8,92 @@ const Algorithm = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedTrack, setExpandedTrack] = useState(null);
+    const [expandedDays, setExpandedDays] = useState({});
+
+  // Calculation status state
+  const [calculationTaskId, setCalculationTaskId] = useState(null);
+  const [calculationStatus, setCalculationStatus] = useState(null);
+  const [calculationProgress, setCalculationProgress] = useState(0);
+  const [calculationMessage, setCalculationMessage] = useState('');
+
+  // Poll for calculation status updates
+  useEffect(() => {
+    let intervalId = null;
+    let initialDelayTimeoutId = null;
+
+    const fetchCalculationStatus = async () => {
+      if (calculationTaskId) {
+        try {
+          const response = await axios.get(
+            process.env.REACT_APP_API_URL + `/api/algorithm/demo/result/${calculationTaskId}/`
+          );
+          const statusData = response.data;
+
+          setCalculationStatus(statusData.status);
+          setCalculationProgress(statusData.progress);
+          setCalculationMessage(statusData.message);
+
+          // If calculation is complete, stop polling and get the results
+          if (statusData.status === 'completed') {
+            clearInterval(intervalId);
+
+            // Get the result from the status data if available
+            if (statusData.result) {
+              setResult(statusData.result);
+            }
+
+            // Reset task ID after a delay to allow user to see the final status
+            setTimeout(() => {
+              setCalculationTaskId(null);
+              setLoading(false);
+            }, 1000);
+
+            // Scroll to result
+            const resultElement = document.getElementById('result-container');
+            if (resultElement) {
+              resultElement.scrollIntoView({ behavior: 'smooth' });
+            }
+          } else if (statusData.status === 'failed') {
+            // If calculation failed, stop polling and show error
+            clearInterval(intervalId);
+            setError(statusData.message || 'Произошла ошибка при расчете');
+
+            // Reset task ID after a delay
+            setTimeout(() => {
+              setCalculationTaskId(null);
+              setLoading(false);
+            }, 1000);
+          }
+        } catch (error) {
+          console.error('Error fetching calculation status:', error);
+          // If there's an error, stop polling
+          clearInterval(intervalId);
+          setCalculationTaskId(null);
+          setLoading(false);
+          setError('Ошибка при получении статуса расчета');
+        }
+      }
+    };
+
+    if (calculationTaskId) {
+      // Wait 5 seconds before starting to poll to give backend time to create CalculationStatus object
+      initialDelayTimeoutId = setTimeout(() => {
+        // Poll every 2 seconds
+        intervalId = setInterval(fetchCalculationStatus, 2000);
+        // Initial fetch after the delay
+        fetchCalculationStatus();
+      }, 5000);
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+      if (initialDelayTimeoutId) {
+        clearTimeout(initialDelayTimeoutId);
+      }
+    };
+  }, [calculationTaskId]);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
@@ -26,6 +112,9 @@ const Algorithm = () => {
     setError(null);
     setResult(null);
     setExpandedTrack(null);
+    setCalculationStatus(null);
+    setCalculationProgress(0);
+    setCalculationMessage('');
 
     const formData = new FormData();
     formData.append('demo_file', file);
@@ -37,21 +126,31 @@ const Algorithm = () => {
         },
       });
 
-      if (response.data.result) {
-        setResult(response.data.result);
+      if (response.data.task_id) {
+        // Store the task ID for status tracking
+        setCalculationTaskId(response.data.task_id);
+        setCalculationStatus('pending');
+        setCalculationMessage(response.data.message || 'Запуск демонстрации...');
+        console.log("Calculation started successfully:", response.data);
       } else if (response.data.error) {
         setError(response.data.error);
-      }
+        setLoading(false);
+      } else {
+        // Fallback for backward compatibility - if the API returns result directly
+        if (response.data.result) {
+          setResult(response.data.result);
+          setLoading(false);
 
-      // Scroll to result
-      const resultElement = document.getElementById('result-container');
-      if (resultElement) {
-        resultElement.scrollIntoView({ behavior: 'smooth' });
+          // Scroll to result
+          const resultElement = document.getElementById('result-container');
+          if (resultElement) {
+            resultElement.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
       }
     } catch (error) {
       console.error('Error submitting file:', error);
       setError(error.response?.data?.error || 'Произошла ошибка при обработке файла. Пожалуйста, попробуйте снова.');
-    } finally {
       setLoading(false);
     }
   };
@@ -62,6 +161,14 @@ const Algorithm = () => {
     } else {
       setExpandedTrack(trackId);
     }
+  };
+
+  const toggleDayExpand = (trackId, dayIndex) => {
+    const dayKey = `${trackId}-${dayIndex}`;
+    setExpandedDays(prev => ({
+      ...prev,
+      [dayKey]: !prev[dayKey]
+    }));
   };
 
   return (
@@ -101,6 +208,11 @@ const Algorithm = () => {
             <strong>5. Максимальное использование дорожек:</strong> Алгоритм стремится максимально заполнить каждую дорожку.
           </div>
 
+          <div className="ml-5 mb-3 relative pl-5 text-gray-700">
+            <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-blue-700"></div>
+            <strong>6. Оптимизация расхода проволоки:</strong> Алгоритм минимизирует разницу между максимальным значением проволоки на дорожке и требованиями отдельных плит.
+          </div>
+
           <h3 className="text-lg font-bold text-blue-700 mt-6 mb-4">Как работает алгоритм</h3>
 
           <div className="ml-5 mb-3 relative pl-5 text-gray-700">
@@ -118,7 +230,7 @@ const Algorithm = () => {
             <strong>Основной алгоритм размещения:</strong>
             <ul className="list-disc ml-8 mt-2">
               <li>Разделение плит на группы с дедлайнами и без дедлайнов</li>
-              <li>Сортировка плит с дедлайнами по дате, ширине и высоте</li>
+              <li>Сортировка плит с дедлайнами по дате, ширине, высоте и проволоке</li>
               <li>Сортировка плит без дедлайнов по ширине и высоте</li>
               <li>Последовательное размещение плит на дорожках с учетом их размеров и свободного места</li>
               <li>Приоритетное размещение плит с одинаковыми размерами на одной дорожке</li>
@@ -132,7 +244,18 @@ const Algorithm = () => {
               <li>Перераспределение плит для минимизации переналадок между дорожками</li>
               <li>Оптимизация размещения плит с учетом дедлайнов и производственного лага</li>
               <li>Перемещение дорожек с критическими дедлайнами на более ранние даты</li>
-              <li>Заполнение оставшихся свободных мест на дорожках</li>
+              <li>Перегруппировка плит для оптимизации расхода проволоки с использованием алгоритма constraint programming</li>
+            </ul>
+          </div>
+
+          <div className="ml-5 mb-3 relative pl-5 text-gray-700">
+            <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-blue-700"></div>
+            <strong>Оптимизация расхода проволоки:</strong>
+            <ul className="list-disc ml-8 mt-2">
+              <li>Группировка плит по дням и размерам</li>
+              <li>Использование Google OR-Tools для нахождения оптимального распределения плит по дорожкам</li>
+              <li>Минимизация разницы между максимальным значением проволоки на дорожке и требованиями каждой плиты</li>
+              <li>Учет ограничений по вместимости дорожек</li>
             </ul>
           </div>
 
@@ -182,6 +305,26 @@ const Algorithm = () => {
                 </a>
               </div>
 
+              {/* Calculation Status */}
+              {calculationTaskId && (
+                <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                  <div className="flex items-center mb-2">
+                    <FontAwesomeIcon icon="spinner" spin className="text-blue-600 mr-2" />
+                    <h3 className="text-lg font-semibold text-blue-700">
+                      {calculationStatus === 'completed' ? 'Расчет завершен' : 'Выполняется расчет...'}
+                    </h3>
+                  </div>
+                  <p className="text-gray-700 mb-2">{calculationMessage}</p>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div 
+                      className="bg-blue-600 h-2.5 rounded-full" 
+                      style={{ width: `${calculationProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">{calculationProgress}% завершено</p>
+                </div>
+              )}
+
               {error && (
                 <div className="mb-4 text-red-600">
                   {error}
@@ -191,9 +334,9 @@ const Algorithm = () => {
               <button 
                 type="submit" 
                 className="bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-800 transition-colors"
-                disabled={loading}
+                disabled={loading || calculationTaskId}
               >
-                {loading ? 'Обработка...' : 'Запустить демонстрацию'}
+                {loading && !calculationTaskId ? 'Обработка...' : 'Запустить демонстрацию'}
               </button>
             </form>
           </div>
@@ -203,7 +346,7 @@ const Algorithm = () => {
               <h3 className="text-lg font-bold text-blue-700 mb-4">Результат расчета:</h3>
 
               <div className="overflow-x-auto">
-                <div className="grid grid-cols-[150px_repeat(5,1fr)] gap-1 bg-gray-200 border border-gray-200 rounded-lg overflow-hidden text-xs font-medium">
+                <div className="grid grid-cols-[250px_repeat(5,1fr)] gap-1 bg-gray-200 border border-gray-200 rounded-lg overflow-hidden text-xs font-medium">
                   {/* Header */}
                   <div className="p-2 bg-gray-50 text-gray-800 font-semibold flex items-center justify-center">Дорожки</div>
 
@@ -242,11 +385,38 @@ const Algorithm = () => {
                         let cellClass = "p-2 text-gray-400 bg-white flex items-center justify-center";
                         let cellContent = "ПУСТО";
 
+                        // Check if we have plates data and process it
+                        if (day.plates && day.plates.length > 0) {
+                          // Extract information from plates
+                          const firstPlate = day.plates[0];
+                          const size = `${firstPlate.width}x${firstPlate.height}`;
+                          const concrete = firstPlate.concrete_class;
+                          const wireTop = firstPlate.wire_top;
+                          const wireBottom = firstPlate.wire_bottom;
+                          const deadline = firstPlate.deadline;
+                          const occupied = day.plates.reduce((sum, plate) => sum + plate.length, 0);
+
+                          // Extract unique orders from plates
+                          const orders = [...new Set(day.plates
+                            .filter(plate => plate.order)
+                            .map(plate => plate.order))];
+
+                          // Set day properties for compatibility with existing code
+                          day.size = size;
+                          day.concrete = concrete;
+                          day.wireTop = wireTop;
+                          day.wireBottom = wireBottom;
+                          day.deadline = deadline;
+                          day.occupied = occupied;
+                          day.status = deadline && new Date(deadline) < new Date() ? 'overdue' : 'booked';
+                          day.orders = orders.length > 0 ? orders : undefined;
+                        }
+
                         if (day.reconfiguration) {
                           // Reconfiguration day
                           cellClass = "p-2 text-center text-gray-600 flex items-center justify-center font-semibold bg-[#EFF6FF]";
                           cellContent = "ВЫХОДНОЙ";
-                        } else if (day.size || day.concrete || day.wireTop || day.wireBottom || day.occupied) {
+                        } else if (day.size || day.concrete || day.wireTop || day.wireBottom || day.occupied || (day.plates && day.plates.length > 0)) {
                           // Day with content
                           if (day.status === 'overdue') {
                             // Delayed
@@ -295,17 +465,75 @@ const Algorithm = () => {
                             onClick={() => toggleTrackExpand(`${track.id}-${dayIndex}`)}
                           >
                             {cellContent}
-                            {day.orders && day.orders.length > 0 && (
-                              <div className="absolute bottom-1 right-1">
-                                <FontAwesomeIcon icon="info-circle" className="text-blue-500" title={`Заказы: ${day.orders.join(', ')}`} />
-                              </div>
-                            )}
+                            <div className="absolute bottom-1 right-1 flex items-center space-x-1">
+                              {(day.plates && day.plates.length > 0) && (
+                                <button 
+                                  className="text-blue-500 hover:text-blue-700 focus:outline-none"
+                                  onClick={(e) => {
+                                    e.stopPropagation(); // Prevent triggering the cell's onClick
+                                    toggleDayExpand(track.id, dayIndex);
+                                  }}
+                                  title="Показать/скрыть плиты на дорожке"
+                                >
+                                  <FontAwesomeIcon icon="list" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
                     </React.Fragment>
                   ))}
                 </div>
+
+                {/* Expanded Day Plates */}
+                {result && result.map(track => 
+                  track.days.slice(0, 5).map((day, dayIndex) => {
+                    const dayKey = `${track.id}-${dayIndex}`;
+                    if (expandedDays[dayKey] && day.plates && day.plates.length > 0) {
+                      return (
+                        <div key={`plates-${dayKey}`} className="mt-2 p-3 bg-white border border-blue-200 rounded-lg">
+                          <h4 className="font-bold mb-2">
+                            Плиты на дорожке: {track.name}, {day.date}
+                          </h4>
+                          <table className="min-w-full border border-gray-300">
+                            <thead>
+                              <tr className="bg-gray-100">
+                                <th className="py-1 px-2 border-b text-left">Название</th>
+                                <th className="py-1 px-2 border-b text-left">Размеры</th>
+                                <th className="py-1 px-2 border-b text-left">Бетон</th>
+                                <th className="py-1 px-2 border-b text-left">Проволока</th>
+                                <th className="py-1 px-2 border-b text-left">Заказ</th>
+                                <th className="py-1 px-2 border-b text-left">Дедлайн</th>
+                                <th className="py-1 px-2 border-b text-left">Заказчик</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {day.plates.map(plate => (
+                                <tr key={plate.id} className="border-b">
+                                  <td className="py-1 px-2">{plate.name}</td>
+                                  <td className="py-1 px-2">{`${plate.length}x${plate.width}x${plate.height}`}</td>
+                                  <td className="py-1 px-2">{plate.concrete_class}</td>
+                                  <td className="py-1 px-2">{`${plate.wire_top}/${plate.wire_bottom}`}</td>
+                                  <td className="py-1 px-2">{plate.order_number || plate.order}</td>
+                                  <td className="py-1 px-2">{plate.deadline_date || plate.deadline}</td>
+                                  <td className="py-1 px-2">{plate.customer}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <button 
+                            className="mt-2 px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 text-sm"
+                            onClick={() => toggleDayExpand(track.id, dayIndex)}
+                          >
+                            Скрыть плиты
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })
+                )}
 
                 {/* Expanded Track Details */}
                 {expandedTrack && (
@@ -329,16 +557,19 @@ const Algorithm = () => {
                           const track = result.find(t => t.id === trackId);
                           const day = track ? track.days[dayIndex] : null;
 
-                          if (day && day.slabs && day.slabs.length > 0) {
-                            return day.slabs.map(slab => (
-                              <tr key={slab.id} className="border-b">
-                                <td className="py-1 px-2">{slab.name}</td>
-                                <td className="py-1 px-2">{`${slab.length}x${slab.width}x${slab.height}`}</td>
-                                <td className="py-1 px-2">{slab.concrete_class}</td>
-                                <td className="py-1 px-2">{`${slab.wire_top}/${slab.wire_bottom}`}</td>
-                                <td className="py-1 px-2">{slab.order_number}</td>
-                                <td className="py-1 px-2">{slab.deadline_date}</td>
-                                <td className="py-1 px-2">{slab.customer}</td>
+                          // Check if we have slabs or plates data
+                          const items = day && ((day.slabs && day.slabs.length > 0) ? day.slabs : (day.plates && day.plates.length > 0) ? day.plates : null);
+
+                          if (items) {
+                            return items.map(item => (
+                              <tr key={item.id} className="border-b">
+                                <td className="py-1 px-2">{item.name}</td>
+                                <td className="py-1 px-2">{`${item.length}x${item.width}x${item.height}`}</td>
+                                <td className="py-1 px-2">{item.concrete_class}</td>
+                                <td className="py-1 px-2">{`${item.wire_top}/${item.wire_bottom}`}</td>
+                                <td className="py-1 px-2">{item.order_number || item.order}</td>
+                                <td className="py-1 px-2">{item.deadline_date || item.deadline}</td>
+                                <td className="py-1 px-2">{item.customer}</td>
                               </tr>
                             ));
                           } else {

@@ -28,12 +28,14 @@ import {
 	faSort,
 	faSortDown,
 	faSortUp,
+	faSpinner,
 	faTags,
 	faTrashAlt,
 	faUndo,
-	faWrench
+	faWrench,
+	faList
 } from '@fortawesome/free-solid-svg-icons';
-import {exportTo1C, getDashboardStats, startCalculation, getCalculationStatus} from './services/api';
+import {exportTo1C, getDashboardStats, startCalculation, startResetCalculation, getCalculationStatus} from './services/api';
 
 import Header from './components/Header';
 import TabNavigation from './components/TabNavigation';
@@ -49,7 +51,7 @@ library.add(
 	faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, faSortUp, faSortDown,
 	faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
 	faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
-	faHandPaper, faArrowLeft, faDownload
+	faHandPaper, faArrowLeft, faDownload, faSpinner, faList
 );
 
 function App() {
@@ -87,33 +89,36 @@ function App() {
 		let intervalId;
 
 		if (calculationTaskId && calculating) {
-			// Set up polling every 2 seconds
-			intervalId = setInterval(async () => {
-				try {
-					const statusData = await getCalculationStatus(calculationTaskId);
-					setCalculationProgress(statusData.progress);
-					setCalculationMessage(statusData.message);
+			// Wait 5 seconds before starting to poll to give the backend time to create the task
+			setTimeout(() => {
+				// Set up polling every 2 seconds
+				intervalId = setInterval(async () => {
+					try {
+						const statusData = await getCalculationStatus(calculationTaskId);
+						setCalculationProgress(statusData.progress);
+						setCalculationMessage(statusData.message);
 
-					// If calculation is completed or failed, stop polling
-					if (statusData.status === 'completed' || statusData.status === 'failed') {
-						setCalculating(false);
-						clearInterval(intervalId);
+						// If calculation is completed or failed, stop polling
+						if (statusData.status === 'completed' || statusData.status === 'failed') {
+							setCalculating(false);
+							clearInterval(intervalId);
 
-						// Refresh the dashboard stats after calculation
-						const data = await getDashboardStats();
-						setStats(data);
+							// Refresh the dashboard stats after calculation
+							const data = await getDashboardStats();
+							setStats(data);
 
-						// Reset task ID after a short delay
-						setTimeout(() => {
-							setCalculationTaskId(null);
-							setCalculationProgress(0);
-							setCalculationMessage('');
-						}, 3000);
+							// Reset task ID after a short delay
+							setTimeout(() => {
+								setCalculationTaskId(null);
+								setCalculationProgress(0);
+								setCalculationMessage('');
+							}, 3000);
+						}
+					} catch (error) {
+						console.error("Error fetching calculation status:", error);
 					}
-				} catch (error) {
-					console.error("Error fetching calculation status:", error);
-				}
-			}, 2000);
+				}, 2000);
+			}, 5000);
 		}
 
 		// Clean up interval on unmount or when calculation is done
@@ -131,7 +136,7 @@ function App() {
 			try {
 				setCalculating(true);
 				setCalculationProgress(0);
-				setCalculationMessage('Запуск расчета...');
+				setCalculationMessage('Запуск расчета... (ожидание создания задачи)');
 
 				const result = await startCalculation();
 				console.log("Calculation started successfully:", result);
@@ -151,7 +156,35 @@ function App() {
 				setCalculating(false);
 			}
 		}
+
 		if (actionId === 2) {
+			// Show confirmation popup
+			if (window.confirm('Вы уверены, что хотите сбросить все плиты и запустить расчет? Это действие нельзя отменить.')) {
+				try {
+					setCalculating(true);
+					setCalculationProgress(0);
+					setCalculationMessage('Сброс плит и запуск расчета... (ожидание создания задачи)');
+
+					const result = await startResetCalculation();
+					console.log("Reset calculation started successfully:", result);
+
+					// Store the task ID for polling
+					if (result.task_id) {
+						setCalculationTaskId(result.task_id);
+					} else {
+						// If no task ID is returned, stop calculating
+						setCalculating(false);
+						alert("Ошибка при запуске расчета со сбросом: не получен ID задачи.");
+					}
+				}
+				catch (error) {
+					console.error("Error during reset calculation:", error);
+					alert("Ошибка при запуске расчета со сбросом. Пожалуйста, попробуйте снова.");
+					setCalculating(false);
+				}
+			}
+		}
+		if (actionId === 3) {
 			try {
 				setExporting(true);
 				const result = await exportTo1C();
@@ -181,6 +214,12 @@ function App() {
 		},
 		{
 			id: 2,
+			label: 'Сбросить и расчитать',
+			icon: 'undo',
+			color: 'red'
+		},
+		{
+			id: 3,
 			label: 'Выгрузить в 1С',
 			icon: 'file-export',
 			color: 'indigo'
@@ -214,7 +253,13 @@ function App() {
 						/>
 
 						<div>
-							{activeTab === 'track-availability' && <TrackAvailability calculating={calculating} />}
+       {activeTab === 'track-availability' && <TrackAvailability 
+         calculating={calculating} 
+         onDashboardUpdate={async () => {
+           const data = await getDashboardStats();
+           setStats(data);
+         }} 
+       />}
 							{activeTab === 'orders' && <Orders />}
 							{activeTab === 'inventory' && <Inventory />}
 							{activeTab === 'cost-params' && <CostParams />}

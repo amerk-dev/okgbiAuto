@@ -63,13 +63,16 @@ class Track(models.Model):
     position = models.PositiveSmallIntegerField()
     day = models.DateField()
     customer = models.ForeignKey(Customer, null=True, blank=True, on_delete=models.SET_NULL)
-    is_manual = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Track {self.position} - {self.day}"
 
     class Meta:
         ordering = ['day']
+
+    @property
+    def is_manual(self):
+        return self.plates.filter(is_manual=True).exists()
 
     @classmethod
     def recreate_tracks(cls):
@@ -92,7 +95,13 @@ class Track(models.Model):
             customer_position_map = {position: customer_name for position, customer_name in track_with_customers}
             customer_name_map = {name: c_id for name, c_id in Customer.objects.values_list('name', 'id')}
 
-            cls.objects.all().delete()
+            manual_plates_track_ids = Plate.all_objects.filter(models.Q(is_manual=True) | models.Q(is_deleted=True)
+                                                               ).values_list('track_id', flat=True)
+
+            cls.objects.exclude(day__gte=date.today(), id__in=manual_plates_track_ids).delete()
+
+            print(f"Ручные дорожки сохранены: ", cls.objects.filter(day__gte=date.today(),
+                                                                    id__in=manual_plates_track_ids))
 
             new_tracks = []
             for day_step in range(days):
@@ -109,11 +118,12 @@ class Track(models.Model):
                 for position in range(params.tracks_count):
                     customer_name = customer_position_map.get(position)
                     customer_id = customer_name_map.get(customer_name)
-                    new_tracks.append(Track(
-                        day=day,
-                        position=position,
-                        customer_id=customer_id
-                    ))
+                    if not Track.objects.filter(day=day, position=position).exists():
+                        new_tracks.append(Track(
+                            day=day,
+                            position=position,
+                            customer_id=customer_id
+                        ))
             cls.objects.bulk_create(new_tracks)
 
 
@@ -301,6 +311,7 @@ class PlateManager(models.Manager):
 
 
 class Plate(AbstractPlate):
+    is_manual = models.BooleanField(default=False)
     track = models.ForeignKey(Track, on_delete=models.SET_NULL, null=True, related_name='plates')
     deadline = models.ForeignKey(Deadline, on_delete=models.CASCADE, related_name='plates')
     objects = PlateManager()

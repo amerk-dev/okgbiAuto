@@ -342,6 +342,24 @@ export const startCalculation = async () => {
   }
 };
 
+export const startResetCalculation = async () => {
+  try {
+    const response = await fetch(`${API_URL}/api/reset-calculate/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error starting reset calculation:', error);
+    throw error;
+  }
+};
+
 export const getCalculationStatus = async (taskId) => {
   try {
     const url = taskId 

@@ -5,7 +5,7 @@ from .views import (
     CustomerViewSet, TrackViewSet, OrderViewSet, PlateViewSet, ReadyPlateViewSet,
     UnitPriceViewSet, ParametersViewSet, StockView, DashboardStatsView, CalculationView,
     CalculationStatusView, PrintTrackPlanView, PrintTrackPlanShortView, Export1CView, 
-    AlgorithmView, AlgorithmDemoView
+    AlgorithmView, AlgorithmDemoView, ResetCalculationView
 )
 
 
@@ -41,6 +41,7 @@ urlpatterns = [
 
     # Calculation endpoints
     path('calculate/', CalculationView.as_view(), name='calculate'),
+    path('reset-calculate/', ResetCalculationView.as_view(), name='reset_calculate'),
     path('calculation-status/', CalculationStatusView.as_view(), name='calculation_status'),
     path('calculation-status/<str:task_id>/', CalculationStatusView.as_view(), name='calculation_status_detail'),
 
@@ -54,4 +55,5 @@ urlpatterns = [
     # Algorithm description and demo endpoints
     path('algorithm/', AlgorithmView.as_view(), name='algorithm'),
     path('algorithm/demo/', AlgorithmDemoView.as_view(), name='algorithm_demo'),
+    path('algorithm/demo/result/<str:task_id>/', AlgorithmDemoView.as_view(), name='algorithm_demo_result'),
 ]

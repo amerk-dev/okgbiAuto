@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timedelta
 
 import requests
-from django.db import transaction
+from django.db import models, transaction
 
 from calculation.models import ReadyPlate, Order, Plate, Parameters, Deadline, Customer
 
@@ -59,7 +59,17 @@ class Update1CDataCommand:
 
                 plates_to_create = []
                 for plate_data in plates:
-                    for _ in range(plate_data['count']):
+                    manual_plates = Plate.all_objects.filter(
+                                        length=plate_data['length'],
+                                        width=plate_data['width'],
+                                        height=plate_data['height'],
+                                        concrete_class=plate_data['class'] or 'В25',
+                                        wire_bottom=plate_data['wire_bottom'],
+                                        wire_top=plate_data['wire_top'],
+                                        deadline__order__order_number=order.order_number)
+                    manual_plates.update(deadline=deadline)
+
+                    for _ in range(max(plate_data['count'] - manual_plates.count(), 0)):
                         plate = Plate(
                                         name=plate_data['name'],
                                         length=plate_data['length'],
@@ -79,8 +89,12 @@ class Update1CDataCommand:
         orders = data['orders']
         with transaction.atomic():
             ReadyPlate.all_objects.all().delete()
-            Order.objects.all().delete()
+            Plate.all_objects.exclude(models.Q(is_manual=True) | models.Q(is_deleted=True)
+                                     ).delete()
+            Order.objects.exclude(deadlines__plates__isnull=False).delete()
             self._process_ready_plates(ready_plates)
             self._process_orders(orders)
+
+            Order.objects.exclude(deadlines__plates__isnull=False).delete()
             Customer.objects.filter(order__isnull=True).delete()
 

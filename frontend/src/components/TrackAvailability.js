@@ -3,10 +3,10 @@ import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 import { 
   getTracks, getContractors, updateTrackContractor, moveSlab, swapTracks, 
   startCalculation, getCalculationStatus, getTrackSlabs, updateSlab, deleteSlab, transferSlabs,
-  printTrackPlan, printTrackPlanShort
+  printTrackPlan, printTrackPlanShort, getDashboardStats
 } from '../services/api';
 
-const TrackAvailability = ({calculating}) => {
+const TrackAvailability = ({calculating, onDashboardUpdate}) => {
  const [showModal, setShowModal] = useState(false);
 	const [showRecalculateModal, setShowRecalculateModal] = useState(false);
 	const [showCellModal, setShowCellModal] = useState(false);
@@ -97,6 +97,19 @@ const TrackAvailability = ({calculating}) => {
 					// If calculation is complete or failed, stop polling
 					if (statusData.status === 'completed' || statusData.status === 'failed') {
 						clearInterval(intervalId);
+
+						// If calculation completed successfully, refresh tracks and dashboard
+						if (statusData.status === 'completed') {
+							// Refresh tracks data
+							const tracksData = await getTracks();
+							setTracks(tracksData);
+
+							// Refresh dashboard stats using the callback from App.js
+							if (onDashboardUpdate) {
+								await onDashboardUpdate();
+							}
+						}
+
 						// Reset task ID after a delay to allow user to see the final status
 						setTimeout(() => {
 							setCalculationTaskId(null);
@@ -112,11 +125,14 @@ const TrackAvailability = ({calculating}) => {
 		};
 
 		if (calculationTaskId) {
-			// Fetch status immediately
-			fetchCalculationStatus();
+			// Wait 5 seconds before starting to poll to give the backend time to create the task
+			setTimeout(() => {
+				// Fetch status after the delay
+				fetchCalculationStatus();
 
-			// Then set up polling every 2 seconds
-			intervalId = setInterval(fetchCalculationStatus, 2000);
+				// Then set up polling every 2 seconds
+				intervalId = setInterval(fetchCalculationStatus, 2000);
+			}, 5000);
 		}
 
 		// Clean up on unmount or when calculationTaskId changes
@@ -1032,7 +1048,7 @@ const TrackAvailability = ({calculating}) => {
 					setCalculationTaskId(result.task_id);
 					setCalculationStatus('pending');
 					setCalculationProgress(0);
-					setCalculationMessage('Запуск расчета...');
+					setCalculationMessage('Запуск расчета... (ожидание создания задачи)');
 				}
 
 				// Refresh the tracks data after calculation
