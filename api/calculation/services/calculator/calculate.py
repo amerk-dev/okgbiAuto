@@ -582,8 +582,6 @@ def solve_slab_grouping_ortools(slabs_data: list[Slab], num_available_tracks: in
     # 6) Параметры решателя и запуск
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds
-    # совет: можно включить многопоточность, если нужно ускорить поиск
-    solver.parameters.num_search_workers = 8
 
     status = solver.Solve(model)
 
