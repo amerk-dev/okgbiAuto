@@ -109,15 +109,10 @@ def delete_unitprices(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('calculation', '0010_export1c'),
+        ('calculation', '0001_initial'),
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='parameters',
-            name='url_1c_export',
-            field=models.CharField(default='', max_length=255, verbose_name='URL 1c'),
-        ),
         migrations.RunPython(
             code=load_parameters,
             reverse_code=delete_parameters
