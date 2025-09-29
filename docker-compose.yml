@@ -5,10 +5,16 @@ services:
     image: nginx:alpine
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/generate_htpasswd.sh:/docker-entrypoint.d/10-generate-htpasswd.sh
       - static_volume:/static
       - media_volume:/media
     ports:
       - "127.0.0.1:3000:80"
+    environment:
+      - NGINX_BASIC_AUTH_USER=${DJANGO_SUPERUSER_USERNAME:-admin}
+      - NGINX_BASIC_AUTH_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-admin}
+    env_file:
+      - .env
     depends_on:
       - api
       - frontend
