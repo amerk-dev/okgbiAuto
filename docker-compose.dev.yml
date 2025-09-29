@@ -21,7 +21,9 @@ services:
       - db
       - redis
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    networks:
+      - app_network
 
   celery:
     build:
@@ -40,11 +42,15 @@ services:
       - api
       - redis
       - db
+    networks:
+      - app_network
 
   redis:
     image: redis:latest
     ports:
       - "6379:6379"
+    networks:
+      - app_network
 
   frontend:
     build:
@@ -61,6 +67,8 @@ services:
       - CHOKIDAR_USEPOLLING=true
     depends_on:
       - api
+    networks:
+      - app_network
 
   db:
     image: postgres:latest
@@ -72,7 +80,13 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     ports:
       - "54321:5432"
+    networks:
+      - app_network
 
 volumes:
   postgres_data:
   frontend_node_modules:
+
+networks:
+  app_network:
+    driver: bridge

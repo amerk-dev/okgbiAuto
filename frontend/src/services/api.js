@@ -1,6 +1,35 @@
 // API service for communicating with the backend
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+// Function to get CSRF token from cookies
+const getCsrfToken = () => {
+  const name = 'csrftoken=';
+  const decodedCookie = decodeURIComponent(document.cookie);
+  const cookieArray = decodedCookie.split(';');
+
+  for (let i = 0; i < cookieArray.length; i++) {
+    let cookie = cookieArray[i].trim();
+    if (cookie.indexOf(name) === 0) {
+      return cookie.substring(name.length, cookie.length);
+    }
+  }
+  return '';
+};
+
+// Headers for non-GET requests with CSRF token
+const getHeaders = () => {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    headers['X-CSRFToken'] = csrfToken;
+  }
+
+  return headers;
+};
+
 // Tracks API
 export const getTracks = async () => {
   try {
@@ -32,9 +61,7 @@ export const updateTrackContractor = async (trackId, contractor) => {
   try {
     const response = await fetch(`${API_URL}/api/tracks/${trackId}/contractor/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify({ contractor }),
     });
     if (!response.ok) {
@@ -51,9 +78,7 @@ export const moveSlab = async (slabId, targetTrackId, targetDay) => {
   try {
     const response = await fetch(`${API_URL}/api/tracks/move-slab/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify({ slabId, targetTrackId, targetDay }),
     });
     if (!response.ok) {
@@ -72,9 +97,7 @@ export const swapTracks = async (track1Id, track2Id) => {
     // The backend MoveTrackView handles both slab movement and track swapping
     const response = await fetch(`${API_URL}/api/tracks/swap/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify({ track1Id, track2Id }),
     });
     if (!response.ok) {
@@ -104,9 +127,7 @@ export const updateSlab = async (slabId, slabData) => {
   try {
     const response = await fetch(`${API_URL}/api/plates/${slabId}/`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify(slabData),
     });
     if (!response.ok) {
@@ -123,9 +144,7 @@ export const deleteSlab = async (slabId) => {
   try {
     const response = await fetch(`${API_URL}/api/plates/${slabId}/`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
     });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -141,9 +160,7 @@ export const transferSlabs = async (slabIds, targetTrackPosition, targetDate) =>
   try {
     const response = await fetch(`${API_URL}/api/tracks/transfer-slabs/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify({ slabIds, targetTrackPosition, targetDate }),
     });
 
@@ -210,9 +227,7 @@ export const deleteOrder = async (orderId, plateName) => {
   try {
     const response = await fetch(`${API_URL}/api/orders/${orderId}/`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify({ plateName }),
     });
     if (!response.ok) {
@@ -229,9 +244,7 @@ export const restoreOrder = async (orderId, plateName) => {
   try {
     const response = await fetch(`${API_URL}/api/orders/${orderId}/restore/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify({ plateName }),
     });
     if (!response.ok) {
@@ -275,9 +288,7 @@ export const updateMaterials = async (materials) => {
   try {
     const response = await fetch(`${API_URL}/api/materials/update/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify({ materials }),
     });
     if (!response.ok) {
@@ -294,9 +305,7 @@ export const updateTrackSettings = async (settings) => {
   try {
     const response = await fetch(`${API_URL}/api/track-settings/update/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
       body: JSON.stringify(settings),
     });
     if (!response.ok) {
@@ -328,9 +337,7 @@ export const startCalculation = async () => {
   try {
     const response = await fetch(`${API_URL}/api/calculate/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
     });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -346,9 +353,7 @@ export const startResetCalculation = async () => {
   try {
     const response = await fetch(`${API_URL}/api/reset-calculate/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
     });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -406,9 +411,7 @@ export const exportTo1C = async () => {
   try {
     const response = await fetch(`${API_URL}/api/export-1c/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(),
     });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

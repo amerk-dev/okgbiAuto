@@ -33,7 +33,8 @@ import {
 	faTrashAlt,
 	faUndo,
 	faWrench,
-	faList
+	faList,
+	faGear
 } from '@fortawesome/free-solid-svg-icons';
 import {exportTo1C, getDashboardStats, startCalculation, startResetCalculation, getCalculationStatus} from './services/api';
 
@@ -51,7 +52,7 @@ library.add(
 	faFileExport, faSearch, faFilter, faTrashAlt, faPlus, faSort, faSortUp, faSortDown,
 	faEdit, faTags, faBoxOpen, faExclamationTriangle, faSave, faInfoCircle,
 	faMoneyBillWave, faCalendarCheck, faChevronDown, faChevronUp, faExchangeAlt,
-	faHandPaper, faArrowLeft, faDownload, faSpinner, faList
+	faHandPaper, faArrowLeft, faDownload, faSpinner, faList, faGear
 );
 
 function App() {

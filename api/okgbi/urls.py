@@ -21,10 +21,9 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    path('grappelli/', include('grappelli.urls')),  # grappelli URLS
-    path('admin/', admin.site.urls),
+    path('api/grappelli/', include('grappelli.urls')),  # grappelli URLS
+    path('api/admin/', admin.site.urls),
     path('api/', include('calculation.urls')),  # Django API endpoints
 
     # Serve React frontend at root path
-    path('', TemplateView.as_view(template_name='index.html')),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
