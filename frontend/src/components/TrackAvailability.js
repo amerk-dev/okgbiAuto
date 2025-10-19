@@ -1891,16 +1891,16 @@ const TrackAvailability = ({calculating, onDashboardUpdate}) => {
                                 break;
                               case 'deadline':
                                 // Convert date strings to Date objects for comparison
-                                valueA = a.deadline ? new Date(a.deadline.split('.').reverse().join('-')) : new Date(0);
-                                valueB = b.deadline ? new Date(b.deadline.split('.').reverse().join('-')) : new Date(0);
+                                valueA = a.deadline_date ? new Date(a.deadline_date.split('.').reverse().join('-')) : new Date(0);
+                                valueB = b.deadline_date ? new Date(b.deadline_date.split('.').reverse().join('-')) : new Date(0);
                                 break;
                               case 'order':
-                                valueA = a.order || '';
-                                valueB = b.order || '';
+                                valueA = a.order_number || '';
+                                valueB = b.order_number || '';
                                 break;
                               case 'name':
-                                valueA = a.clean_name || '';
-                                valueB = b.clean_name || '';
+                                valueA = a.name || '';
+                                valueB = b.name || '';
                                 break;
                               case 'length':
                                 valueA = parseFloat(a.length) || 0;

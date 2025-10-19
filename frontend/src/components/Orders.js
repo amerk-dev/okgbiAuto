@@ -343,8 +343,9 @@ const Orders = () => {
                 viewingDeleted 
                   ? 'border-blue-500 text-blue-700 bg-blue-50 hover:bg-blue-100' 
                   : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-              }`}
+              } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={handleViewDeleted}
+              disabled={loading}
             >
               <FontAwesomeIcon icon={viewingDeleted ? "arrow-left" : "trash-alt"} className="mr-2" />
               {viewingDeleted ? 'Вернуться к активным' : 'Удаленные'}

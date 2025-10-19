@@ -320,6 +320,8 @@ class Plate(AbstractPlate):
     @property
     def is_overdue(self):
         parameters = Parameters.get_solo()
+        if self.track is None or self.deadline is None:
+            return False
         return (self.deadline.date
                 and self.deadline.date < (self.track.day + timedelta(days=parameters.production_lag)))
 
